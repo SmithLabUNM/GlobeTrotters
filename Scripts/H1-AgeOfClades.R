@@ -1,3 +1,31 @@
+#load libraries
+require(dplyr)
+require(purrrlyr)
+require(tidyverse)
+require(tidyr)
+require(reshape2)
+require(ggplot2)
+
+#load data
+options(stringsAsFactors = FALSE)
+
+data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
+## Data does not include oceanic (marine) species; does include aquatic spp.
+## Data does not include introduced species (only native ranges)
+data$num.conts <- data$n.cont
+data$num.conts[data$num.conts == 4] <- "3+"
+data$num.conts[data$num.conts == 3] <- "3+"
+data$num.conts <- as.factor(data$num.conts)
+
+pan <- read.table("pantheria.csv", header = TRUE, sep = ",")
+pan1 <- subset(pan, select = c("MSW05_Binomial", "X26.1_GR_Area_km2", "X22.1_HomeRange_km2"))
+colnames(pan1)[1] <- "binomial"
+colnames(pan1)[2] <- "GR_Area_km2"
+colnames(pan1)[3] <- "HomeRange_km2"
+
+ranges <- read.table("ranges.csv", header = TRUE, sep = ",")
+colnames(ranges)[1] <- "binomial"
+
 #H1 spp that are on mult cont are older
 fossil <- subset(data, data$foss.age > 0)
 no_age <- subset(data, is.na(data$foss.age))
@@ -69,3 +97,18 @@ fossil.unique$global
 ?levels
 fossil.unique$global <- as.factor(fossil.unique$n.cont)
 levels(fossil.unique$global) <- c("one", "more than one", "more than one", "more than one")
+
+## continents by age  of family
+ggplot() +
+  geom_density(data = fossil.unique, aes(x = max.age, fill = num.conts), alpha = 0.7) +
+  scale_fill_manual(values = col,
+                    name="Continents") +
+  theme_jmg + theme(panel.border = element_rect(fill=NA),
+                    strip.background = element_rect(fill=NA),
+                    legend.position = c(0.85, 0.8))+
+  scale_x_continuous(name = "Age of Family",
+                     breaks = seq(0, 25, 2),
+                     limits = c(0, 8),
+                     expand=c(0,0))+
+  scale_y_continuous(name="Probability Density", expand=c(0,0), breaks=seq(0,0.6,0.2),limits=c(0,0.7))
+

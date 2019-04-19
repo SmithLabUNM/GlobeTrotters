@@ -1,3 +1,31 @@
+#load libraries
+require(dplyr)
+require(purrrlyr)
+require(tidyverse)
+require(tidyr)
+require(reshape2)
+require(ggplot2)
+
+#load data
+options(stringsAsFactors = FALSE)
+
+data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
+## Data does not include oceanic (marine) species; does include aquatic spp.
+## Data does not include introduced species (only native ranges)
+data$num.conts <- data$n.cont
+data$num.conts[data$num.conts == 4] <- "3+"
+data$num.conts[data$num.conts == 3] <- "3+"
+data$num.conts <- as.factor(data$num.conts)
+
+pan <- read.table("pantheria.csv", header = TRUE, sep = ",")
+pan1 <- subset(pan, select = c("MSW05_Binomial", "X26.1_GR_Area_km2", "X22.1_HomeRange_km2"))
+colnames(pan1)[1] <- "binomial"
+colnames(pan1)[2] <- "GR_Area_km2"
+colnames(pan1)[3] <- "HomeRange_km2"
+
+ranges <- read.table("ranges.csv", header = TRUE, sep = ",")
+colnames(ranges)[1] <- "binomial"
+
 #H3 spp that come from diverse grps are on more continents
 df <- data
 df <- filter(df, !duplicated(binomial))

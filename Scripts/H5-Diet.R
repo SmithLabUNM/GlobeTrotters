@@ -1,3 +1,31 @@
+#load libraries
+require(dplyr)
+require(purrrlyr)
+require(tidyverse)
+require(tidyr)
+require(reshape2)
+require(ggplot2)
+
+#load data
+options(stringsAsFactors = FALSE)
+
+data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
+## Data does not include oceanic (marine) species; does include aquatic spp.
+## Data does not include introduced species (only native ranges)
+data$num.conts <- data$n.cont
+data$num.conts[data$num.conts == 4] <- "3+"
+data$num.conts[data$num.conts == 3] <- "3+"
+data$num.conts <- as.factor(data$num.conts)
+
+pan <- read.table("pantheria.csv", header = TRUE, sep = ",")
+pan1 <- subset(pan, select = c("MSW05_Binomial", "X26.1_GR_Area_km2", "X22.1_HomeRange_km2"))
+colnames(pan1)[1] <- "binomial"
+colnames(pan1)[2] <- "GR_Area_km2"
+colnames(pan1)[3] <- "HomeRange_km2"
+
+ranges <- read.table("ranges.csv", header = TRUE, sep = ",")
+colnames(ranges)[1] <- "binomial"
+
 #H5 spp on mult cont are omnivores
 spp = data[!duplicated(data$binomial),]
 
@@ -249,3 +277,26 @@ diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "2"] <- 292
 diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "3+"] <- 6
 
 diettype_bargraph_full$prop <- diettype_bargraph_full$V1 / diettype_bargraph_full$tots
+
+## diet type
+#show as proportions
+ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = as.factor(numconts))) + 
+  geom_bar(stat = "identity", position = "dodge", color="black") +
+  scale_fill_manual("Continents", values = col) +
+  xlab("Diet Type") + ylab("Proportion") + 
+  scale_x_discrete(labels=c("diet.carnivore" = "Carnivore", "diet.piscivore" = "Piscivore", 
+                            "diet.invertivore" = "Invertivore", "diet.browser" = "Browser", 
+                            "diet.grazer" = "Grazer", "diet.frugivore" = "Frugivore")) + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1, size=14)) + 
+  theme_jmg+theme(panel.border = element_rect(fill=NA),
+                  strip.background = element_rect(fill=NA),
+                  legend.position = c(1.15, 0.5))+
+  theme(axis.title.y = element_text(margin = margin(r = 5)))
+
+## diet breadth
+#show as proportions
+ggplot(dietbreadth_bargraph_full, aes(x = dietbreadth, y = prop, fill = as.factor(num.conts))) + 
+  geom_bar(stat = "identity", position = "dodge", color="black") +
+  scale_fill_manual("Continents", values = col) +
+  xlab("\n\nDietary Breadth") + ylab("Proportion") + 
+  theme(legend.position = "none") +theme_jmg

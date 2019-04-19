@@ -1,3 +1,31 @@
+#load libraries
+require(dplyr)
+require(purrrlyr)
+require(tidyverse)
+require(tidyr)
+require(reshape2)
+require(ggplot2)
+
+#load data
+options(stringsAsFactors = FALSE)
+
+data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
+## Data does not include oceanic (marine) species; does include aquatic spp.
+## Data does not include introduced species (only native ranges)
+data$num.conts <- data$n.cont
+data$num.conts[data$num.conts == 4] <- "3+"
+data$num.conts[data$num.conts == 3] <- "3+"
+data$num.conts <- as.factor(data$num.conts)
+
+pan <- read.table("pantheria.csv", header = TRUE, sep = ",")
+pan1 <- subset(pan, select = c("MSW05_Binomial", "X26.1_GR_Area_km2", "X22.1_HomeRange_km2"))
+colnames(pan1)[1] <- "binomial"
+colnames(pan1)[2] <- "GR_Area_km2"
+colnames(pan1)[3] <- "HomeRange_km2"
+
+ranges <- read.table("ranges.csv", header = TRUE, sep = ",")
+colnames(ranges)[1] <- "binomial"
+
 ######H4 spp on mult cont are larger
 clean.data <- subset(data, data$mass >= 0) #3808
 
@@ -125,3 +153,55 @@ median(EA_NA$mass) #80
 length(EA_NA$mass) #1337
 median(two.cont_EN$size) #28.875
 length(two.cont_EN$size) #280
+
+## body mass
+ggplot() +
+  geom_density(data = clean.data, aes(x = log10(mass), fill = num.conts), alpha = 0.7) +
+  scale_fill_manual(values = col, 
+                    name="Continents") +
+  theme_jmg + theme(legend.position = c(0.85, 0.82))+
+  scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
+                     breaks = seq(-1, 7.5, 1),
+                     limits = c(-0, 7.5),
+                     expand=c(0,0))+
+  scale_y_continuous(limits = c(0, 0.65),breaks = c(0,0.2,0.4,0.6),expand=c(0,0), 
+                     name = 'Probability')
+
+#North vs South America
+ggplot() +
+  geom_density(data = NS, aes(x = log10(size), fill = cont), alpha = 0.7) +
+  scale_fill_manual(values = col,
+                    name="N. & S. America",
+                    labels=c("1", "2")) +
+  theme_jmg +  theme(legend.position = c(0.77, 0.8))+
+  scale_x_continuous(name = expression(log[10]~Body~Mass),
+                     breaks = seq(0, 7.5, 1),
+                     limits = c(0, 7.5), expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 0.7),breaks=seq(0,0.7,0.2),
+                     name="Probability Density", expand=c(0,0))
+
+#Africa vs Eurasia
+ggplot() +
+  geom_density(data = EF, aes(x = log10(size), fill = cont), alpha = 0.7) +
+  scale_fill_manual(values = col,
+                    name="Africa & Eurasia",
+                    labels=c("1", "2")) +
+  theme_jmg +  theme(legend.position = c(0.77, 0.8))+
+  scale_x_continuous(name = expression(log[10]~Body~Mass),
+                     breaks = seq(0, 7.5, 1),
+                     limits = c(0, 7.5), expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 0.7),breaks=seq(0,0.7,0.2),
+                     name="Probability Density", expand=c(0,0))
+
+#Africa vs Eurasia
+ggplot() +
+  geom_density(data = EN, aes(x = log10(size), fill = cont), alpha = 0.7) +
+  scale_fill_manual(values = col,
+                    name="Eurasia & North America",
+                    labels=c("One", "Both")) +
+  theme_jmg +  theme(legend.position = c(0.77, 0.8))+
+  scale_x_continuous(name = expression(log[10]~Body~Mass),
+                     breaks = seq(0, 7.5, 1),
+                     limits = c(0, 7.5), expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 0.7),breaks=seq(0,0.7,0.2),
+                     name="Probability Density", expand=c(0,0))

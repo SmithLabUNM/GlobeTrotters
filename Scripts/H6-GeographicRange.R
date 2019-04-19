@@ -1,3 +1,31 @@
+#load libraries
+require(dplyr)
+require(purrrlyr)
+require(tidyverse)
+require(tidyr)
+require(reshape2)
+require(ggplot2)
+
+#load data
+options(stringsAsFactors = FALSE)
+
+data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
+## Data does not include oceanic (marine) species; does include aquatic spp.
+## Data does not include introduced species (only native ranges)
+data$num.conts <- data$n.cont
+data$num.conts[data$num.conts == 4] <- "3+"
+data$num.conts[data$num.conts == 3] <- "3+"
+data$num.conts <- as.factor(data$num.conts)
+
+pan <- read.table("pantheria.csv", header = TRUE, sep = ",")
+pan1 <- subset(pan, select = c("MSW05_Binomial", "X26.1_GR_Area_km2", "X22.1_HomeRange_km2"))
+colnames(pan1)[1] <- "binomial"
+colnames(pan1)[2] <- "GR_Area_km2"
+colnames(pan1)[3] <- "HomeRange_km2"
+
+ranges <- read.table("ranges.csv", header = TRUE, sep = ",")
+colnames(ranges)[1] <- "binomial"
+
 ####H6. Sp. w greater geographic ranges are found on more continents ####
 data2 <- merge(data, pan1, by = "binomial", all.x = TRUE, all.y = FALSE)
 
@@ -91,3 +119,13 @@ summary(glm(lm(log10(df.clean$gr.area) ~ log10(df.clean$size) + as.factor(df.cle
 # summary(model)
 # 
 # model2 <- anova(lm(log10(df.clean$ratio2 + 1) ~ log10(df.clean$size) + as.factor(df.clean$num.cont)))
+
+# home range
+ggplot(data = df.clean, aes(x = logSize, y = ratio)) +
+  geom_point(alpha = 0.7, aes(col = num.cont)) +
+  geom_smooth(aes(color = num.cont), method = "lm") +
+  scale_color_manual(values = col) +
+  labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range/Geographic~Range), color = "Number of Continents") +
+  theme_jmg + 
+  theme(legend.position = "top")
+
