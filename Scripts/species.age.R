@@ -38,4 +38,5 @@ species.age.summary <- function(x) {
 }
 species.age <- apply(age, 1, species.age.summary)
 str(species.age)
+
 species.age[1:7,1:5]

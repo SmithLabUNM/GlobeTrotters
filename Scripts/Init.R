@@ -1,6 +1,5 @@
 ###### SETUP >>>>>>
 # Set working directory
-setwd("C:\\Files\\Projects\\PhD\\project Felisas group\\analysis\\load")
 
 # Loading required packages
 require(tidyverse)
@@ -8,13 +7,12 @@ require(stringr)
 options(stringsAsFactors = FALSE)
 
 # Readt data
-df <- read.csv("mom10.6x - mom10.6x.csv")
-###### SETUP ||||||
+df <- read.csv("MOMv11.csv", header = TRUE)
 
-# Create binomial
-df$binomial <- paste(df$genus, df$species)
+###### SETUP
 
-###### REMOVE MARINE SPECIES >>>>>>
+###### REMOVE MARINE SPECIES
+
 df <- df %>%
   # Order Cetacea (Whales s.l.)
   filter(order != "Cetacea") %>%
@@ -29,9 +27,14 @@ df <- df %>%
   # Marine otter (Lontra felina)
   filter(binomial != "Lontra felina")
   # Sea otter (Enhydra lutris)
-###### REMOVE MARINE SPECIES ||||||
 
-###### FIX CONTINENTS >>>>>>
+###### REMOVE INTRODUCED AND DOMESTICATED SPECIES
+
+df <- df %>%
+  filter(extant.status != "introduction") %>%
+  filter(extant.status != "domesticated")
+
+###### FIX CONTINENTS
 # Search for continental mistakes
 table(df$continent, useNA = "always")
 
@@ -39,9 +42,8 @@ table(df$continent, useNA = "always")
 df <- filter(df, !is.na(continent) &
                  continent != "Insular" &
                  continent != "Marine")
-###### FIX CONTINENTS ||||||
 
-###### FIX DIET ||||||
+###### FIX DIET
 df$trophic[which(df$trophic == "")] <- NA
 sort(table(df$trophic))
 
@@ -148,7 +150,36 @@ table(df$diet.breadth)
 
 df[which(df$diet.breadth == 4),]
 
-### Fossil age >>>
+###### ADD RANGES
+binomials <- df$binomial
+
+pan <- read.csv("pantheria.csv", header = TRUE)
+pan <- pan %>%
+  dplyr::rename(binomial = MSW05_Binomial) %>%
+  dplyr::select(binomial, X26.1_GR_Area_km2)
+pan <- pan[(pan$binomial %in% binomials),]
+
+ranges <- read.csv("ranges.csv", header = TRUE)
+ranges <- ranges %>%
+  rename(binomial = Binomial.1.2) %>%
+  dplyr::select(binomial, current.range.km2, present.natural.range.km2)
+
+ranges$binomial <- gsub("_", " ", ranges$binomial)
+ranges <- ranges[(ranges$binomial %in% binomials),]
+
+df <- left_join(df, pan, "binomial")
+df <- left_join(df, ranges, "binomial")
+
+###### ADD AGES
+
+### Fossil age
+#age data fossil = PBDB min & max occurence estiamtes. 
+#This provides different fossil data at different resolutions. 
+#The ages extracted here are based only on species level identifications of fossils. 
+#All fossils are provided with a maximum and minimum estimated age. 
+#To get the most likely age of species origin we found the oldest minimum species age, and the oldest maximum species age for each species. 
+#The midpoint of this range was used as species age. Because of species name mismatches and missing species the following analysis includes 693 species out of 4443 possible.
+
 pbdb <- read.csv("pbdb.data.csv", as.is = T)
 foss.age <-
   pbdb %>%
@@ -160,10 +191,45 @@ foss.age <-
 
 
 df <- left_join(df, foss.age, "binomial")
-### Fossil age |||
 
+### Faurby ages
+#age data phyl = from Faurby tree estimates. 
+#This source provides 1000 equally likely trees. 
+#The species ages were extracted as branch length to the parent node of each species for all trees. 
+#The estimate used for species ages were the median ages found by this method. Because of species name mismatches the following analysis includes 4019 species out of 4443 possible.
 
-###### CONTINENTAL DUPLICATES >>>>>>
+age <- read.csv("species.age.csv", header = TRUE, row.names = 1)
+species.age.summary <- function(x) {
+  c(age.mean = mean(x),
+    age.median = median(x),
+    age.lower.range = range(x)[1],
+    age.upper.range = range(x)[2],
+    age.q95 = quantile(x, .95),
+    age.q05 = quantile(x, .05),
+    age.sd = sd(x))
+}
+species.age <- apply(age, 1, species.age.summary)
+str(species.age)
+
+species.age[1:7,1:5]
+
+faurby.ages <- as.data.frame(t(species.age))
+faurby.ages$binomial <- rownames(faurby.ages)
+faurby.ages$binomial <- gsub("_", " ", faurby.ages$binomial)
+
+faurby.ages <- faurby.ages %>%
+  dplyr::select(binomial, age.median) 
+
+df <- left_join(df, faurby.ages, "binomial")
+
+# genus level
+# age <- read.csv("age.csv", header = TRUE) #match on genus
+# age <- age %>%
+#   dplyr::select(-cont)
+# genera <- unique(mom$genus)
+# age <- age[(age$genus %in% genera),]
+
+###### CONTINENTAL DUPLICATES
 # Checking for accidents
 require(stringr)
 stopifnot(!any(str_trim(df$genus) != df$genus))
@@ -173,13 +239,9 @@ df$binomial[duplicated(df$binomial)]
 
 df[(duplicated(df[c("binomial", "continent")])),]
 
-# Remove introduced species
-table(df$extant.status)
-df <- df[-which(df$extant.status == "introduction"), ]
+
 
 cont <- group_by(df, binomial) %>% summarise(n.cont = n())
 df <- left_join(df, cont, by = "binomial")
-###### CONTINENTAL DUPLICATES ||||||
 
 write.csv(df, "MOM.global.mammals.csv", row.names = FALSE)
-
