@@ -9,13 +9,13 @@ require(ggplot2)
 #load data
 options(stringsAsFactors = FALSE)
 
-data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
 ## Data does not include oceanic (marine) species; does include aquatic spp.
 ## Data does not include introduced species (only native ranges)
-data$num.conts <- data$n.cont
-data$num.conts[data$num.conts == 4] <- "3+"
-data$num.conts[data$num.conts == 3] <- "3+"
-data$num.conts <- as.factor(data$num.conts)
+data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
+
+data$n.cont[data$n.cont == 4] <- "3+"
+data$n.cont[data$n.cont == 3] <- "3+"
+data$n.cont <- as.factor(data$num.conts)
 
 pan <- read.table("pantheria.csv", header = TRUE, sep = ",")
 pan1 <- subset(pan, select = c("MSW05_Binomial", "X26.1_GR_Area_km2", "X22.1_HomeRange_km2"))
