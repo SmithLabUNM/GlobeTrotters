@@ -39,20 +39,34 @@ length(unique(data.foss.age$binomial[data.foss.age$n.cont == 1]))
 length(unique(data.foss.age$binomial[data.foss.age$n.cont == 2]))
 length(unique(data.foss.age$binomial[data.foss.age$n.cont == "3+"]))
 
-#1 v 2
+#1 v +
 ks.test(data.foss.age$foss.age[data.foss.age$n.cont == 1], 
-        data.foss.age$foss.age[data.foss.age$n.cont == 2]) 
+        data.foss.age$foss.age[data.foss.age$n.cont == 2 | data.foss.age$n.cont == "3+"]) 
 
-#2 v 3+
-ks.test(data.foss.age$foss.age[data.foss.age$n.cont == 2], 
+#1+2 v 3+
+ks.test(data.foss.age$foss.age[data.foss.age$n.cont == 2 | data.foss.age$n.cont == 1], 
         data.foss.age$foss.age[data.foss.age$n.cont == "3+"]) 
 
 ## continents by age  of family
+col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+plot_theme <- theme(panel.grid = element_blank(), 
+               aspect.ratio = .75, #adjust as needed
+               axis.text = element_text(size = 21, color = "black"), 
+               axis.ticks.length=unit(0.2,"cm"),
+               axis.title = element_text(size = 21),
+               axis.title.y = element_text(margin = margin(r = 10)),
+               axis.title.x = element_text(margin = margin(t = 10)),
+               axis.title.x.top = element_text(margin = margin(b = 5)),
+               plot.title = element_text(size = 21, face = "plain", hjust = 10),
+               panel.border = element_rect(colour = "black", fill=NA, size=1),
+               panel.background = element_blank(),
+               legend.position = "none",
+               text = element_text(family = 'Helvetica')) 
 ggplot() +
-  geom_density(data = fossil.unique, aes(x = max.age, fill = num.conts), alpha = 0.7) +
-  scale_fill_manual(values = col,
-                    name="Continents") +
-  theme_jmg + theme(panel.border = element_rect(fill=NA),
+  geom_density(data = data.foss.age, aes(x = foss.age, fill = n.cont), alpha = 0.7) +
+  scale_fill_manual(values = col, 
+                    name="Continents") + 
+  plot_theme + theme(panel.border = element_rect(fill=NA),
                     strip.background = element_rect(fill=NA),
                     legend.position = c(0.85, 0.8))+
   scale_x_continuous(name = "Age of Family",
@@ -80,4 +94,17 @@ ks.test(data.faurby$age.median[data.faurby$n.cont == 1],
 #2 v 3+
 ks.test(data.faurby$age.median[data.faurby$n.cont == 2], 
         data.faurby$age.median[data.faurby$n.cont == "3+"]) 
+
+ggplot() +
+  geom_density(data = data.faurby, aes(x = age.median, fill = n.cont), alpha = 0.7) +
+  scale_fill_manual(values = col, 
+                    name="Continents") + 
+  plot_theme + theme(panel.border = element_rect(fill=NA),
+                     strip.background = element_rect(fill=NA),
+                     legend.position = c(0.85, 0.8))+
+  scale_x_continuous(name = "Age of Species",
+                     breaks = seq(0, 25, 2),
+                     limits = c(0, 8),
+                     expand=c(0,0))+
+  scale_y_continuous(name="Probability Density", expand=c(0,0), breaks=seq(0,0.6,0.2),limits=c(0,0.7))
 
