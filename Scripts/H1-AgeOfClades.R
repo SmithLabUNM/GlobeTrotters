@@ -39,7 +39,7 @@ length(unique(data.foss.age$binomial[data.foss.age$n.cont == 1]))
 length(unique(data.foss.age$binomial[data.foss.age$n.cont == 2]))
 length(unique(data.foss.age$binomial[data.foss.age$n.cont == "3+"]))
 
-#1 v +
+#1 v 3
 ks.test(data.foss.age$foss.age[data.foss.age$n.cont == 1], 
         data.foss.age$foss.age[data.foss.age$n.cont == 2 | data.foss.age$n.cont == "3+"]) 
 
@@ -87,12 +87,12 @@ length(unique(data.faurby$binomial[data.faurby$n.cont == 1]))
 length(unique(data.faurby$binomial[data.faurby$n.cont == 2]))
 length(unique(data.faurby$binomial[data.faurby$n.cont == "3+"]))
 
-#1 v 2
+#1 v 2+
 ks.test(data.faurby$age.median[data.faurby$n.cont == 1], 
-        data.faurby$age.median[data.faurby$n.cont == 2]) 
+        data.faurby$age.median[data.faurby$n.cont == 2 | data.faurby$n.cont == "3+"]) 
 
-#2 v 3+
-ks.test(data.faurby$age.median[data.faurby$n.cont == 2], 
+#1+2 v 3+
+ks.test(data.faurby$age.median[data.faurby$n.cont == 1 | data.faurby$n.cont == 2], 
         data.faurby$age.median[data.faurby$n.cont == "3+"]) 
 
 ggplot() +
@@ -108,3 +108,44 @@ ggplot() +
                      expand=c(0,0))+
   scale_y_continuous(name="Probability Density", expand=c(0,0), breaks=seq(0,0.6,0.2),limits=c(0,0.7))
 
+## what about continent connectivity and aage of family to disperse?
+#for continent pairs
+#NA and SA
+N_S_America <- subset(data.foss.age, data.foss.age$continent == "North.America" | data.foss.age$continent == "South.America")
+N_S_America1 <- subset(N_S_America, N_S_America$n.cont == 1)
+
+two.cont_NS <- subset(N_S_America, N_S_America$n.cont == 2)
+
+length(two.cont_NS$binomial) #104
+length(N_S_America1$binomial) #317
+
+ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "two.sided") #p = 0.0008218
+ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "less") #p = 0.0004109 x is statically younger than y
+ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "greater") #p = 0.4979
+
+#NA and EA
+N_E <- subset(data.foss.age, data.foss.age$continent == "North.America" | data.foss.age$continent == "Eurasia")
+N_E1 <- subset(N_E, N_E$n.cont == 1)
+
+two.cont_NE <- subset(N_E, N_E$n.cont == 2)
+
+length(two.cont_NE$binomial) #100
+length(N_E1$binomial) #324
+
+ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "two.sided") #p = 0.03584
+ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "less") #p = 0.01792 x is statically younger than y
+ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "greater") #p = 0.04871
+
+
+#EA and AF
+E_A <- subset(data.foss.age, data.foss.age$continent == "Eurasia" | data.foss.age$continent == "Africa")
+E_A1 <- subset(E_A, E_A$n.cont == 1)
+
+two.cont_EA <- subset(E_A, E_A$n.cont == 2)
+
+length(two.cont_EA$binomial) #68
+length(E_A$binomial) #265
+
+ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "two.sided") #p = 0.0005699
+ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "less") #p = 0.9747 
+ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "greater") #p = 0.0002849 x is statically older than y
