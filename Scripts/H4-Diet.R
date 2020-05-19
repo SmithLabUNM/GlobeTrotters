@@ -6,122 +6,123 @@ require(tidyr)
 require(reshape2)
 require(ggplot2)
 
+col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+plot_theme <- theme(panel.grid = element_blank(), 
+                    aspect.ratio = .75, #adjust as needed
+                    axis.text = element_text(size = 21, color = "black"), 
+                    axis.ticks.length=unit(0.2,"cm"),
+                    axis.title = element_text(size = 21),
+                    axis.title.y = element_text(margin = margin(r = 10)),
+                    axis.title.x = element_text(margin = margin(t = 10)),
+                    axis.title.x.top = element_text(margin = margin(b = 5)),
+                    plot.title = element_text(size = 21, face = "plain", hjust = 10),
+                    panel.border = element_rect(colour = "black", fill=NA, size=1),
+                    panel.background = element_blank(),
+                    legend.position = "none",
+                    text = element_text(family = 'Helvetica'))
+
 #load data
 options(stringsAsFactors = FALSE)
 
 data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
 ## Data does not include oceanic (marine) species; does include aquatic spp.
 ## Data does not include introduced species (only native ranges)
-data$num.conts <- data$n.cont
-data$num.conts[data$num.conts == 4] <- "3+"
-data$num.conts[data$num.conts == 3] <- "3+"
-data$num.conts <- as.factor(data$num.conts)
-
-pan <- read.table("pantheria.csv", header = TRUE, sep = ",")
-pan1 <- subset(pan, select = c("MSW05_Binomial", "X26.1_GR_Area_km2", "X22.1_HomeRange_km2"))
-colnames(pan1)[1] <- "binomial"
-colnames(pan1)[2] <- "GR_Area_km2"
-colnames(pan1)[3] <- "HomeRange_km2"
-
-ranges <- read.table("ranges.csv", header = TRUE, sep = ",")
-colnames(ranges)[1] <- "binomial"
+data$n.cont[data$n.cont == 4] <- "3+"
+data$n.cont[data$n.cont == 3] <- "3+"
+data$n.cont <- as.factor(data$n.cont)
 
 #H5 spp on mult cont are omnivores
-spp = data[!duplicated(data$binomial),]
-
-bats <- subset(spp, spp$order == "Chiroptera")
-mean(bats$mass, na.rm = TRUE)
-length(bats$binomial[bats$diet.invertivore == 1])
-length(bats$binomial[bats$n.cont == 3])
-
-invert.mass <- mean(spp$mass[spp$diet.invertivore == 1], na.rm = TRUE)
-carn.mass <- mean(spp$mass[spp$diet.carnivore == 1], na.rm = TRUE)
-browse.mass <- mean(spp$mass[spp$diet.browser == 1], na.rm = TRUE)
-graze.mass <- mean(spp$mass[spp$diet.grazer == 1], na.rm = TRUE)
-frug.mass <- mean(spp$mass[spp$diet.frugivore == 1], na.rm = TRUE)
-pisc.mass <- mean(spp$mass[spp$diet.piscivore == 1], na.rm = TRUE)
-
-invert.massD <- spp$mass[spp$diet.invertivore == 1]
-carn.massD <- spp$mass[spp$diet.carnivore == 1]
-browse.massD <- spp$mass[spp$diet.browser == 1]
-graze.massD <- spp$mass[spp$diet.grazer == 1]
-frug.massD <- spp$mass[spp$diet.frugivore == 1]
-pisc.massD <- spp$mass[spp$diet.piscivore == 1]
-
-ks.test(invert.massD, frug.massD)
+df = data[!duplicated(data$binomial),]
+length(df$binomial) #4426
 
 #understand data
-length(unique(data$binomial[data$diet.invertivore == TRUE])) #1986
-length(unique(data$binomial[data$diet.carnivore == TRUE])) #333
-length(unique(data$binomial[data$diet.browser == TRUE])) #1619
-length(unique(data$binomial[data$diet.grazer == TRUE])) #610
-length(unique(data$binomial[data$diet.frugivore == TRUE])) #1935
-length(unique(data$binomial[data$diet.piscivore == TRUE])) #31
+length(df$binomial[df$diet.invertivore == TRUE]) #1998
+length(df$binomial[df$diet.carnivore == TRUE]) #333
+length(df$binomial[df$diet.browser == TRUE]) #1631
+length(df$binomial[df$diet.grazer == TRUE]) #618
+length(df$binomial[df$diet.frugivore == TRUE]) #1941
+length(df$binomial[df$diet.piscivore == TRUE]) #30
 
-length(unique(data$binomial[data$diet.breadth == 1])) #2481
-length(unique(data$binomial[data$diet.breadth == 2])) #1734
-length(unique(data$binomial[data$diet.breadth == 3])) #187
-length(unique(data$binomial[data$diet.breadth == 4])) #1
-length(unique(data$binomial[data$diet.breadth == 5])) #0
-length(unique(data$binomial[data$diet.breadth == 6])) #0
+length(df$binomial[df$diet.breadth == 1]) #2490
+length(df$binomial[df$diet.breadth == 2]) #1747
+length(df$binomial[df$diet.breadth == 3]) #189
+length(df$binomial[df$diet.breadth == 4]) #0
+length(df$binomial[df$diet.breadth == 5]) #0
+length(df$binomial[df$diet.breadth == 6]) #0
 
-data$binomial[data$diet.breadth == 4] #Sigmodon hispidus
+#1 v 2+ diet breadth
 
-unique.data <- data %>%
-  group_by(binomial) %>%
-  dplyr:: summarise(dietbreadth = diet.breadth[1], n.cont = n.cont[1])
-unique.data$dietbreadth <- as.factor(unique.data$dietbreadth)
-anova(lm(unique.data$n.cont ~ unique.data$dietbreadth)) #<0.001
+not.glob <- filter(data, n.cont == 1) %>% 
+  select(diet.breadth) %>% .[[1]]
+glob <- filter(data, n.cont != 1) %>% 
+  select(diet.breadth) %>% .[[1]]
 
-global.definition <- 1
-data$global <- data$n.cont > global.definition
-
-not.glob <- filter(data, !global) %>% select(diet.breadth) %>% .[[1]]
-glob <- filter(data, global) %>% select(diet.breadth) %>% .[[1]]
-
-# Is variance equal? Yes
-var.test(not.glob, glob) #0.2522
-#variance is equal, meaning that we can run a t-test
-#but data is not normal, so can't run a t-test
+# Is variance equal? No
+var.test(not.glob, glob) #1.171249, p = 0.01549
+#variance is not equal, meaning that we cannot run a t-test
 
 # T-test is significant but we violate assumption of normality of data
-t.test(not.glob, glob) #p-value = 1.919e-06
+t.test(not.glob, glob) #p-value = 2.065e-07
 
 # Wilcoxon rank-sum test (equivalent to the Mann-Whitney U test)
 # Does not assume normality
-wilcox.test(not.glob, glob, paired = FALSE) #p-value = 4.694e-07
+wilcox.test(not.glob, glob, paired = FALSE) #p-value = 4.095e-07
 median(not.glob) - median(glob) #medians are so close it doesn't make sense to report the difference (0)
-mean(not.glob) - mean(glob) #0.12 difference in means
+mean(not.glob) - mean(glob) #0.13 difference in means
 
 #percentage difference
-(mean(not.glob) - mean(glob))/mean(not.glob)*100 #7.908595 
+(mean(not.glob) - mean(glob))/mean(not.glob)*100 #8.575447 
 
-df <- data
+#1+2 v 3+ diet breadth
 
-#1 v 2 cont
+not.glob <- filter(data, n.cont == 1 | n.cont == 2) %>% 
+  select(diet.breadth) %>% .[[1]]
+glob <- filter(data, n.cont == "3+") %>% 
+  select(diet.breadth) %>% .[[1]]
+
+# Is variance equal? No
+var.test(not.glob, glob) #1.266582, p = 0.5699
+#variance is equal, meaning that we cannot run a t-test
+#but data is not normal, so can't run a t-test
+
+# T-test is significant but we violate assumption of normality of data
+t.test(not.glob, glob) #p-value = 0.995
+
+# Wilcoxon rank-sum test (equivalent to the Mann-Whitney U test)
+# Does not assume normality
+wilcox.test(not.glob, glob, paired = FALSE) #p-value = 0.8432
+median(not.glob) - median(glob) #medians are so close it doesn't make sense to report the difference (0)
+mean(not.glob) - mean(glob) # basically 0 difference in means
+
+#percentage difference
+(mean(not.glob) - mean(glob))/mean(not.glob)*100 #0.05
+
+
+
+#1 v 2+ cont
 df <- filter(df, !duplicated(binomial))
 
 # Assign if species is global or not by if it occurs on more than 1 continent
-df$global <- df$n.cont == 2
+df$global <- df$n.cont != 1
 
 # Create a data frame with all species
 diets <- names(dplyr::select(df, starts_with("diet"), -diet.src, -diet.breadth))
 res <- data.frame(diet = diets)
 
 res["count"] <- colSums(df[diets])
-res["on2"] <- colSums(df[df$global, diets])
+res["onMult"] <- colSums(df[df$global, diets])
 
 # Count how large a proportion we expect of a given diet
 res <- mutate(res, glob.proportion = count/nrow(df))
 
 # Find the total species number on 2+ continents
-on2.tot <- sum(df$global)
-res <- mutate(res, on2.proportion = on2/on2.tot)
+onMult.tot <- sum(df$global)
+res <- mutate(res, onMult.proportion = onMult/onMult.tot)
 # Run binomial test and add that to the result
 # The test compares each diet presence globally to their overall precense in mammalia
 res <- purrrlyr::invoke_rows(.d = res,
-                   .f = function(on2, glob.proportion, ...) {
-                     test <- binom.test(on2, on2.tot, p = glob.proportion, alternative="greater")
+                   .f = function(onMult, glob.proportion, ...) {
+                     test <- binom.test(onMult, onMult.tot, p = glob.proportion, alternative="greater")
                      c(p.val = as.numeric(test$p.value))
                    },
                    .collate = "cols", .to = c("p.value"))
@@ -137,32 +138,32 @@ res <- arrange(res, p.value) %>% mutate(signif = p.value < 0.05,
 
 # Look at the significants
 res
-#write.csv(res, "onecontvtwo.diets.csv", row.names = FALSE)
+#write.csv(res, "onecontvmult.diets.csv", row.names = FALSE)
 
-#1 v all
+#1+2 v 3+
 df <- filter(df, !duplicated(binomial))
 
 # Assign if species is global or not by if it occurs on more than 1 continent
-df$global <- df$n.cont > 1
+df$global <- df$n.cont == "3+"
 
 # Create a data frame with all species
 diets <- names(select(df, starts_with("diet"), -diet.src, -diet.breadth))
 res <- data.frame(diet = diets)
 
 res["count"] <- colSums(df[diets])
-res["on2"] <- colSums(df[df$global, diets])
+res["on3"] <- colSums(df[df$global, diets])
 
 # Count how large a proportion we expect of a given diet
 res <- mutate(res, glob.proportion = count/nrow(df))
 
-# Find the total species number on 2+ continents
-on2.tot <- sum(df$global)
-res <- mutate(res, on2.proportion = on2/on2.tot)
+# Find the total species number on 3+ continents
+on3.tot <- sum(df$global)
+res <- mutate(res, on3.proportion = on3/on3.tot)
 # Run binomial test and add that to the result
 # The test compares each diet presence globally to their overall precense in mammalia
 res <- purrrlyr::invoke_rows(.d = res,
-                   .f = function(on2, glob.proportion, ...) {
-                     test <- binom.test(on2, on2.tot, p = glob.proportion, alternative="greater")
+                   .f = function(on3, glob.proportion, ...) {
+                     test <- binom.test(on3, on3.tot, p = glob.proportion, alternative="greater")
                      c(p.val = as.numeric(test$p.value))
                    },
                    .collate = "cols", .to = c("p.value"))
@@ -178,78 +179,23 @@ res <- arrange(res, p.value) %>% mutate(signif = p.value < 0.05,
 
 # Look at the significants
 res
-#write.csv(res, "onecontvall.diets.csv", row.names = FALSE)
-
-#1+2 v all
-df <- filter(df, !duplicated(binomial))
-
-# Assign if species is global or not by if it occurs on more than 1 continent
-df$global <- df$n.cont > 2
-
-# Create a data frame with all species
-diets <- names(select(df, starts_with("diet"), -diet.src, -diet.breadth))
-res <- data.frame(diet = diets)
-
-res["count"] <- colSums(df[diets])
-res["on2"] <- colSums(df[df$global, diets])
-
-# Count how large a proportion we expect of a given diet
-res <- mutate(res, glob.proportion = count/nrow(df))
-
-# Find the total species number on 2+ continents
-on2.tot <- sum(df$global)
-res <- mutate(res, on2.proportion = on2/on2.tot)
-# Run binomial test and add that to the result
-# The test compares each diet presence globally to their overall precense in mammalia
-res <- purrrlyr::invoke_rows(.d = res,
-                   .f = function(on2, glob.proportion, ...) {
-                     test <- binom.test(on2, on2.tot, p = glob.proportion, alternative="greater")
-                     c(p.val = as.numeric(test$p.value))
-                   },
-                   .collate = "cols", .to = c("p.value"))
-
-# Find which ones are signifcicant
-# And which ones are signifcant bonferoni-corrected since we run many tests
-# And 3 other stronger types of corrections which give the same results
-res <- arrange(res, p.value) %>% mutate(signif = p.value < 0.05,
-                                        signif.bonferoni = p.value < 0.05/n(),
-                                        signif.holm = !0.05/(n() + 1 - 1:n()) < p.value,
-                                        signif.sidak = p.value < 1 - (1 - 0.05)^(1/n()),
-                                        signif.holm.sidak = !(1 - (1 - 0.05)^(1/n())) < p.value)
-
-# Look at the significants
-res
-filter(res, signif)
-#write.csv(res, "oneandtwocontvall.diets.csv", row.names = FALSE)
-
-#need to group by binomial so don't double count
-unique.data <- as.data.frame(unique.data)
-unique.data$num.conts <- unique.data$n.cont
-unique.data$num.conts[unique.data$num.conts == 4] <- "3+"
-unique.data$num.conts[unique.data$num.conts == 3] <- "3+"
-unique.data$num.conts <- as.factor(unique.data$num.conts)
+#write.csv(res, "onetwocontvthree.diets.csv", row.names = FALSE)
 
 #dietbreadth
 #need to create values for NAs
-dietbreadth_bargraph <- ddply(unique.data, .(num.conts, dietbreadth), function(x){
+dietbreadth_bargraph <- plyr::ddply(df, c("n.cont", "diet.breadth"), function(x){
   nrow(x)
 })
-dietbreadth_bargraph_full <- tidyr::complete(dietbreadth_bargraph, num.conts, dietbreadth)
+dietbreadth_bargraph_full <- tidyr::complete(dietbreadth_bargraph, n.cont, diet.breadth)
 
-sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$num.conts == "1"], na.rm = TRUE) #4105
-sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$num.conts == "2"], na.rm = TRUE) #292
-sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$num.conts == "3+"], na.rm = TRUE) #6 #phew, they match!
-
-dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$num.conts == "1"] <- 4105
-dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$num.conts == "2"] <- 292
-dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$num.conts == "3+"] <- 6
+dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "1"] <- sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "1"], na.rm = TRUE) #4148
+dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "2"] <- sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "2"], na.rm = TRUE) #272
+dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "3+"] <-sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "3+"], na.rm = TRUE) #6 #phew, they match!
 
 dietbreadth_bargraph_full$prop <- dietbreadth_bargraph_full$V1 / dietbreadth_bargraph_full$tots
 
 #diettype
-
-require(reshape2)
-data.melt <- melt(data, id.vars = c("binomial", "num.conts"), 
+data.melt <- melt(data, id.vars = c("binomial", "n.cont"), 
                measure.vars = c("diet.carnivore", "diet.browser", "diet.grazer", "diet.invertivore", "diet.piscivore", "diet.frugivore"),
                variable.name = "diet.type")
 
@@ -258,23 +204,19 @@ new.data <- subset(data.melt, data.melt$value == TRUE)
 #group by binomial so don't recount
 unique.new.data <- new.data %>%
   group_by(binomial) %>%
-  dplyr:: summarise(diettype = diet.type[1], numconts = num.conts[1])
+  dplyr:: summarise(diettype = diet.type[1], numconts = n.cont[1])
 unique.data$diettype <- as.factor(unique.new.data$diettype)
 unique.data <- as.data.frame(unique.data)
 
-diettype_bargraph <- ddply(unique.new.data, .(numconts, diettype), function(x){
+diettype_bargraph <- plyr::ddply(unique.new.data, c("numconts", "diettype"), function(x){
   nrow(x)
 })
 diettype_bargraph_full <- complete(diettype_bargraph, numconts, diettype)
 diettype_bargraph_full$diet.type <- factor(diettype_bargraph_full$diettype, levels = c("diet.carnivore", "diet.piscivore", "diet.invertivore", "diet.frugivore", "diet.browser", "diet.grazer"))
 
-sum(diettype_bargraph_full$V1[1:6]) #4105
-sum(diettype_bargraph_full$V1[7:12]) #292
-sum(diettype_bargraph_full$V1[13:18], na.rm = TRUE) #6
-
-diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "1"] <- 4105
-diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "2"] <- 292
-diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "3+"] <- 6
+diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "1"] <- sum(diettype_bargraph_full$V1[1:6]) #4148
+diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "2"] <- sum(diettype_bargraph_full$V1[7:12]) #272
+diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "3+"] <- sum(diettype_bargraph_full$V1[13:18], na.rm = TRUE) #6
 
 diettype_bargraph_full$prop <- diettype_bargraph_full$V1 / diettype_bargraph_full$tots
 
@@ -288,15 +230,15 @@ ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = as.factor(numc
                             "diet.invertivore" = "Invertivore", "diet.browser" = "Browser", 
                             "diet.grazer" = "Grazer", "diet.frugivore" = "Frugivore")) + 
   theme(axis.text.x = element_text(angle = 45, hjust=1, size=14)) + 
-  theme_jmg+theme(panel.border = element_rect(fill=NA),
+  plot_theme +theme(panel.border = element_rect(fill=NA),
                   strip.background = element_rect(fill=NA),
                   legend.position = c(1.15, 0.5))+
   theme(axis.title.y = element_text(margin = margin(r = 5)))
 
 ## diet breadth
 #show as proportions
-ggplot(dietbreadth_bargraph_full, aes(x = dietbreadth, y = prop, fill = as.factor(num.conts))) + 
+ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth, y = prop, fill = as.factor(n.cont))) + 
   geom_bar(stat = "identity", position = "dodge", color="black") +
   scale_fill_manual("Continents", values = col) +
   xlab("\n\nDietary Breadth") + ylab("Proportion") + 
-  theme(legend.position = "none") +theme_jmg
+  theme(legend.position = "none") + plot_theme
