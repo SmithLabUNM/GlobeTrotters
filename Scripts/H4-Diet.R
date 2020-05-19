@@ -50,11 +50,17 @@ length(df$binomial[df$diet.breadth == 4]) #0
 length(df$binomial[df$diet.breadth == 5]) #0
 length(df$binomial[df$diet.breadth == 6]) #0
 
-#1 v 2+ diet breadth
+df.clean <- subset(df, df$diet.breadth > 0 & !is.na(df$diet.breadth))
+length(unique(df.clean$binomial)) #4426
+length(unique(df.clean$binomial[df.clean$n.cont == 1])) #4248
+length(unique(df.clean$binomial[df.clean$n.cont == 2])) #272
+length(unique(df.clean$binomial[df.clean$n.cont == "3+"])) #6
 
-not.glob <- filter(data, n.cont == 1) %>% 
+
+#1 v 2+ diet breadth
+not.glob <- filter(df.clean, n.cont == 1) %>% 
   select(diet.breadth) %>% .[[1]]
-glob <- filter(data, n.cont != 1) %>% 
+glob <- filter(df.clean, n.cont != 1) %>% 
   select(diet.breadth) %>% .[[1]]
 
 # Is variance equal? No
@@ -74,10 +80,9 @@ mean(not.glob) - mean(glob) #0.13 difference in means
 (mean(not.glob) - mean(glob))/mean(not.glob)*100 #8.575447 
 
 #1+2 v 3+ diet breadth
-
-not.glob <- filter(data, n.cont == 1 | n.cont == 2) %>% 
+not.glob <- filter(df.clean, n.cont == 1 | n.cont == 2) %>% 
   select(diet.breadth) %>% .[[1]]
-glob <- filter(data, n.cont == "3+") %>% 
+glob <- filter(df.clean, n.cont == "3+") %>% 
   select(diet.breadth) %>% .[[1]]
 
 # Is variance equal? No
@@ -98,9 +103,8 @@ mean(not.glob) - mean(glob) # basically 0 difference in means
 (mean(not.glob) - mean(glob))/mean(not.glob)*100 #0.05
 
 
-
 #1 v 2+ cont
-df <- filter(df, !duplicated(binomial))
+df <- filter(df.clean, !duplicated(binomial))
 
 # Assign if species is global or not by if it occurs on more than 1 continent
 df$global <- df$n.cont != 1
@@ -141,7 +145,7 @@ res
 #write.csv(res, "onecontvmult.diets.csv", row.names = FALSE)
 
 #1+2 v 3+
-df <- filter(df, !duplicated(binomial))
+df <- filter(df.clean, !duplicated(binomial))
 
 # Assign if species is global or not by if it occurs on more than 1 continent
 df$global <- df$n.cont == "3+"
@@ -183,11 +187,13 @@ res
 
 #dietbreadth
 #need to create values for NAs
-dietbreadth_bargraph <- plyr::ddply(df, c("n.cont", "diet.breadth"), function(x){
+dietbreadth_bargraph <- plyr::ddply(df.clean, c("n.cont", "diet.breadth"), function(x){
   nrow(x)
 })
+
 dietbreadth_bargraph_full <- tidyr::complete(dietbreadth_bargraph, n.cont, diet.breadth)
 
+dietbreadth_bargraph_full$tots <- NA
 dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "1"] <- sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "1"], na.rm = TRUE) #4148
 dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "2"] <- sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "2"], na.rm = TRUE) #272
 dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "3+"] <-sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "3+"], na.rm = TRUE) #6 #phew, they match!
@@ -195,7 +201,7 @@ dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "3+"] <-sum(d
 dietbreadth_bargraph_full$prop <- dietbreadth_bargraph_full$V1 / dietbreadth_bargraph_full$tots
 
 #diettype
-data.melt <- melt(data, id.vars = c("binomial", "n.cont"), 
+data.melt <- melt(df.clean, id.vars = c("binomial", "n.cont"), 
                measure.vars = c("diet.carnivore", "diet.browser", "diet.grazer", "diet.invertivore", "diet.piscivore", "diet.frugivore"),
                variable.name = "diet.type")
 

@@ -18,6 +18,7 @@ data$n.cont[data$n.cont == 3] <- "3+"
 data$n.cont <- as.factor(data$n.cont)
 
 ## Q1: How many spp are on ea continent
+length(unique(data$binomial)) #4426
 length(unique(data$binomial[data$n.cont == 1])) #4148
 length(unique(data$binomial[data$n.cont == 2])) #272
 length(unique(data$binomial[data$n.cont == "3+"])) #6

@@ -68,6 +68,16 @@ df.pan <- subset(df, !is.na(df$pan.gr.area) & !is.na(df$size)) #3084 spp (out of
 
 df.faurby <- subset(df, !is.na(df$faurby.nat.range) & !is.na(df$size) & df$faurby.nat.range != 0) #2629 spp (out of 3497 w/ bs est)
 
+length(unique(df.pan$binomial)) #3084
+length(unique(df.pan$binomial[df.pan$num.cont == 1])) #2841
+length(unique(df.pan$binomial[df.pan$num.cont == 2])) #238
+length(unique(df.pan$binomial[df.pan$num.cont == "3+"])) #5
+
+length(unique(df.faurby$binomial)) # 2629
+length(unique(df.faurby$binomial[df.faurby$num.cont == 1])) #2517
+length(unique(df.faurby$binomial[df.faurby$num.cont == 2])) #108
+length(unique(df.faurby$binomial[df.faurby$num.cont == "3+"])) #4
+
 #get ratio of geog range out of total area
 df.pan$ratio <- df.pan$pan.gr.area/df.pan$cont.tot.area
 df.faurby$ratio <- df.faurby$faurby.nat.range/df.faurby$cont.tot.area

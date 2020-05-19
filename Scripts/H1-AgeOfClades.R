@@ -34,10 +34,10 @@ data.foss.age <- data %>%
 data.foss.age <- data.foss.age %>%
   na.omit()
 
-length(unique(data.foss.age$binomial))
-length(unique(data.foss.age$binomial[data.foss.age$n.cont == 1]))
-length(unique(data.foss.age$binomial[data.foss.age$n.cont == 2]))
-length(unique(data.foss.age$binomial[data.foss.age$n.cont == "3+"]))
+length(unique(data.foss.age$binomial)) #669
+length(unique(data.foss.age$binomial[data.foss.age$n.cont == 1])) #578
+length(unique(data.foss.age$binomial[data.foss.age$n.cont == 2])) #86
+length(unique(data.foss.age$binomial[data.foss.age$n.cont == "3+"])) #5
 
 #1 v 3
 ks.test(data.foss.age$foss.age[data.foss.age$n.cont == 1], 
@@ -82,10 +82,10 @@ data.faurby <- data %>%
 data.faurby <- data.faurby %>%
   na.omit()
 
-length(unique(data.faurby$binomial))
-length(unique(data.faurby$binomial[data.faurby$n.cont == 1]))
-length(unique(data.faurby$binomial[data.faurby$n.cont == 2]))
-length(unique(data.faurby$binomial[data.faurby$n.cont == "3+"]))
+length(unique(data.faurby$binomial)) #4005
+length(unique(data.faurby$binomial[data.faurby$n.cont == 1])) #3736
+length(unique(data.faurby$binomial[data.faurby$n.cont == 2])) #263
+length(unique(data.faurby$binomial[data.faurby$n.cont == "3+"])) #6
 
 #1 v 2+
 ks.test(data.faurby$age.median[data.faurby$n.cont == 1], 

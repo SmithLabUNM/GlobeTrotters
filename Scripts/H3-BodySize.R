@@ -46,6 +46,11 @@ unique.data$global <- as.factor(unique.data$n.cont)
 
 length(unique.data$binomial) #3505
 
+length(unique.data$binomial) #3505
+length(unique.data$binomial[unique.data$n.cont == 1]) #3241
+length(unique.data$binomial[unique.data$n.cont == 2]) #258
+length(unique.data$binomial[unique.data$n.cont == "3+"]) #6
+
 #1 v 2+
 length(unique.data$mass[unique.data$n.cont == 1]) #3241
 length(unique.data$mass[unique.data$n.cont == 2 | unique.data$n.cont == "3+"]) #264
