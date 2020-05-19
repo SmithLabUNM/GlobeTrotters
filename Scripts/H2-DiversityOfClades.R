@@ -67,6 +67,11 @@ indeces[4,5] <- sorensen(x = data$binomial[data$continent == "Africa"],
 df <- data
 df <- filter(df, !duplicated(binomial))
 
+length(unique(df$family)) #135
+length(unique(df$family[df$n.cont == 1])) #132
+length(unique(df$family[df$n.cont == 2])) #54
+length(unique(df$family[df$n.cont == "3+"])) #6
+
 ####1 v 2+ cont####
 df$global <- df$n.cont != 1
 
