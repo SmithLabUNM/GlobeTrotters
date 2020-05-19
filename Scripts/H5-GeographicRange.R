@@ -6,6 +6,21 @@ require(tidyr)
 require(reshape2)
 require(ggplot2)
 
+col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+plot_theme <- theme(panel.grid = element_blank(), 
+                    aspect.ratio = .75, #adjust as needed
+                    axis.text = element_text(size = 21, color = "black"), 
+                    axis.ticks.length=unit(0.2,"cm"),
+                    axis.title = element_text(size = 21),
+                    axis.title.y = element_text(margin = margin(r = 10)),
+                    axis.title.x = element_text(margin = margin(t = 10)),
+                    axis.title.x.top = element_text(margin = margin(b = 5)),
+                    plot.title = element_text(size = 21, face = "plain", hjust = 10),
+                    panel.border = element_rect(colour = "black", fill=NA, size=1),
+                    panel.background = element_blank(),
+                    legend.position = "none",
+                    text = element_text(family = 'Helvetica'))
+
 #load data
 options(stringsAsFactors = FALSE)
 
@@ -15,19 +30,9 @@ data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
 
 data$n.cont[data$n.cont == 4] <- "3+"
 data$n.cont[data$n.cont == 3] <- "3+"
-data$n.cont <- as.factor(data$num.conts)
+data$n.cont <- as.factor(data$n.cont)
 
-pan <- read.table("pantheria.csv", header = TRUE, sep = ",")
-pan1 <- subset(pan, select = c("MSW05_Binomial", "X26.1_GR_Area_km2", "X22.1_HomeRange_km2"))
-colnames(pan1)[1] <- "binomial"
-colnames(pan1)[2] <- "GR_Area_km2"
-colnames(pan1)[3] <- "HomeRange_km2"
-
-ranges <- read.table("ranges.csv", header = TRUE, sep = ",")
-colnames(ranges)[1] <- "binomial"
-
-####H6. Sp. w greater geographic ranges are found on more continents ####
-data2 <- merge(data, pan1, by = "binomial", all.x = TRUE, all.y = FALSE)
+####H5. Sp. w greater geographic ranges are found on more continents ####
 
 #Eurasia = 54.752349 km2
 #Africa = 30.380561 km2
@@ -36,96 +41,72 @@ data2 <- merge(data, pan1, by = "binomial", all.x = TRUE, all.y = FALSE)
 #Australia = 7.692265 km2
 
 #want to add "tot.area" column
-for(i in 1:length(data2$binomial)){
-  if(data2$continent[i] == "Eurasia"){
-    data2$tot.area[i] <- (54.75*10^6)
-  }else if(data2$continent[i] == "Africa"){
-    data2$tot.area[i] <- (30.38*10^6)
-  }else if(data2$continent[i] == "North.America"){
-    data2$tot.area[i] <- (24.70*10^6)
-  }else if(data2$continent[i] == "South.America"){
-    data2$tot.area[i] <- (17.83*10^6)
+for(i in 1:length(data$binomial)){
+  if(data$continent[i] == "Eurasia"){
+    data$tot.area[i] <- (54.75*10^6)
+  }else if(data$continent[i] == "Africa"){
+    data$tot.area[i] <- (30.38*10^6)
+  }else if(data$continent[i] == "North.America"){
+    data$tot.area[i] <- (24.70*10^6)
+  }else if(data$continent[i] == "South.America"){
+    data$tot.area[i] <- (17.83*10^6)
   }else{
-    data2$tot.area[i] <- (7.69*10^6)
+    data$tot.area[i] <- (7.69*10^6)
   }
 }
 
 #want to combine to unique spp
-df <- data2 %>%
+df <- data %>%
   dplyr::group_by(binomial) %>%
-  dplyr::summarise(cont.tot.area = sum(tot.area), gr.area = GR_Area_km2[1], num.cont = num.conts[1], home.range = HomeRange_km2[1], size = mean(mass)) %>%
+  dplyr::summarise(cont.tot.area = sum(tot.area), pan.gr.area = X26.1_GR_Area_km2[1], 
+                   faurby.nat.range = present.natural.range.km2[1], faurby.current.range = current.range.km2[1],
+                   num.cont = n.cont[1], size = mean(mass)) %>%
   as.data.frame()
 
 #get cleanest dataset
-df.clean <- subset(df, !is.na(df$gr.area) & !is.na(df$size))
+df.pan <- subset(df, !is.na(df$pan.gr.area) & !is.na(df$size)) #3084 spp (out of 3497 w/ bs est)
+
+df.faurby <- subset(df, !is.na(df$faurby.nat.range) & !is.na(df$size) & df$faurby.nat.range != 0) #2629 spp (out of 3497 w/ bs est)
 
 #get ratio of geog range out of total area
-df.clean$ratio <- df.clean$gr.area/df.clean$cont.tot.area
+df.pan$ratio <- df.pan$pan.gr.area/df.pan$cont.tot.area
+df.faurby$ratio <- df.faurby$faurby.nat.range/df.faurby$cont.tot.area
 
 #change to log units
-df.clean$logSize <- log10(df.clean$size)
-df.clean$logRatio <- log10(df.clean$ratio)
+df.pan$logSize <- log10(df.pan$size)
+df.pan$logRatio <- log10(df.pan$ratio)
+
+df.faurby$logSize <- log10(df.faurby$size)
+df.faurby$logRatio <- log10(df.faurby$ratio)
 
 #Do species on multiple continents occupy a larger area than available when taking body size into account? Yes!
-summary(glm(lm(log10(df.clean$ratio) ~ log10(df.clean$size) + as.factor(df.clean$num.cont))))
-summary(lm(log10(df.clean$ratio[df.clean$num.cont == "1"]) ~ log10(df.clean$size[df.clean$num.cont == "1"])))
-summary(lm(log10(df.clean$ratio[df.clean$num.cont == "2"]) ~ log10(df.clean$size[df.clean$num.cont == "2"])))
-summary(lm(log10(df.clean$ratio[df.clean$num.cont == "3+"]) ~ log10(df.clean$size[df.clean$num.cont == "3+"])))
+summary(glm(lm(log10(df.pan$ratio) ~ log10(df.pan$size) + as.factor(df.pan$num.cont))))
+summary(lm(log10(df.pan$ratio[df.pan$num.cont == "1"]) ~ log10(df.pan$size[df.pan$num.cont == "1"])))
+summary(lm(log10(df.pan$ratio[df.pan$num.cont == "2"]) ~ log10(df.pan$size[df.pan$num.cont == "2"])))
+summary(lm(log10(df.pan$ratio[df.pan$num.cont == "3+"]) ~ log10(df.pan$size[df.pan$num.cont == "3+"])))
+
+summary(glm(lm(log10(df.faurby$ratio) ~ log10(df.faurby$size) + as.factor(df.faurby$num.cont))))
+summary(lm(log10(df.faurby$ratio[df.faurby$num.cont == "1"]) ~ log10(df.faurby$size[df.faurby$num.cont == "1"])))
+summary(lm(log10(df.faurby$ratio[df.faurby$num.cont == "2"]) ~ log10(df.faurby$size[df.faurby$num.cont == "2"])))
+summary(lm(log10(df.faurby$ratio[df.faurby$num.cont == "3+"]) ~ log10(df.faurby$size[df.faurby$num.cont == "3+"])))
 
 #Do species have a lager geo-range for their body size? Yes!
-summary(glm(lm(log10(df.clean$gr.area) ~ log10(df.clean$size) + as.factor(df.clean$num.cont))))
+summary(glm(lm(log10(df.pan$pan.gr.area) ~ log10(df.pan$size) + as.factor(df.pan$num.cont))))
+summary(glm(lm(log10(df.faurby$faurby.nat.range) ~ log10(df.faurby$size) + as.factor(df.faurby$num.cont))))
 
-# ##using faurby "natural ranges"
-# data3 <- data
-# data3$binomial <- gsub(" ", "_", data$binomial, fixed = TRUE)
-# data3 <- merge(data3, ranges, 
-#                by = "binomial", 
-#                all.x = FALSE, all.y = FALSE)
-# 
-# length(unique(data3$binomial)) #3149 spp
-# 
-# #want to add "tot.area" column
-# for(i in 1:length(data3$binomial)){
-#   if(data3$continent[i] == "Eurasia"){
-#     data3$tot.area[i] <- 54.75
-#   }else if(data3$continent[i] == "Africa"){
-#     data3$tot.area[i] <- 30.38
-#   }else if(data3$continent[i] == "North.America"){
-#     data3$tot.area[i] <- 24.70
-#   }else if(data3$continent[i] == "South.America"){
-#     data3$tot.area[i] <- 17.83
-#   }else{
-#     data3$tot.area[i] <- 7.69
-#   }
-# }
-# 
-# df <- data3 %>%
-#   group_by(binomial) %>%
-#   summarise(cont.tot.area = sum(tot.area), gr.area = present.natural.range.km2[1], num.cont = n.cont[1], curr.range = current.range.km2[1], size = mean(mass)) %>%
-#   as.data.frame()
-# 
-# #get cleanest dataset
-# df.clean <- subset(df, !is.na(df$gr.area) & !is.na(df$size))
-# 
-# #get ratio of geog range out of total area
-# df.clean$ratio <- df.clean$gr.area/df.clean$cont.tot.area
-# df.clean$ratio2 <- df.clean$curr.range/df.clean$cont.tot.area
-# model <- lm(log10(df.clean$ratio + 1) ~ log10(df.clean$size))
-# summary(model)
-# 
-# model2 <- anova(lm(log10(df.clean$ratio + 1) ~ log10(df.clean$size) + as.factor(df.clean$num.cont)))
-# 
-# model <- lm(log10(df.clean$ratio2 + 1) ~ log10(df.clean$size))
-# summary(model)
-# 
-# model2 <- anova(lm(log10(df.clean$ratio2 + 1) ~ log10(df.clean$size) + as.factor(df.clean$num.cont)))
-
-# home range
-ggplot(data = df.clean, aes(x = logSize, y = ratio)) +
+# ranges
+ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
   geom_point(alpha = 0.7, aes(col = num.cont)) +
   geom_smooth(aes(color = num.cont), method = "lm") +
   scale_color_manual(values = col) +
   labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range/Geographic~Range), color = "Number of Continents") +
-  theme_jmg + 
+  plot_theme + 
   theme(legend.position = "top")
 
+ggplot(data = df.faurby, aes(x = logSize, y = ratio)) +
+  geom_point(alpha = 0.7, aes(col = num.cont)) +
+  geom_smooth(aes(color = num.cont), method = "lm") +
+  scale_color_manual(values = col) +
+  labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range/Geographic~Range), color = "Number of Continents") +
+  plot_theme + 
+  theme(legend.position = "top")
