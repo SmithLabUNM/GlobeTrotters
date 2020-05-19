@@ -56,6 +56,7 @@ length(unique(df.clean$binomial[df.clean$n.cont == 1])) #4248
 length(unique(df.clean$binomial[df.clean$n.cont == 2])) #272
 length(unique(df.clean$binomial[df.clean$n.cont == "3+"])) #6
 
+plot(as.factor(df.clean$n.cont), df.clean$diet.breadth)
 
 #1 v 2+ diet breadth
 not.glob <- filter(df.clean, n.cont == 1) %>% 
@@ -220,6 +221,7 @@ diettype_bargraph <- plyr::ddply(unique.new.data, c("numconts", "diettype"), fun
 diettype_bargraph_full <- complete(diettype_bargraph, numconts, diettype)
 diettype_bargraph_full$diet.type <- factor(diettype_bargraph_full$diettype, levels = c("diet.carnivore", "diet.piscivore", "diet.invertivore", "diet.frugivore", "diet.browser", "diet.grazer"))
 
+diettype_bargraph_full$tots <- NA
 diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "1"] <- sum(diettype_bargraph_full$V1[1:6]) #4148
 diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "2"] <- sum(diettype_bargraph_full$V1[7:12]) #272
 diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "3+"] <- sum(diettype_bargraph_full$V1[13:18], na.rm = TRUE) #6
