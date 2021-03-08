@@ -760,5 +760,8 @@ ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "two.sided") #p = 0.0
 ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "less") #p = 0.9747 
 ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "greater") #p = 0.0002849 x is statically older than y
 
+## AVERAGE LIFESPAN OF A SP CORR FOR BS----
 
+hist(df$foss.age)
+plot(log10(df$mass) ~ df$foss.age)
 
