@@ -6,6 +6,25 @@ require(tidyr)
 require(reshape2)
 require(ggplot2)
 require(stringr)
+require(ape)
+require(caper)
+require(phytools)
+
+#plot themes
+col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+plot_theme <- theme(panel.grid = element_blank(), 
+                    aspect.ratio = .75, #adjust as needed
+                    axis.text = element_text(size = 21, color = "black"), 
+                    axis.ticks.length=unit(0.2,"cm"),
+                    axis.title = element_text(size = 21),
+                    axis.title.y = element_text(margin = margin(r = 10)),
+                    axis.title.x = element_text(margin = margin(t = 10)),
+                    axis.title.x.top = element_text(margin = margin(b = 5)),
+                    plot.title = element_text(size = 21, face = "plain", hjust = 10),
+                    panel.border = element_rect(colour = "black", fill=NA, size=1),
+                    panel.background = element_blank(),
+                    legend.position = "none",
+                    text = element_text(family = 'Helvetica')) 
 
 ## LOAD DATA----
 options(stringsAsFactors = FALSE)
@@ -237,6 +256,11 @@ genL.mom <- left_join(cont.mom, pacifici, "binomial")
 
 ## WRITE DATA----
 df <- genL.mom
+
+df$n.cont[df$n.cont == 4] <- "3+"
+df$n.cont[df$n.cont == 3] <- "3+"
+df$n.cont <- as.factor(df$n.cont)
+
 write.csv(df, "MOM.global.mammals.csv", row.names = FALSE)
 
 ## TEST: Proportion of mammal species on 1, 2, 3+ continents----
@@ -249,12 +273,12 @@ n.df <- df %>%
   as.data.frame()
 
 ## TEST: How many spp are on ea continent?----
-length(unique(df$binomial)) #4426
+length(unique(df$binomial)) #4463
 length(unique(df$binomial[df$n.cont == 1])) #4176
-length(unique(df$binomial[df$n.cont == 2])) #281 (6.73%)
-length(unique(df$binomial[df$n.cont == 3 | df$n.cont == 4])) #6 (0.14%)
+length(unique(df$binomial[df$n.cont == 2])) #281 
+length(unique(df$binomial[df$n.cont == "3+"])) #6
 
-unique(df[which(df$n.cont == 3 | df$n.cont == 4), "binomial"])
+unique(df[which(df$n.cont == "3+"), "binomial"])
 
 ## TEST: Connectivity and shared species----
 ## calculate sørensen index
@@ -288,324 +312,158 @@ indeces[4,5] <- sorensen(x = df$binomial[df$continent == "Africa"],
                          y = df$binomial[df$continent == "Australia"])
 write.csv(indeces, "sorensen.index.csv")
 
-## TEST: Species from more diverse orders are more places----
-
-#make matrix of stats
-
-#baseline for order
-n.df <- df %>%
-  group_by(order) %>%
-  summarise(n.tot = length(unique(binomial)),
-            n.cont.tot = length(unique(n.cont)),
-            per.tot = length(unique(binomial))/length(unique(df$binomial))) %>% 
-  as.data.frame()
-
-n.df.per <- df %>%
-  group_by(order, n.cont) %>%
-  summarise(n = length(unique(binomial))) %>%
-  as.data.frame()
-
-df.orders <- merge(n.df, n.df.per, by = "order", all.y = TRUE)
-
-df.orders$per.1[df.orders$n.cont == 1] <- (df.orders$n[df.orders$n.cont == 1]/sum(df.orders$n[df.orders$n.cont == 1])) * 100
-df.orders$per.2[df.orders$n.cont == 2] <- (df.orders$n[df.orders$n.cont == 2]/sum(df.orders$n[df.orders$n.cont == 2])) * 100
-df.orders$per.3.4[df.orders$n.cont >= 3] <- (df.orders$n[df.orders$n.cont >= 3]/sum(df.orders$n[df.orders$n.cont >= 3])) * 100
-
-df.orders$comp.2[df.orders$n.cont == 2]  <- df.orders$per.2[df.orders$n.cont == 2] - df.orders$per.tot[df.orders$n.cont == 2]
-df.orders$comp.3.4[df.orders$n.cont >= 3] <- df.orders$per.3.4[df.orders$n.cont >= 3] - df.orders$per.tot[df.orders$n.cont >= 3]
-
-View(df.orders)
-
-#which orders are over or under represented on 2 or 3+ continents?
-sort(df.orders$comp.2)
-df.orders$order[df.orders$comp.2 > 10] #Carnivora, Chiroptera, Rodentia
-
-min(df.orders$comp.2, na.rm = TRUE) #0.35%; likely not sig
-
-max(df.orders$comp.2, na.rm = TRUE) #53.55%
-which.max(df.orders$comp.2)
-df.orders[10,] #Chiroptera
-
-sort(df.orders$comp.3.4) #all high
-df.orders$order[df.orders$comp.3.4 > 1]
-#Artiodactyla, Carnivora, Chiroptera
-
-min(df.orders$comp.3.4, na.rm = TRUE) #16.49%
-which.min(df.orders$comp.3.4)
-df.orders[11,] #Chiroptera
-max(df.orders$comp.3.4, na.rm = TRUE) #49.94%
-which.max(df.orders$comp.3.4)
-df.orders[7,] #Carnivora
-
-df$n.cont[df$n.cont == 4] <- "3+"
-df$n.cont[df$n.cont == 3] <- "3+"
-df$n.cont <- as.factor(df$n.cont)
-
-####1 v 2 cont####
-
-df$global <- df$n.cont == 2
-
-# Create a data frame with all species
-res <- data.frame(order = unique(df$order))
-
-# Create a dataframe with famlies and count how many species are in each family
-res0 <- df %>% 
-  group_by(order) %>% 
-  dplyr::summarise(count = n())
-
-# Create a dataframe with global orders and count how many species are global
-res1 <- filter(df, global) %>% 
-  group_by(order) %>% 
-  dplyr::summarise(onMult = n())
-
-# Merge the data
-res <- left_join(res, res0, by = "order") %>% 
-  left_join(res1, by = "order")
-
-# Change NA's to zero
-res[is.na(res)] <- 0
-
-# Count how large a proportion we expect of a given family
-res <- mutate(res, glob.proportion = count/sum(count))
-
-# Find the total species number on 2+ continents
-onMult.tot <- sum(res$onMult)
-res <- mutate(res, onMult.proportion = onMult/onMult.tot)
-# Run binomial test and add that to the result
-# The test compares each familys presence globally to their overall precense in mammalia
-res <- purrrlyr::invoke_rows(.d = res,
-                             .f = function(onMult, glob.proportion, ...) {
-                               test <- binom.test(onMult, onMult.tot, p = glob.proportion, alternative="greater")
-                               c(p.val = as.numeric(test$p.value))
-                             },
-                             .collate = "cols", .to = c("p.value"))
-
-# Find which ones are signifcicant
-# And which ones are signifcant bonferoni-corrected since we run many tests
-# And 3 other stronger types of corrections which give the same results
-res <- arrange(res, p.value) %>% mutate(signif = p.value < 0.05,
-                                        signif.bonferoni = p.value < 0.05/n(),
-                                        signif.holm = !0.05/(n() + 1 - 1:n()) < p.value,
-                                        signif.sidak = p.value < 1 - (1 - 0.05)^(1/n()),
-                                        signif.holm.sidak = !(1 - (1 - 0.05)^(1/n())) < p.value)
-
-# Look at the significants
-filter(res, signif)
-
-write.csv(res, "onecontvtwo.orders.csv", row.names = FALSE)
-
-####1+2 v 3+####
-df$global <- df$n.cont == "3+"
-
-# Create a data frame with all species
-res <- data.frame(order = unique(df$order))
-
-# Create a dataframe with famlies and count how many species are in each family
-res0 <- df %>% 
-  group_by(order) %>% 
-  dplyr::summarise(count = n())
-
-# Create a dataframe with global famlies and count how many species are global
-res1 <- filter(df, global) %>% 
-  group_by(order) %>% 
-  dplyr::summarise(on3 = n())
-
-# Merge the data
-res <- left_join(res, res0, by = "order") %>% 
-  left_join(res1, by = "order")
-
-# Change NA's to zero
-res[is.na(res)] <- 0
-
-# Count how large a proportion we expect of a given family
-res <- mutate(res, glob.proportion = count/sum(count))
-
-# Find the total species number on 2+ continents
-on3.tot <- sum(res$on3)
-res <- mutate(res, on3.proportion = on3/on3.tot)
-# Run binomial test and add that to the result
-# The test compares each familys presence globally to their overall precense in mammalia
-res <- purrrlyr::invoke_rows(.d = res,
-                             .f = function(on3, glob.proportion, ...) {
-                               test <- binom.test(on3, on3.tot, p = glob.proportion, alternative="greater")
-                               c(p.val = as.numeric(test$p.value))
-                             },
-                             .collate = "cols", .to = c("p.value"))
-
-# Find which ones are signifcicant
-# And which ones are signifcant bonferoni-corrected since we run many tests
-# And 3 other stronger types of corrections which give the same results
-res <- arrange(res, p.value) %>% mutate(signif = p.value < 0.05,
-                                        signif.bonferoni = p.value < 0.05/n(),
-                                        signif.holm = !0.05/(n() + 1 - 1:n()) < p.value,
-                                        signif.sidak = p.value < 1 - (1 - 0.05)^(1/n()),
-                                        signif.holm.sidak = !(1 - (1 - 0.05)^(1/n())) < p.value)
-
-# Look at the significants
-filter(res, signif)
-
-write.csv(res, "onetwocontvthree.orders.csv", row.names = FALSE)
-
 ## TEST: How far can an animal go?----
 df$AFR_d <- as.numeric(df$AFR_d)
 
-# small mammal (10-1000g)
-sm.mamm <- df[df$mass >=10 & df$mass < 1000,]
-
-#get averages for disperal factors
-sm.avg <- sm.mamm %>%
-  summarise(n = n(),
-            avg.age = mean(age.median, na.rm = TRUE)*1000000,
-            avg.mass = mean(mass, na.rm = TRUE),
-            avg.hmrg = mean(X22.2_HomeRange_Indiv_km2, na.rm = TRUE),
-            disp.age = mean(X7.1_DispersalAge_d, na.rm = TRUE),
-            gen.length = mean(GenerationLength_d, na.rm = TRUE),
-            repro.age = mean(AFR_d, na.rm = TRUE)) %>%
-  as.data.frame()
-            
-# model
-#age of lineage in yr*365day/gen.length*hmrg
-sm.tot.dist <- ((sm.avg$avg.age*365)/sm.avg$gen.length)*sm.avg$avg.hmrg #164,038.7 km2
-
-#per body size
-sm.dist <- sm.tot.dist/sm.avg$avg.mass #1,184.505 km2
-
-# medium mammal (1000-100000g)
-med.mamm <- df[df$mass >= 1000 & df$mass < 100000,]
-
-med.avg <- med.mamm %>%
-  summarise(n = n(),
-            avg.age = mean(age.median, na.rm = TRUE)*1000000,
-            avg.mass = mean(mass, na.rm = TRUE),
-            avg.hmrg = mean(X22.2_HomeRange_Indiv_km2, na.rm = TRUE),
-            disp.age = mean(X7.1_DispersalAge_d, na.rm = TRUE),
-            gen.length = mean(GenerationLength_d, na.rm = TRUE),
-            repro.age = mean(AFR_d, na.rm = TRUE)) %>%
-  as.data.frame()
-
-# model
-#age of lineage in yr*365day/gen.length*hmrg
-med.tot.dist <- ((med.avg$avg.age*365)/med.avg$gen.length)*med.avg$avg.hmrg #15,586,722 km2
-
-#per body size
-med.dist <- med.tot.dist/med.avg$avg.mass #960.8239 km2
-
-# large mammal (>100000g)
-lrg.mamm <- df[df$mass >= 100000,]
-
-lrg.avg <- lrg.mamm %>%
-  summarise(n = n(),
-            avg.age = mean(age.median, na.rm = TRUE)*1000000,
-            avg.mass = mean(mass, na.rm = TRUE),
-            avg.hmrg = mean(X22.2_HomeRange_Indiv_km2, na.rm = TRUE),
-            disp.age = mean(X7.1_DispersalAge_d, na.rm = TRUE),
-            gen.length = mean(GenerationLength_d, na.rm = TRUE),
-            repro.age = mean(AFR_d, na.rm = TRUE)) %>%
-  as.data.frame()
-
-# model
-#age of lineage in yr*365day/gen.length*hmrg
-lrg.tot.dist <- ((lrg.avg$avg.age*365)/lrg.avg$gen.length)*lrg.avg$avg.hmrg #1,695,920,562 km2
-
-#per body size
-lrg.dist <- lrg.tot.dist/lrg.avg$avg.mass #1,864.738 km2
-
-#for all
 dist <- df %>%
   group_by(binomial) %>%
   summarise(n = n(),
-            avg.age = age.median[1]*1000000,
+            foss.avg.age = foss.age[1]*1000000,
+            age = age.median[1]*1000000,
             avg.mass = mean(mass, na.rm = TRUE),
-            avg.hmrg = mean(X22.2_HomeRange_Indiv_km2, na.rm = TRUE),
-            disp.age = mean(X7.1_DispersalAge_d, na.rm = TRUE),
-            gen.length = mean(GenerationLength_d, na.rm = TRUE),
-            repro.age = mean(AFR_d, na.rm = TRUE),
-            n.cont = n.cont[1]) %>%
+            hmrg = X22.2_HomeRange_Indiv_km2[1],
+            disp.age = X7.1_DispersalAge_d[1],
+            gen.length = GenerationLength_d[1],
+            repro.age = AFR_d[1],
+            n.cont = n.cont[1],
+            carn = isTRUE(sum(diet.piscivore + diet.invertivore + diet.carnivore) >= 1 & sum(diet.browser + diet.grazer + diet.frugivore) == 0)) %>%
   as.data.frame()
 
-dist$dist.tot.dist = ((dist$avg.age*365)/dist$gen.length)*dist$avg.hmrg
-dist$dist.per.bs = dist$dist.tot.dist/dist$avg.mass
+#calculate dispersal (From Smith et al. 2016)
+#carnivore: Dc = 40.7M^0.81
+#herb or omni = Dho = D3.31M^0.65
+
+#model: include lineage age, generation length, dispersal distance, age of reproduction
+dist$tot.disp.hmrg = ((dist$age*365)/(dist$gen.length+dist$disp.age))*dist$hmrg
+dist$dist.hmrg.per.bs = dist$tot.disp.hmrg/dist$avg.mass
+
+dist$disp.dist[dist$carn == TRUE] = (dist$age[dist$carn == TRUE]*365/(dist$gen.length[dist$carn == TRUE]+dist$disp.age[dist$carn == TRUE]))*(40.7*(dist$avg.mass[dist$carn == TRUE]^0.81))
+dist$disp.dist[dist$carn != TRUE] = (dist$age[dist$carn != TRUE]*365/(dist$gen.length[dist$carn != TRUE]+dist$disp.age[dist$carn != TRUE]))*(3.31*(dist$avg.mass[dist$carn != TRUE]^0.65))
+  
+Eurasia = 54750000
+Africa = 30380000
+North.America = 24700000
+South.America = 17830000
+Australia = 7690000
+
+length(dist$binomial[!is.na(dist$tot.disp.hmrg)]) #84
+length(dist$binomial[!is.na(dist$disp.dist)]) #126
+
+length(dist$binomial[dist$tot.disp.hmrg >= Australia & !is.na(dist$tot.disp.hmrg)]) #19
+length(dist$binomial[dist$disp.dist >= Australia & !is.na(dist$tot.disp.hmrg)]) #83
+
+length(dist$binomial[dist$tot.disp.hmrg >= South.America & !is.na(dist$tot.disp.hmrg)]) #11
+length(dist$binomial[dist$disp.dist >= South.America & !is.na(dist$tot.disp.hmrg)]) #82
+
+length(dist$binomial[dist$tot.disp.hmrg >= North.America & !is.na(dist$tot.disp.hmrg)]) #8
+length(dist$binomial[dist$disp.dist >= North.America & !is.na(dist$tot.disp.hmrg)]) #81
+
+length(dist$binomial[dist$tot.disp.hmrg >= Africa & !is.na(dist$tot.disp.hmrg)]) #8
+length(dist$binomial[dist$disp.dist >= Africa & !is.na(dist$tot.disp.hmrg)]) #81
+
+length(dist$binomial[dist$tot.disp.hmrg >= Eurasia & !is.na(dist$tot.disp.hmrg)]) #5
+length(dist$binomial[dist$disp.dist >= Eurasia & !is.na(dist$tot.disp.hmrg)]) #80
+
+#dist$dist.tot.dist = ((dist$avg.age*365)/dist$gen.length)*dist$avg.hmrg #incorporate age of dispersal and age of reproduction 
+#dist$dist.per.bs = dist$dist.tot.dist/dist$avg.mass
 
 # what does that look like for those on lots of continents?
-x <- dist[dist$n.cont >= 3,]
-x$dist.tot.dist #ranges from 499.66 to 29,139,370
-mean(x$dist.tot.dist, na.rm = TRUE) #4,926,767
-mean(dist$dist.tot.dist, na.rm = TRUE) #21,242,857
+dist$n.cont[dist$n.cont == 4] <- "3+"
+dist$n.cont[dist$n.cont == 3] <- "3+"
+dist$n.cont <- as.factor(dist$n.cont)
 
-#animals that are widespread have a larger home range than predicted for body size
+dist_stats <- dist %>%
+  group_by(n.cont) %>%
+  summarise(sample.size = length(unique(binomial)),
+            min.dist.hmrg = min(tot.disp.hmrg, na.rm = TRUE),
+            max.dist.hmrg = max(tot.disp.hmrg, na.rm = TRUE),
+            mean.dist.hmrg = mean(tot.disp.hmrg, na.rm = TRUE),
+            min.dist.disp = min(disp.dist, na.rm = TRUE),
+            max.dist.disp = max(disp.dist, na.rm = TRUE),
+            mean.dist.disp = mean(disp.dist, na.rm = TRUE)) %>%
+  as.data.frame()
+
+#unimpeded animals can get across continents; clearly some filtering
+#is the filtering clade or ecological type specific? answer than by looking at families or something
+#problem with home range: already constricted by filtering of some sort
+
+ggplot(data = dist) + geom_histogram(aes(log10(tot.disp.hmrg), fill = n.cont))
+ggplot(data = dist) + geom_histogram(aes(log10(disp.dist), fill = n.cont))
+
+#1 v 2+
+ks.test(dist$tot.disp.hmrg[dist$n.cont == 1], 
+        dist$tot.disp.hmrg[dist$n.cont == 2 | dist$n.cont == "3+"]) 
+#non-sig
+
+ks.test(dist$disp.dist[dist$n.cont == 1], 
+        dist$disp.dist[dist$n.cont == 2 | dist$n.cont == "3+"]) 
+#sig
 
 
-## TEST: animals that are widespread have a larger geographic range than predicted for body size
+#1+2 v 3+
+ks.test(dist$tot.disp.hmrg[dist$n.cont == 2 | dist$n.cont == 1], 
+        dist$tot.disp.hmrg[dist$n.cont == "3+"]) 
+#non-sig
 
-for(i in 1:length(data$binomial)){
-  if(data$continent[i] == "Eurasia"){
-    data$tot.area[i] <- (54.75*10^6)
-  }else if(data$continent[i] == "Africa"){
-    data$tot.area[i] <- (30.38*10^6)
-  }else if(data$continent[i] == "North.America"){
-    data$tot.area[i] <- (24.70*10^6)
-  }else if(data$continent[i] == "South.America"){
-    data$tot.area[i] <- (17.83*10^6)
+ks.test(dist$disp.dist[dist$n.cont == 2 | dist$n.cont == 1], 
+        dist$disp.dist[dist$n.cont == "3+"]) 
+#non-sig
+
+
+#lower tail (min) for 3+ is higher than 1 or 2 continents; but wouldn't show that it's outside of the sampling from 1 or 2 cont; is the lower tail higher because our sample size is 6?
+
+#randomly pick 6 1000 times and see if the lower tail is often as high?
+#create a dist of min, mean, and max; and ask which quartile does it occur in?
+
+## TEST: animals that are widespread have a larger geographic range than predicted for body size----
+
+for(i in 1:length(df$binomial)){
+  if(df$continent[i] == "Eurasia"){
+    df$tot.area[i] <- (54.75*10^6)
+  }else if(df$continent[i] == "Africa"){
+    df$tot.area[i] <- (30.38*10^6)
+  }else if(df$continent[i] == "North.America"){
+    df$tot.area[i] <- (24.70*10^6)
+  }else if(df$continent[i] == "South.America"){
+    df$tot.area[i] <- (17.83*10^6)
   }else{
-    data$tot.area[i] <- (7.69*10^6)
+    df$tot.area[i] <- (7.69*10^6)
   }
 }
 
 #want to combine to unique spp
-df <- data %>%
+df.cont <- df %>%
   dplyr::group_by(binomial) %>%
-  dplyr::summarise(cont.tot.area = sum(tot.area), pan.gr.area = X26.1_GR_Area_km2[1], 
-                   faurby.nat.range = present.natural.range.km2[1], faurby.current.range = current.range.km2[1],
-                   num.cont = n.cont[1], size = mean(mass)) %>%
+  dplyr::summarise(cont.tot.area = sum(tot.area), 
+                   pan.gr.area = X26.1_GR_Area_km2[1], 
+                   hmrg = X22.1_HomeRange_km2[1],
+                   faurby.nat.range = present.natural.range.km2[1], 
+                   faurby.current.range = current.range.km2[1],
+                   num.cont = n.cont[1], 
+                   size = mean(mass)) %>%
   as.data.frame()
 
 #get cleanest dataset
-df.pan <- subset(df, !is.na(df$pan.gr.area) & !is.na(df$size)) #3084 spp (out of 3497 w/ bs est)
+df.pan <- subset(df.cont, !is.na(df.cont$pan.gr.area) & !is.na(df.cont$size))
 
-df.faurby <- subset(df, !is.na(df$faurby.nat.range) & !is.na(df$size) & df$faurby.nat.range != 0) #2629 spp (out of 3497 w/ bs est)
+df.faurby <- subset(df.cont, !is.na(df.cont$faurby.nat.range) & !is.na(df.cont$size) & df.cont$faurby.nat.range != 0) 
 
-length(unique(df.pan$binomial)) #3084
-length(unique(df.pan$binomial[df.pan$num.cont == 1])) #2841
-length(unique(df.pan$binomial[df.pan$num.cont == 2])) #238
+length(unique(df.pan$binomial)) #2972
+length(unique(df.pan$binomial[df.pan$num.cont == 1])) #2730
+length(unique(df.pan$binomial[df.pan$num.cont == 2])) #237
 length(unique(df.pan$binomial[df.pan$num.cont == "3+"])) #5
 
-length(unique(df.faurby$binomial)) # 2629
-length(unique(df.faurby$binomial[df.faurby$num.cont == 1])) #2517
-length(unique(df.faurby$binomial[df.faurby$num.cont == 2])) #108
+length(unique(df.faurby$binomial)) # 2515
+length(unique(df.faurby$binomial[df.faurby$num.cont == 1])) #2396
+length(unique(df.faurby$binomial[df.faurby$num.cont == 2])) #115
 length(unique(df.faurby$binomial[df.faurby$num.cont == "3+"])) #4
-
-#get ratio of geog range out of total area
-df.pan$ratio <- df.pan$pan.gr.area/df.pan$cont.tot.area
-df.faurby$ratio <- df.faurby$faurby.nat.range/df.faurby$cont.tot.area
-
-#change to log units
-df.pan$logSize <- log10(df.pan$size)
-df.pan$logRatio <- log10(df.pan$ratio)
-
-df.faurby$logSize <- log10(df.faurby$size)
-df.faurby$logRatio <- log10(df.faurby$ratio)
-
-#Do species on multiple continents occupy a larger area than available when taking body size into account? Yes!
-summary(glm(lm(log10(df.pan$ratio) ~ log10(df.pan$size) + as.factor(df.pan$num.cont))))
-summary(lm(log10(df.pan$ratio[df.pan$num.cont == "1"]) ~ log10(df.pan$size[df.pan$num.cont == "1"])))
-summary(lm(log10(df.pan$ratio[df.pan$num.cont == "2"]) ~ log10(df.pan$size[df.pan$num.cont == "2"])))
-summary(lm(log10(df.pan$ratio[df.pan$num.cont == "3+"]) ~ log10(df.pan$size[df.pan$num.cont == "3+"])))
-
-summary(glm(lm(log10(df.faurby$ratio) ~ log10(df.faurby$size) + as.factor(df.faurby$num.cont))))
-summary(lm(log10(df.faurby$ratio[df.faurby$num.cont == "1"]) ~ log10(df.faurby$size[df.faurby$num.cont == "1"])))
-summary(lm(log10(df.faurby$ratio[df.faurby$num.cont == "2"]) ~ log10(df.faurby$size[df.faurby$num.cont == "2"])))
-summary(lm(log10(df.faurby$ratio[df.faurby$num.cont == "3+"]) ~ log10(df.faurby$size[df.faurby$num.cont == "3+"])))
-
-#Do species have a lager geo-range for their body size? Yes!
-summary(glm(lm(log10(df.pan$pan.gr.area) ~ log10(df.pan$size) + as.factor(df.pan$num.cont))))
-summary(glm(lm(log10(df.faurby$faurby.nat.range) ~ log10(df.faurby$size) + as.factor(df.faurby$num.cont))))
 
 # ranges
 ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
   geom_point(alpha = 0.7, aes(col = num.cont)) +
   geom_smooth(aes(color = num.cont), method = "lm") +
   scale_color_manual(values = col) +
-  labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range/Geographic~Range), color = "Number of Continents") +
+  labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
   plot_theme + 
   theme(legend.position = "top")
 
@@ -616,6 +474,24 @@ ggplot(data = df.faurby, aes(x = logSize, y = ratio)) +
   labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range/Geographic~Range), color = "Number of Continents") +
   plot_theme + 
   theme(legend.position = "top")
+
+#homerange to geographic range
+plot(log10(df.pan$pan.gr.area) ~ log10(df.pan$hmrg))
+summary(lm(df.pan$pan.gr.area ~ df.pan$hmrg)) #significant, but r2 = 0.04
+#home range does not predict geographic range
+
+#do bigger animals have a larger hmrg?
+summary(lm(log10(df.pan$hmrg) ~ log10(df.pan$size) + as.factor(df.pan$num.cont))) #r2 = 0.67; sig
+summary(lm(log10(df.pan$hmrg) ~ log10(df.pan$size))) #r2 = 0.66; sig
+
+ggplot(data = df.pan, aes(x = log10(df.pan$size), y = log10(df.pan$hmrg))) +
+  geom_point(alpha = 0.7, aes(col = num.cont)) +
+  geom_smooth(aes(color = num.cont), method = "lm") +
+  scale_color_manual(values = col) +
+  labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range), color = "Number of Continents") +
+  plot_theme + 
+  theme(legend.position = "top")
+
 ## TEST: Place of origin dictates how far you can travel----
 #depends on how far can go
 #depends on how connected your country of origin is (that is, SA and AUS won't be able to disperse; EURA and NA should have the most)
@@ -623,55 +499,39 @@ ggplot(data = df.faurby, aes(x = logSize, y = ratio)) +
 
 ## TEST: older clades have dispersed farther----
 
-data$n.cont[data$n.cont == 4] <- "3+"
-data$n.cont[data$n.cont == 3] <- "3+"
-data$n.cont <- as.factor(data$n.cont)
-
 #how big will the datasets be?
-length(unique(data$binomial[data$foss.age > 0]))
-length(unique(data$binomial[data$age.median > 0]))
+length(unique(df$binomial[df$foss.age > 0])) #695
+length(unique(df$binomial[df$age.median > 0])) #4041
 
 # range of dates
-max(data$foss.age, na.rm = TRUE) #22.185
-min(data$foss.age, na.rm = TRUE) #0.00585
+max(df$foss.age, na.rm = TRUE) #22.185
+min(df$foss.age, na.rm = TRUE) #0.00585
 
 #H1 spp that are on mult cont are older
 
 #foss.age
-data.foss.age <- data %>%
+data.foss.age <- df %>%
   dplyr::select(binomial, foss.age, n.cont, continent)
 
 data.foss.age <- data.foss.age %>%
   na.omit()
 
-length(unique(data.foss.age$binomial)) #669
-length(unique(data.foss.age$binomial[data.foss.age$n.cont == 1])) #578
-length(unique(data.foss.age$binomial[data.foss.age$n.cont == 2])) #86
+length(unique(data.foss.age$binomial)) #694
+length(unique(data.foss.age$binomial[data.foss.age$n.cont == 1])) #595
+length(unique(data.foss.age$binomial[data.foss.age$n.cont == 2])) #94
 length(unique(data.foss.age$binomial[data.foss.age$n.cont == "3+"])) #5
 
 #1 v 3
 ks.test(data.foss.age$foss.age[data.foss.age$n.cont == 1], 
         data.foss.age$foss.age[data.foss.age$n.cont == 2 | data.foss.age$n.cont == "3+"]) 
+#sig
 
 #1+2 v 3+
 ks.test(data.foss.age$foss.age[data.foss.age$n.cont == 2 | data.foss.age$n.cont == 1], 
         data.foss.age$foss.age[data.foss.age$n.cont == "3+"]) 
+#sig
 
 ## continents by age  of family
-col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
-plot_theme <- theme(panel.grid = element_blank(), 
-                    aspect.ratio = .75, #adjust as needed
-                    axis.text = element_text(size = 21, color = "black"), 
-                    axis.ticks.length=unit(0.2,"cm"),
-                    axis.title = element_text(size = 21),
-                    axis.title.y = element_text(margin = margin(r = 10)),
-                    axis.title.x = element_text(margin = margin(t = 10)),
-                    axis.title.x.top = element_text(margin = margin(b = 5)),
-                    plot.title = element_text(size = 21, face = "plain", hjust = 10),
-                    panel.border = element_rect(colour = "black", fill=NA, size=1),
-                    panel.background = element_blank(),
-                    legend.position = "none",
-                    text = element_text(family = 'Helvetica')) 
 ggplot() +
   geom_density(data = data.foss.age, aes(x = foss.age, fill = n.cont), alpha = 0.7) +
   scale_fill_manual(values = col, 
@@ -686,24 +546,26 @@ ggplot() +
   scale_y_continuous(name="Probability Density", expand=c(0,0), breaks=seq(0,0.6,0.2),limits=c(0,0.7))
 
 # faurby
-data.faurby <- data %>%
+data.faurby <- df %>%
   dplyr::select(binomial, age.median, n.cont, continent)
 
 data.faurby <- data.faurby %>%
   na.omit()
 
-length(unique(data.faurby$binomial)) #4005
-length(unique(data.faurby$binomial[data.faurby$n.cont == 1])) #3736
-length(unique(data.faurby$binomial[data.faurby$n.cont == 2])) #263
+length(unique(data.faurby$binomial)) #4040
+length(unique(data.faurby$binomial[data.faurby$n.cont == 1])) #3762
+length(unique(data.faurby$binomial[data.faurby$n.cont == 2])) #272
 length(unique(data.faurby$binomial[data.faurby$n.cont == "3+"])) #6
 
 #1 v 2+
 ks.test(data.faurby$age.median[data.faurby$n.cont == 1], 
         data.faurby$age.median[data.faurby$n.cont == 2 | data.faurby$n.cont == "3+"]) 
+#sig
 
 #1+2 v 3+
 ks.test(data.faurby$age.median[data.faurby$n.cont == 1 | data.faurby$n.cont == 2], 
         data.faurby$age.median[data.faurby$n.cont == "3+"]) 
+#sig
 
 ggplot() +
   geom_density(data = data.faurby, aes(x = age.median, fill = n.cont), alpha = 0.7) +
@@ -718,7 +580,7 @@ ggplot() +
                      expand=c(0,0))+
   scale_y_continuous(name="Probability Density", expand=c(0,0), breaks=seq(0,0.6,0.2),limits=c(0,0.7))
 
-## what about continent connectivity and aage of family to disperse?
+## what about continent connectivity and age of family to disperse?
 #for continent pairs
 #NA and SA
 N_S_America <- subset(data.foss.age, data.foss.age$continent == "North.America" | data.foss.age$continent == "South.America")
@@ -726,12 +588,12 @@ N_S_America1 <- subset(N_S_America, N_S_America$n.cont == 1)
 
 two.cont_NS <- subset(N_S_America, N_S_America$n.cont == 2)
 
-length(two.cont_NS$binomial) #104
-length(N_S_America1$binomial) #317
+length(two.cont_NS$binomial) #111
+length(N_S_America1$binomial) #324
 
-ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "two.sided") #p = 0.0008218
-ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "less") #p = 0.0004109 x is statically younger than y
-ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "greater") #p = 0.4979
+ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "two.sided") #sig
+ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "less") #sig x is statically younger than y
+ks.test(N_S_America1$foss.age, two.cont_NS$foss.age, alternative = "greater") #not sig
 
 #NA and EA
 N_E <- subset(data.foss.age, data.foss.age$continent == "North.America" | data.foss.age$continent == "Eurasia")
@@ -739,12 +601,12 @@ N_E1 <- subset(N_E, N_E$n.cont == 1)
 
 two.cont_NE <- subset(N_E, N_E$n.cont == 2)
 
-length(two.cont_NE$binomial) #100
-length(N_E1$binomial) #324
+length(two.cont_NE$binomial) #115
+length(N_E1$binomial) #332
 
-ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "two.sided") #p = 0.03584
-ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "less") #p = 0.01792 x is statically younger than y
-ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "greater") #p = 0.04871
+ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "two.sided") #barely sig
+ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "less") #sig x is statically younger than y
+ks.test(N_E1$foss.age, two.cont_NE$foss.age, alternative = "greater") #non-sig
 
 
 #EA and AF
@@ -753,15 +615,32 @@ E_A1 <- subset(E_A, E_A$n.cont == 1)
 
 two.cont_EA <- subset(E_A, E_A$n.cont == 2)
 
-length(two.cont_EA$binomial) #68
-length(E_A$binomial) #265
+length(two.cont_EA$binomial) #77
+length(E_A$binomial) #276
 
-ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "two.sided") #p = 0.0005699
-ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "less") #p = 0.9747 
-ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "greater") #p = 0.0002849 x is statically older than y
+ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "two.sided") #sig
+ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "less") #non-sig
+ks.test(E_A1$foss.age, two.cont_EA$foss.age, alternative = "greater") #sig; x is statistically older than y
+
+## TESTING ALL THE THINGS
+df$n.cont <- as.character(df$n.cont)
+
+mamm.tree <- read.tree("https://de.cyverse.org/dl/d/DD53DD75-07A0-4609-A321-F3819E72AE5D/Mammal2.tre")
+
+#filter species that don't match
+mamm.tree$tip.label #give indices for each mamm
+#use tip labels to filter the results
+df$binomial <- gsub(" ", "_", df$binomial)
+sp.results_sub <- subset(df, binomial %in% mamm.tree$tip.label) #214
+
+glm(df$n.cont ~ df$mass + df$age.median + df$diet.breadth + df$X22.1_HomeRange_km2)
+
+#Blomberg's K
+phylosig(mamm.tree, slope, method="lambda", test = TRUE, nsim = 1000, se = NULL, start = NULL, control = list()) #39.2275 
+phylosig(mamm.tree, slope, method="K", test = TRUE, nsim = 1000, se = NULL, start = NULL, control = list()) #0.0883418
 
 ## AVERAGE LIFESPAN OF A SP CORR FOR BS----
 
 hist(df$foss.age)
-plot(log10(df$mass) ~ df$foss.age)
-
+plot(df$foss.age ~ log10(df$mass))
+summary(lm(df$foss.age ~ log10(df$mass))) #sig buy r2 = 0.03
