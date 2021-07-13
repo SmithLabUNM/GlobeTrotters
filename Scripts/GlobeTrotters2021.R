@@ -1,4 +1,8 @@
-#load libraries
+# Globe Trotters
+# Meghan A. Balk
+# balkm@email.arizona.edu
+
+##load packages----
 require(dplyr)
 require(purrrlyr)
 require(tidyverse)
@@ -10,41 +14,162 @@ require(ape)
 require(caper)
 require(phytools)
 
-#plot themes
-col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
-plot_theme <- theme(panel.grid = element_blank(), 
-                    aspect.ratio = .75, #adjust as needed
-                    axis.text = element_text(size = 21, color = "black"), 
-                    axis.ticks.length=unit(0.2,"cm"),
-                    axis.title = element_text(size = 21),
-                    axis.title.y = element_text(margin = margin(r = 10)),
-                    axis.title.x = element_text(margin = margin(t = 10)),
-                    axis.title.x.top = element_text(margin = margin(b = 5)),
-                    plot.title = element_text(size = 21, face = "plain", hjust = 10),
-                    panel.border = element_rect(colour = "black", fill=NA, size=1),
-                    panel.background = element_blank(),
-                    legend.position = "none",
-                    text = element_text(family = 'Helvetica')) 
-
-## LOAD DATA----
+##load data----
 options(stringsAsFactors = FALSE)
 
 mom <- read.csv("MOMv11.csv", header = TRUE)
+pacifici <- read.csv("Generation Lenght for Mammals.csv", header = TRUE)
+origin <- read.csv("familyOrigin.csv", header = TRUE)
+pbdb <- read.csv("pbdb.data.csv", as.is = T)
+faurby.ages <- read.csv("species.age.csv", header = TRUE, row.names = 1)
+ranges <- read.csv("ranges.csv", header = TRUE)
+pantheria <- read.csv("pantheria.csv", header = TRUE)
 
-## TRIM DATA----
-#reduce data to major continents, terrestrial things, and non-introduced or domesticated spp
-clean.mom <- as.data.frame(subset(mom, mom$continent == "Africa" | 
-                                       mom$continent == "North.America" | 
-                                       mom$continent == "South.America" | 
-                                       mom$continent == "Eurasia" |
-                                       mom$continent == "Australia"))
-clean.mom <- as.data.frame(subset(clean.mom, clean.mom$extant.status != "introduction" &
-                                             clean.mom$extant.status != "domesticated"))
+## AGES----
 
-## DIET----
-diet.mom <- clean.mom
-diet.mom$trophic[which(diet.mom$trophic == "")] <- NA
-sort(table(diet.mom$trophic))
+sp <- unique(mom$binomial)
+
+### Fossil age
+#age data fossil = PBDB min & max occurence estiamtes. 
+#This provides different fossil data at different resolutions. 
+#The ages extracted here are based only on species level identifications of fossils. 
+#All fossils are provided with a maximum and minimum estimated age. 
+#To get the most likely age of species origin we found the oldest minimum species age, and the oldest maximum species age for each species. 
+#The midpoint of this range was used as species age. Because of species name mismatches and missing species the following analysis includes 693 species out of 4443 possible.
+
+foss.ages <- pbdb %>%
+  mutate(binomial = accepted_name) %>%
+  group_by(binomial) %>%
+  summarise(lw.range = max(min_ma),
+            hi.range = max(max_ma),
+            foss.age = (hi.range+lw.range)/2)
+
+### Faurby ages
+#age data phyl = from Faurby tree estimates. 
+#This source provides 1000 equally likely trees. 
+#The species ages were extracted as branch length to the parent node of each species for all trees. 
+#The estimate used for species ages were the median ages found by this method. Because of species name mismatches the following analysis includes 4019 species out of 4443 possible.
+
+species.age.summary <- function(x) {
+  c(age.mean = mean(x),
+    age.median = median(x),
+    age.lower.range = range(x)[1],
+    age.upper.range = range(x)[2],
+    age.q95 = quantile(x, .95),
+    age.q05 = quantile(x, .05),
+    age.sd = sd(x))
+}
+species.age <- apply(faurby.ages, 1, species.age.summary)
+str(species.age)
+
+species.age[1:7,1:5]
+
+phyl.ages <- as.data.frame(t(species.age))
+phyl.ages$binomial <- rownames(phyl.ages)
+phyl.ages$binomial <- gsub("_", " ", phyl.ages$binomial)
+
+phyl.ages <- phyl.ages %>%
+  dplyr::select(binomial, age.median) 
+
+# genus level
+# age <- read.csv("age.csv", header = TRUE) #match on genus
+# age <- age %>%
+#   dplyr::select(-cont)
+# genera <- unique(mom$genus)
+# age <- age[(age$genus %in% genera),]
+
+##manipulate data----
+##trim data
+colnames(pacifici)
+pacifici.trim <- pacifici %>%
+  dplyr::select(binomial = Scientific_name, 
+                Max_longevity_d, 
+                Rspan_d, 
+                AFR_d, 
+                Calculated_GL_d, 
+                GenerationLength_d)
+
+
+colnames(origin)
+origin.trim <- origin %>%
+  dplyr::select(family,
+                continent.family = continent)
+
+colnames(ranges)
+ranges.trim <- ranges %>%
+  dplyr::select(binomial = Binomial.1.2,
+                current.range,
+                present.natural.range,
+                current.range.km2,
+                present.natural.range.km2)
+
+colnames(pantheria)
+pantheria.trim <- pantheria %>%
+  dplyr::select(binomial = MSW05_Binomial,
+                home.range.km2 = X22.1_HomeRange_km2,
+                indiv.home.range.km2 = X22.2_HomeRange_Indiv_km2,
+                dispersal.age.d = X7.1_DispersalAge_d)
+
+##Combine data
+mom.origin <- left_join(mom, origin.trim,
+                        by = "family")
+
+mom.origin.age <- left_join(mom.origin, age.trim, 
+                            by = "genus")
+
+mom.origin.age.gen <- left_join(mom.origin.age, pacifici.trim,
+                                by = "binomial") #why is it adding 2 rows?
+x <- mom.origin.age.gen[duplicated(mom.origin.age.gen$index),]
+y.1 <- mom.origin.age.gen[mom.origin.age.gen$index == x$index[1],]
+pacifici.trim[pacifici.trim$binomial == y.1$binomial,] #no information for GenLength == 3206.296, remove; 1st index
+y.2 <- mom.origin.age.gen[mom.origin.age.gen$index == x$index[2],]
+pacifici.trim[pacifici.trim$binomial == y.2$binomial,] #no information for GenLength == 6095.5, remove; 2nd index
+a <- mom.origin.age.gen
+a.1 <- a[!(a$binomial == y.1$binomial[1] & a$GenerationLength_d == y.1$GenerationLength_d[1]),]
+a.2 <- a.1[!(a.1$binomial == y.2$binomial[1] & a.1$GenerationLength_d == y.2$GenerationLength_d[2]),]
+
+mom.origin.age.gen.foss <- left_join(a.2, foss.ages,
+                                     by = "binomial")
+
+mom.origin.age.gen.foss.phyl <- left_join(mom.origin.age.gen.foss, phyl.ages,
+                                          by = "binomial")
+
+mom.origin.age.gen.foss.phyl.ranges <- left_join(mom.origin.age.gen.foss.phyl, ranges.trim,
+                                                 by = "binomial")
+
+mom.origin.age.gen.foss.phyl.ranges.pan <- left_join(mom.origin.age.gen.foss.phyl.ranges, pantheria.trim,
+                                                     by = "binomial")
+
+df <- mom.origin.age.gen.foss.phyl.ranges.pan
+
+##remove marine species
+df <- df %>%
+  # Order Cetacea (Whales s.l.)
+  filter(order != "Cetacea") %>%
+  # Order Sirenia (Sea cows s.l.):
+  filter(order != "Sirenia") %>%
+  # Families in the clade Pinnipedia (Seal s.l.):
+  # Odobenidae (walruses)
+  # Otariidae (fur seals and sea lions)
+  # Phocidae (true seals)
+  filter(!family %in% c("Odobenidae", "Otariidae", "Phocidae")) %>%
+  # Other marine mammals:
+  # Marine otter (Lontra felina)
+  filter(binomial != "Lontra felina")
+# Sea otter (Enhydra lutris)
+
+##fix continents
+# Search for continental mistakes
+table(df$continent, useNA = "always")
+
+# Remove NA's, Insulars, and Marine
+df <- filter(df, !is.na(continent) &
+             continent != "Insular" &
+             continent != "Marine")
+
+##fix diet
+df$trophic[which(df$trophic == "")] <- NA
+sort(table(df$trophic))
 
 
 invertivore <- c("ainsect", "Ainsect", "ainsect/carn", "ainsect/ginsect",
@@ -77,9 +202,9 @@ frugivore <- c("browse/frug", "Browse/frug", "browse/frug/ginsect", "Browse/frug
 piscivore <- c("Carn/piscivore", "invert/piscivore", "piscivore", "piscivore/invert", "piscivore/invert/carn")
 
 
-troph.diet <- which(diet.mom$trophic %in% c(invertivore, carnivore, browser, grazer, frugivore, piscivore))
+troph.diet <- which(df$trophic %in% c(invertivore, carnivore, browser, grazer, frugivore, piscivore))
 
-diet.mom <- diet.mom %>% mutate(diet.invertivore = trophic %in% invertivore,
+df <- df %>% mutate(diet.invertivore = trophic %in% invertivore,
                     diet.carnivore = trophic %in% carnivore,
                     diet.browser = trophic %in% browser,
                     diet.grazer = trophic %in% grazer,
@@ -87,12 +212,15 @@ diet.mom <- diet.mom %>% mutate(diet.invertivore = trophic %in% invertivore,
                     diet.piscivore = trophic %in% piscivore)
 
 # Find NAs and replace them with genereic averages
-select(diet.mom, starts_with("diet")) %>% colSums()
+df %>% 
+  dplyr::select(starts_with("diet")) %>% 
+  colSums()
 
-diet.mom$diet.src <- NA
-diet.mom$diet.src[troph.diet] <- "troph.diet"
+df$diet.src <- NA
+df$diet.src[troph.diet] <- "troph.diet"
 
-diet <- select(diet.mom, order, family, genus, binomial, starts_with("diet"))
+diet <- df %>%
+  dplyr::select(order, family, genus, binomial, starts_with("diet"))
 
 species.diet <- filter(diet, !is.na(diet.src)) %>% group_by(binomial) %>%
   summarise(family = family[1],
@@ -124,164 +252,171 @@ family.diet <- group_by(genus.diet, family) %>%
             diet.piscivore = mean(diet.piscivore, na.rm = TRUE) > 0.5,
             diet.src = "mean.family")
 
-for(i in 1:nrow(diet.mom)) {
-  if(diet.mom$binomial[i] %in% species.diet$binomial) {
-    k <- which(species.diet$binomial == diet.mom$binomial[i])
-    diet.mom[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
+for(i in 1:nrow(df)) {
+  if(df$binomial[i] %in% species.diet$binomial) {
+    k <- which(species.diet$binomial == df$binomial[i])
+    df[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
       species.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
-  } else if(diet.mom$genus[i] %in% genus.diet$genus) {
-    k <- which(genus.diet$genus == diet.mom$genus[i])
-    diet.mom[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
+  } else if(df$genus[i] %in% genus.diet$genus) {
+    k <- which(genus.diet$genus == df$genus[i])
+    df[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
       genus.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
-  } else if(diet.mom$family[i] %in% family.diet$family) {
-    k <- which(family.diet$family == diet.mom$family[i])
-    diet.mom[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
+  } else if(df$family[i] %in% family.diet$family) {
+    k <- which(family.diet$family == df$family[i])
+    df[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
       family.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
   } else {
     stop("Cannot find diet")
   }
 }
 
-table(diet.mom$diet.src, useNA = "always")
+table(df$diet.src, useNA = "always")
 
-diet.mom$diet.breadth <- select(diet.mom, diet.invertivore:diet.piscivore) %>% rowSums()
-table(diet.mom$diet.breadth)
+df$diet.breadth <- df %>%
+  dplyr::select(diet.invertivore:diet.piscivore) %>% 
+         rowSums()
+table(df$diet.breadth)
 
-## RANGES----
-range.mom <- diet.mom
-binomials <- range.mom$binomial
-
-pan <- read.csv("pantheria.csv", header = TRUE)
-pan <- pan %>%
-  dplyr::rename(binomial = MSW05_Binomial) %>%
-  dplyr::select(binomial, X26.1_GR_Area_km2, X22.1_HomeRange_km2, 
-                X22.2_HomeRange_Indiv_km2, X7.1_DispersalAge_d)
-pan <- pan[(pan$binomial %in% binomials),]
-
-ranges <- read.csv("ranges.csv", header = TRUE)
-ranges <- ranges %>%
-  rename(binomial = Binomial.1.2) %>%
-  dplyr::select(binomial, current.range.km2, present.natural.range.km2)
-
-ranges$binomial <- gsub("_", " ", ranges$binomial)
-ranges <- ranges[(ranges$binomial %in% binomials),]
-
-range.mom <- left_join(range.mom , pan, "binomial")
-range.mom <- left_join(range.mom , ranges, "binomial")
-
-## AGES----
-
-### Fossil age
-#age data fossil = PBDB min & max occurence estiamtes. 
-#This provides different fossil data at different resolutions. 
-#The ages extracted here are based only on species level identifications of fossils. 
-#All fossils are provided with a maximum and minimum estimated age. 
-#To get the most likely age of species origin we found the oldest minimum species age, and the oldest maximum species age for each species. 
-#The midpoint of this range was used as species age. Because of species name mismatches and missing species the following analysis includes 693 species out of 4443 possible.
-
-age.mom <- range.mom
-
-pbdb <- read.csv("pbdb.data.csv", as.is = T)
-foss.age <-
-  pbdb %>%
-  mutate(binomial = accepted_name) %>%
-  group_by(binomial) %>%
-  summarise(lw.range = max(min_ma),
-            hi.range = max(max_ma),
-            foss.age = (hi.range+lw.range)/2)
-
-
-age.mom <- left_join(age.mom, foss.age, "binomial")
-
-### Faurby ages
-#age data phyl = from Faurby tree estimates. 
-#This source provides 1000 equally likely trees. 
-#The species ages were extracted as branch length to the parent node of each species for all trees. 
-#The estimate used for species ages were the median ages found by this method. Because of species name mismatches the following analysis includes 4019 species out of 4443 possible.
-
-age <- read.csv("species.age.csv", header = TRUE, row.names = 1)
-species.age.summary <- function(x) {
-  c(age.mean = mean(x),
-    age.median = median(x),
-    age.lower.range = range(x)[1],
-    age.upper.range = range(x)[2],
-    age.q95 = quantile(x, .95),
-    age.q05 = quantile(x, .05),
-    age.sd = sd(x))
-}
-species.age <- apply(age, 1, species.age.summary)
-str(species.age)
-
-species.age[1:7,1:5]
-
-faurby.ages <- as.data.frame(t(species.age))
-faurby.ages$binomial <- rownames(faurby.ages)
-faurby.ages$binomial <- gsub("_", " ", faurby.ages$binomial)
-
-faurby.ages <- faurby.ages %>%
-  dplyr::select(binomial, age.median) 
-
-age.mom <- left_join(age.mom, faurby.ages, "binomial")
-
-# genus level
-# age <- read.csv("age.csv", header = TRUE) #match on genus
-# age <- age %>%
-#   dplyr::select(-cont)
-# genera <- unique(mom$genus)
-# age <- age[(age$genus %in% genera),]
-
-## CONTINENTAL----
+##remove continental duplicates
 # Checking for accidents
-cont.mom <- age.mom
+stopifnot(!any(str_trim(df$genus) != df$genus))
+stopifnot(!any(str_trim(df$species) != df$species))
 
-stopifnot(!any(str_trim(df$genus) != cont.mom$genus))
-stopifnot(!any(str_trim(df$species) != cont.mom$species))
+df$binomial[duplicated(df$binomial)]
 
-cont.mom$binomial[duplicated(cont.mom$binomial)]
+df[(duplicated(df[c("binomial", "continent")])),]
 
-cont.mom[(duplicated(cont.mom[c("binomial", "continent")])),]
+# Remove introduced species
+table(df$extant.status)
+df <- df[-which(df$extant.status == "introduction"), ]
 
-cont <- group_by(cont.mom, binomial) %>% summarise(n.cont = n())
-cont.mom <- left_join(cont.mom, cont, by = "binomial")
+# Remove domesticated species
+df <- df[-which(df$extant.status == "domesticated"), ]
 
-## GENERATION LENGTH
-pacifici <- read.csv("Generation Lenght for Mammals.csv", header = TRUE)
+#create ncont
+cont <- group_by(df, binomial) %>% summarise(n.cont = n())
+df <- left_join(df, cont, 
+                by = "binomial")
 
-pacifici <- pacifici %>%
-  dplyr::rename(binomial = Scientific_name) %>%
-  dplyr::select(binomial, GenerationLength_d, Calculated_GL_d, AFR_d, Rspan_d)
-pacifici <- pacifici[(pan$binomial %in% binomials),]
+##data used for analyses----
+#write.csv(df, "data.csv")
 
-genL.mom <- left_join(cont.mom, pacifici, "binomial")
+##plot themes----
+col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+plot_theme <- theme(panel.grid = element_blank(), 
+                    aspect.ratio = .75, #adjust as needed
+                    axis.text = element_text(size = 21, color = "black"), 
+                    axis.ticks.length=unit(0.2,"cm"),
+                    axis.title = element_text(size = 21),
+                    axis.title.y = element_text(margin = margin(r = 10)),
+                    axis.title.x = element_text(margin = margin(t = 10)),
+                    axis.title.x.top = element_text(margin = margin(b = 5)),
+                    plot.title = element_text(size = 21, face = "plain", hjust = 10),
+                    panel.border = element_rect(colour = "black", fill=NA, size=1),
+                    panel.background = element_blank(),
+                    legend.position = "none",
+                    text = element_text(family = 'Helvetica')) 
 
-## WRITE DATA----
-df <- genL.mom
+##data for analyses----
+#df <- read.csv("data.csv", header = TRUE)
 
-df$n.cont[df$n.cont == 4] <- "3+"
-df$n.cont[df$n.cont == 3] <- "3+"
-df$n.cont <- as.factor(df$n.cont)
+## TEST: How many sp are on each continent?----
+length(unique(df$binomial))
+length(unique(df$binomial[df$n.cont == 1]))
+length(unique(df$binomial[df$n.cont == 2])) 
+length(unique(df$binomial[df$n.cont >= 3]))
 
-write.csv(df, "MOM.global.mammals.csv", row.names = FALSE)
+unique(df[which(df$n.cont >= 3), "binomial"])
 
-## TEST: Proportion of mammal species on 1, 2, 3+ continents----
-#n per order
-n.df <- df %>%
-  group_by(order) %>%
-  summarise(n.order = length(unique(binomial)),
-            n.cont.order = length(unique(n.cont)),
-            percent.order = (length(unique(binomial))/length(unique(df$binomial)))*100) %>%
+##DIET----
+
+
+#figure: stacked bar graph
+
+##DISPERSAL----
+## TEST: How far can an animal go?----
+df$AFR_d <- as.numeric(df$AFR_d)
+
+dist <- df %>%
+  dplyr::group_by(binomial) %>%
+  dplyr::summarise(n = n(),
+                   foss.avg.age = fossil.age[1]*1000000,
+                   age = age.median[1]*1000000,
+                   avg.mass = mean(mass, na.rm = TRUE),
+                   hmrg = home.range.km2[1],
+                   disp.age = dispersal.age.d[1],
+                   gen.length = GenerationLength_d[1],
+                   repro.age = AFR_d[1], 
+                   n.cont = n.cont[1],
+                   carn = isTRUE(sum(diet.piscivore + diet.invertivore + diet.carnivore) >= 1 & sum(diet.browser + diet.grazer + diet.frugivore) == 0)) %>%
   as.data.frame()
 
-## TEST: How many spp are on ea continent?----
-length(unique(df$binomial)) #4463
-length(unique(df$binomial[df$n.cont == 1])) #4176
-length(unique(df$binomial[df$n.cont == 2])) #281 
-length(unique(df$binomial[df$n.cont == "3+"])) #6
+dist <- dist %>%
+  drop_na(hmrg, avg.mass)
+  
 
-unique(df[which(df$n.cont == "3+"), "binomial"])
+#model: include lineage age, generation length, dispersal distance, age of reproduction
+dist$tot.disp.hmrg = ((dist$age*365)/(dist$gen.length+dist$disp.age))*(dist$hmrg/2) #go radius of homerange
+dist$dist.hmrg.per.bs = dist$tot.disp.hmrg/dist$avg.mass
+
+ggplot(data = dist) +
+  geom_density(aes(dist.hmrg.per.bs))
+
+#calculate dispersal (From Smith et al. 2016)
+#carnivore: Dc = 40.7M^0.81
+#herb or omni = Dho = D3.31M^0.65
+
+#model: include lineage age divided by number of generations (generation length + age of first reproduction) multiply by dispersal from above equation
+
+dist$disp.dist[dist$carn == TRUE] = (dist$age[dist$carn == TRUE]*365/(dist$gen.length[dist$carn == TRUE]+dist$disp.age[dist$carn == TRUE]))*(40.7*(dist$avg.mass[dist$carn == TRUE]^0.81))
+dist$disp.dist[dist$carn != TRUE] = (dist$age[dist$carn != TRUE]*365/(dist$gen.length[dist$carn != TRUE]+dist$disp.age[dist$carn != TRUE]))*(3.31*(dist$avg.mass[dist$carn != TRUE]^0.65))
+
+Eurasia = 54750000
+Africa = 30380000
+North.America = 24700000
+South.America = 17830000
+Australia = 7690000
+
+length(dist$binomial[!is.na(dist$disp.dist)])
+length(dist$binomial[!is.na(dist$tot.disp.hmrg)]) 
+length(dist$binomial[!is.na(dist$dist.hmrg.per.bs)]) 
+
+length(dist$binomial[dist$disp.dist >= Australia & !is.na(dist$disp.dist)]) 
+
+length(dist$binomial[dist$disp.dist >= South.America & !is.na(dist$tot.disp.hmrg)]) 
+
+length(dist$binomial[dist$disp.dist >= North.America & !is.na(dist$tot.disp.hmrg)]) 
+
+length(dist$binomial[dist$disp.dist >= Africa & !is.na(dist$tot.disp.hmrg)]) 
+
+length(dist$binomial[dist$disp.dist >= Eurasia & !is.na(dist$tot.disp.hmrg)]) 
+
+
+# what does that look like for those on lots of continents?
+dist$n.cont[dist$n.cont == 4] <- "3+"
+dist$n.cont[dist$n.cont == 3] <- "3+"
+dist$n.cont <- as.factor(dist$n.cont)
+
+dist_stats <- dist %>%
+  dplyr::group_by(n.cont) %>%
+  dplyr::summarise(sample.size = length(unique(binomial)),
+                   min.dist.hmrg = min(tot.disp.hmrg, na.rm = TRUE),
+                   max.dist.hmrg = max(tot.disp.hmrg, na.rm = TRUE),
+                   mean.dist.hmrg = mean(tot.disp.hmrg, na.rm = TRUE),
+                   min.dist.disp = min(disp.dist, na.rm = TRUE),
+                   max.dist.disp = max(disp.dist, na.rm = TRUE),
+                   mean.dist.disp = mean(disp.dist, na.rm = TRUE)) %>%
+  as.data.frame()
+
+#unimpeded animals can get across continents; clearly some filtering
+#is the filtering clade or ecological type specific? answer than by looking at families or something
+#problem with home range: already constricted by filtering of some sort
+
+ggplot(data = dist) + 
+  geom_histogram(aes(log10(disp.dist), fill = n.cont))
 
 ## TEST: Connectivity and shared species----
-## calculate sørensen index
+#calculate sørensen index
 sorensen <- function(x,y) {
   index = (2*(length(intersect(x, y))))/(length(x) + length(y))
   return(index)
@@ -312,108 +447,62 @@ indeces[4,5] <- sorensen(x = df$binomial[df$continent == "Africa"],
                          y = df$binomial[df$continent == "Australia"])
 write.csv(indeces, "sorensen.index.csv")
 
-## TEST: How far can an animal go?----
-df$AFR_d <- as.numeric(df$AFR_d)
+#place of origin: where do most globe trotters originate from? chi.square test
+#locomotion
+#figure: stacked bar graph
 
-dist <- df %>%
-  group_by(binomial) %>%
-  summarise(n = n(),
-            foss.avg.age = foss.age[1]*1000000,
-            age = age.median[1]*1000000,
-            avg.mass = mean(mass, na.rm = TRUE),
-            hmrg = X22.2_HomeRange_Indiv_km2[1],
-            disp.age = X7.1_DispersalAge_d[1],
-            gen.length = GenerationLength_d[1],
-            repro.age = AFR_d[1],
-            n.cont = n.cont[1],
-            carn = isTRUE(sum(diet.piscivore + diet.invertivore + diet.carnivore) >= 1 & sum(diet.browser + diet.grazer + diet.frugivore) == 0)) %>%
+##phylogenetic test---
+#test for lambda
+
+
+## TEST: Proportion of mammal species on 1, 2, 3+ continents----
+#n per order
+n.df <- df %>%
+  group_by(order) %>%
+  summarise(n.order = length(unique(binomial)),
+            n.cont.order = length(unique(n.cont)),
+            percent.order = (length(unique(binomial))/length(unique(df$binomial)))*100) %>%
   as.data.frame()
 
-#calculate dispersal (From Smith et al. 2016)
-#carnivore: Dc = 40.7M^0.81
-#herb or omni = Dho = D3.31M^0.65
 
-#model: include lineage age, generation length, dispersal distance, age of reproduction
-dist$tot.disp.hmrg = ((dist$age*365)/(dist$gen.length+dist$disp.age))*dist$hmrg
-dist$dist.hmrg.per.bs = dist$tot.disp.hmrg/dist$avg.mass
+length(unique(df$binomial)) #4463
+length(unique(df$binomial[df$n.cont == 1])) #4176
+length(unique(df$binomial[df$n.cont == 2])) #281 
+length(unique(df$binomial[df$n.cont == "3+"])) #6
 
-dist$disp.dist[dist$carn == TRUE] = (dist$age[dist$carn == TRUE]*365/(dist$gen.length[dist$carn == TRUE]+dist$disp.age[dist$carn == TRUE]))*(40.7*(dist$avg.mass[dist$carn == TRUE]^0.81))
-dist$disp.dist[dist$carn != TRUE] = (dist$age[dist$carn != TRUE]*365/(dist$gen.length[dist$carn != TRUE]+dist$disp.age[dist$carn != TRUE]))*(3.31*(dist$avg.mass[dist$carn != TRUE]^0.65))
-  
-Eurasia = 54750000
-Africa = 30380000
-North.America = 24700000
-South.America = 17830000
-Australia = 7690000
-
-length(dist$binomial[!is.na(dist$tot.disp.hmrg)]) #84
-length(dist$binomial[!is.na(dist$disp.dist)]) #126
-
-length(dist$binomial[dist$tot.disp.hmrg >= Australia & !is.na(dist$tot.disp.hmrg)]) #19
-length(dist$binomial[dist$disp.dist >= Australia & !is.na(dist$tot.disp.hmrg)]) #83
-
-length(dist$binomial[dist$tot.disp.hmrg >= South.America & !is.na(dist$tot.disp.hmrg)]) #11
-length(dist$binomial[dist$disp.dist >= South.America & !is.na(dist$tot.disp.hmrg)]) #82
-
-length(dist$binomial[dist$tot.disp.hmrg >= North.America & !is.na(dist$tot.disp.hmrg)]) #8
-length(dist$binomial[dist$disp.dist >= North.America & !is.na(dist$tot.disp.hmrg)]) #81
-
-length(dist$binomial[dist$tot.disp.hmrg >= Africa & !is.na(dist$tot.disp.hmrg)]) #8
-length(dist$binomial[dist$disp.dist >= Africa & !is.na(dist$tot.disp.hmrg)]) #81
-
-length(dist$binomial[dist$tot.disp.hmrg >= Eurasia & !is.na(dist$tot.disp.hmrg)]) #5
-length(dist$binomial[dist$disp.dist >= Eurasia & !is.na(dist$tot.disp.hmrg)]) #80
-
-#dist$dist.tot.dist = ((dist$avg.age*365)/dist$gen.length)*dist$avg.hmrg #incorporate age of dispersal and age of reproduction 
-#dist$dist.per.bs = dist$dist.tot.dist/dist$avg.mass
-
-# what does that look like for those on lots of continents?
-dist$n.cont[dist$n.cont == 4] <- "3+"
-dist$n.cont[dist$n.cont == 3] <- "3+"
-dist$n.cont <- as.factor(dist$n.cont)
-
-dist_stats <- dist %>%
-  group_by(n.cont) %>%
-  summarise(sample.size = length(unique(binomial)),
-            min.dist.hmrg = min(tot.disp.hmrg, na.rm = TRUE),
-            max.dist.hmrg = max(tot.disp.hmrg, na.rm = TRUE),
-            mean.dist.hmrg = mean(tot.disp.hmrg, na.rm = TRUE),
-            min.dist.disp = min(disp.dist, na.rm = TRUE),
-            max.dist.disp = max(disp.dist, na.rm = TRUE),
-            mean.dist.disp = mean(disp.dist, na.rm = TRUE)) %>%
-  as.data.frame()
-
-#unimpeded animals can get across continents; clearly some filtering
-#is the filtering clade or ecological type specific? answer than by looking at families or something
-#problem with home range: already constricted by filtering of some sort
-
-ggplot(data = dist) + geom_histogram(aes(log10(tot.disp.hmrg), fill = n.cont))
-ggplot(data = dist) + geom_histogram(aes(log10(disp.dist), fill = n.cont))
-
-#1 v 2+
-ks.test(dist$tot.disp.hmrg[dist$n.cont == 1], 
-        dist$tot.disp.hmrg[dist$n.cont == 2 | dist$n.cont == "3+"]) 
-#non-sig
-
-ks.test(dist$disp.dist[dist$n.cont == 1], 
-        dist$disp.dist[dist$n.cont == 2 | dist$n.cont == "3+"]) 
-#sig
+unique(df[which(df$n.cont == "3+"), "binomial"])
 
 
-#1+2 v 3+
-ks.test(dist$tot.disp.hmrg[dist$n.cont == 2 | dist$n.cont == 1], 
-        dist$tot.disp.hmrg[dist$n.cont == "3+"]) 
-#non-sig
+sorensen <- function(x,y) {
+  index = (2*(length(intersect(x, y))))/(length(x) + length(y))
+  return(index)
+}
 
-ks.test(dist$disp.dist[dist$n.cont == 2 | dist$n.cont == 1], 
-        dist$disp.dist[dist$n.cont == "3+"]) 
-#non-sig
+continents <- c("North.America", "South.America", "Eurasia", "Africa", "Australia")
+indeces <- matrix(nrow = 5, ncol = 5, dimnames = list(continents, continents))
 
+indeces[1,2] <- sorensen(x = df$binomial[df$continent == "North.America"], 
+                         y = df$binomial[df$continent == "South.America"])
+indeces[1,3] <- sorensen(x = df$binomial[df$continent == "North.America"], 
+                         y = df$binomial[df$continent == "Eurasia"])
+indeces[1,4] <- sorensen(x = df$binomial[df$continent == "North.America"], 
+                         y = df$binomial[df$continent == "Africa"])
+indeces[1,5] <- sorensen(x = df$binomial[df$continent == "North.America"], 
+                         y = df$binomial[df$continent == "Australia"])
+indeces[2, 3] <- sorensen(x = df$binomial[df$continent == "South.America"], 
+                          y = df$binomial[df$continent == "Eurasia"])
+indeces[2,4] <- sorensen(x = df$binomial[df$continent == "South.America"], 
+                         y = df$binomial[df$continent == "Africa"])
+indeces[2,5] <- sorensen(x = df$binomial[df$continent == "South.America"], 
+                         y = df$binomial[df$continent == "Australia"])
+indeces[3,4] <- sorensen(x = df$binomial[df$continent == "Eurasia"], 
+                         y = df$binomial[df$continent == "Africa"])
+indeces[3,5] <- sorensen(x = df$binomial[df$continent == "Eurasia"], 
+                         y = df$binomial[df$continent == "Australia"])
+indeces[4,5] <- sorensen(x = df$binomial[df$continent == "Africa"], 
+                         y = df$binomial[df$continent == "Australia"])
+write.csv(indeces, "sorensen.index.csv")
 
-#lower tail (min) for 3+ is higher than 1 or 2 continents; but wouldn't show that it's outside of the sampling from 1 or 2 cont; is the lower tail higher because our sample size is 6?
-
-#randomly pick 6 1000 times and see if the lower tail is often as high?
-#create a dist of min, mean, and max; and ask which quartile does it occur in?
 
 ## TEST: animals that are widespread have a larger geographic range than predicted for body size----
 
@@ -644,3 +733,4 @@ phylosig(mamm.tree, slope, method="K", test = TRUE, nsim = 1000, se = NULL, star
 hist(df$foss.age)
 plot(df$foss.age ~ log10(df$mass))
 summary(lm(df$foss.age ~ log10(df$mass))) #sig buy r2 = 0.03
+
