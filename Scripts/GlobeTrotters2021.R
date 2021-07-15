@@ -296,6 +296,9 @@ cont <- group_by(df, binomial) %>%
 df <- left_join(df, cont, 
                 by = "binomial")
 
+#remove humans
+df <- df[df$binomial != "Homo sapiens",]
+
 ##data used for analyses----
 #write.csv(df, "data.csv")
 
