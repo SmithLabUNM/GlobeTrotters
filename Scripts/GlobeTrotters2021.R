@@ -38,11 +38,11 @@ sp <- unique(mom$binomial)
 #The midpoint of this range was used as species age. Because of species name mismatches and missing species the following analysis includes 693 species out of 4443 possible.
 
 foss.ages <- pbdb %>%
-  mutate(binomial = accepted_name) %>%
-  group_by(binomial) %>%
-  summarise(lw.range = max(min_ma),
+  group_by(accepted_name) %>%
+  summarise(binomial = accepted_name[1],
+            lw.range = max(min_ma),
             hi.range = max(max_ma),
-            foss.age = (hi.range+lw.range)/2)
+            foss.age = (hi.range+lw.range)/2) 
 
 ### Faurby ages
 #age data phyl = from Faurby tree estimates. 
@@ -114,33 +114,30 @@ pantheria.trim <- pantheria %>%
 mom.origin <- left_join(mom, origin.trim,
                         by = "family")
 
-mom.origin.age <- left_join(mom.origin, age.trim, 
-                            by = "genus")
-
-mom.origin.age.gen <- left_join(mom.origin.age, pacifici.trim,
-                                by = "binomial") #why is it adding 2 rows?
-x <- mom.origin.age.gen[duplicated(mom.origin.age.gen$index),]
-y.1 <- mom.origin.age.gen[mom.origin.age.gen$index == x$index[1],]
+mom.origin.gen <- left_join(mom.origin, pacifici.trim,
+                            by = "binomial") #why is it adding 2 rows?
+x <- mom.origin.gen[duplicated(mom.origin.gen$index),]
+y.1 <- mom.origin.gen[mom.origin.gen$index == x$index[1],]
 pacifici.trim[pacifici.trim$binomial == y.1$binomial,] #no information for GenLength == 3206.296, remove; 1st index
-y.2 <- mom.origin.age.gen[mom.origin.age.gen$index == x$index[2],]
+y.2 <- mom.origin.gen[mom.origin.gen$index == x$index[2],]
 pacifici.trim[pacifici.trim$binomial == y.2$binomial,] #no information for GenLength == 6095.5, remove; 2nd index
-a <- mom.origin.age.gen
+a <- mom.origin.gen
 a.1 <- a[!(a$binomial == y.1$binomial[1] & a$GenerationLength_d == y.1$GenerationLength_d[1]),]
 a.2 <- a.1[!(a.1$binomial == y.2$binomial[1] & a.1$GenerationLength_d == y.2$GenerationLength_d[2]),]
 
-mom.origin.age.gen.foss <- left_join(a.2, foss.ages,
-                                     by = "binomial")
+mom.origin.gen.foss <- left_join(a.2, foss.ages,
+                                 by = "binomial")
 
-mom.origin.age.gen.foss.phyl <- left_join(mom.origin.age.gen.foss, phyl.ages,
-                                          by = "binomial")
+mom.origin.gen.foss.phyl <- left_join(mom.origin.gen.foss, phyl.ages,
+                                      by = "binomial")
 
-mom.origin.age.gen.foss.phyl.ranges <- left_join(mom.origin.age.gen.foss.phyl, ranges.trim,
+mom.origin.gen.foss.phyl.ranges <- left_join(mom.origin.gen.foss.phyl, ranges.trim,
+                                             by = "binomial")
+
+mom.origin.gen.foss.phyl.ranges.pan <- left_join(mom.origin.gen.foss.phyl.ranges, pantheria.trim,
                                                  by = "binomial")
 
-mom.origin.age.gen.foss.phyl.ranges.pan <- left_join(mom.origin.age.gen.foss.phyl.ranges, pantheria.trim,
-                                                     by = "binomial")
-
-df <- mom.origin.age.gen.foss.phyl.ranges.pan
+df <- mom.origin.gen.foss.phyl.ranges.pan
 
 ##remove marine species
 df <- df %>%
@@ -294,7 +291,8 @@ df <- df[-which(df$extant.status == "introduction"), ]
 df <- df[-which(df$extant.status == "domesticated"), ]
 
 #create ncont
-cont <- group_by(df, binomial) %>% summarise(n.cont = n())
+cont <- group_by(df, binomial) %>% 
+  dplyr::summarise(n.cont = n())
 df <- left_join(df, cont, 
                 by = "binomial")
 
