@@ -93,7 +93,7 @@ pacifici.trim <- pacifici %>%
 colnames(origin)
 origin.trim <- origin %>%
   dplyr::select(family,
-                continent.family = continent)
+                continent.family = final.continent)
 
 colnames(ranges)
 ranges.trim <- ranges %>%
@@ -300,7 +300,7 @@ df <- left_join(df, cont,
 df <- df[df$binomial != "Homo sapiens",]
 
 ##data used for analyses----
-#write.csv(df, "data.csv")
+#write.csv(df, "global.mammal.data.csv")
 
 ##plot themes----
 col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
@@ -362,6 +362,7 @@ dist$dist.hmrg.per.bs = dist$tot.disp.hmrg/dist$avg.mass
 
 ggplot(data = dist) +
   geom_density(aes(dist.hmrg.per.bs))
+
 
 #calculate dispersal (From Smith et al. 2016)
 #carnivore: Dc = 40.7M^0.81
