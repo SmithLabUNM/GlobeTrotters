@@ -25,9 +25,222 @@ faurby.ages <- read.csv("species.age.csv", header = TRUE, row.names = 1)
 ranges <- read.csv("ranges.csv", header = TRUE)
 pantheria <- read.csv("pantheria.csv", header = TRUE)
 
-## AGES----
+## TRIM DATA ----
 
-sp <- unique(mom$binomial)
+#remove humans
+mom <- mom[mom$binomial != "Homo sapiens",]
+
+#remove invalid mass estimates
+mom <- mom[mom$mass.status != "invalid",]
+
+##remove marine species
+mom <- mom %>%
+  # Order Cetacea (Whales s.l.)
+  filter(order != "Cetacea") %>%
+  # Order Sirenia (Sea cows s.l.):
+  filter(order != "Sirenia") %>%
+  # Families in the clade Pinnipedia (Seal s.l.):
+  # Odobenidae (walruses)
+  # Otariidae (fur seals and sea lions)
+  # Phocidae (true seals)
+  filter(!family %in% c("Odobenidae", "Otariidae", "Phocidae")) %>%
+  # Other marine mammals:
+  # Marine otter (Lontra felina)
+  filter(binomial != "Lontra felina")
+# Sea otter (Enhydra lutris)
+
+##fix continents
+# Search for continental mistakes
+table(mom$continent, useNA = "always")
+
+# Remove NA's, Insulars, and Marine
+mom <- filter(mom, !is.na(continent) &
+               continent != "Insular" &
+               continent != "Marine")
+
+# Remove introduced species
+table(mom$extant.status)
+mom <- mom[-which(mom$extant.status == "introduction"), ]
+
+# Remove domesticated species
+mom <- mom[-which(mom$extant.status == "domesticated"), ]
+
+# Checking for accidents
+stopifnot(!any(str_trim(mom$genus) != mom$genus))
+stopifnot(!any(str_trim(mom$species) != mom$species))
+
+##remove continental duplicates
+mom[(duplicated(mom[c("binomial", "continent")])),]
+
+data <- mom
+write.csv(data, "data.trimmed.csv")
+
+## FIX DIET ----
+
+mom$trophic[which(mom$trophic == "")] <- NA
+sort(table(mom$trophic))
+
+invertivore <- c("ainsect", "Ainsect", "ainsect/carn", "ainsect/ginsect",
+                 "browse/frug/ginsect", "Browse/frug/ginsect", "browse/ginsect",
+                 "browse/ginsect/carn", "carn/ginsect", "carn/ginsect/frug", "carn/invert",
+                 "carn/ginsect/frug", "carn/invert", "carn/invert/frug", "frug/Ainsect",
+                 "frug/ginsect", "Frug/ginsect", "frug/ginsect/browse", "frug/ginsect/carn",
+                 "frug/browse/ginsect", "frug/invert", "ginsect", "Ginsect", "ginsect (earthworms)",
+                 "ginsect/browse", "ginsect/browse/frug", "ginsect/carn", "Ginsect/carn", "ginsect/carn/frug",
+                 "ginsect/frug", "Ginsect/frug", "ginsect/frug/browse", "Ginsect/frug/carn",
+                 "graze/ginsect", "herb/invert", "insect", "invert", "invert/browse", "invert/carn",
+                 "invert/carn/frug", "invert/piscivore", "inverts/carn/frug", "piscivore/invert", "piscivore/invert/carn")
+carnivore <- c("ainsect/carn", "browse/ginsect/carn", "carn", "Carn", "carn/frug", "carn/ginsect",
+               "carn/ginsect/frug", "carn/invert", "carn/invert/frug", "carn/omnivore", "Carn/piscivore",
+               "frug/browse/carn", "ginsect/carn", "Ginsect/carn", "ginsect/carn/frug", "Ginsect/frug/carn",
+               "Graze/carn", "invert/carn", "invert/carn/frug", "inverts/carn/frug", "piscivore/invert/carn", "frug/carn")
+browser <- c("browse", "Browse", "browse (bamboo)", "browse (roots & tubers)", "browse/frug", "Browse/frug",
+             "browse/frug/ginsect", "Browse/frug/ginsect", "browse/ginsect", "browse/ginsect/carn",
+             "browse/graze", "Browse/graze", "browse/graze/frug", "frug/browse", "Frug/browse", "frug/browse/carn",
+             "frug/browse/ginsect", "frug/browse/graze", "frug/ginsect/browse", "ginsect/browse", "ginsect/browse/frug",
+             "ginsect/frug/browse", "graze/brower", "graze/browse", "Graze/browse", "graze/browse/frug", "invert/browse")
+grazer <- c("browse/graze", "Browse/graze", "browse/graze/frug", "frug/browse/graze", "frug/graze", "graze", "Graze",
+            "graze/brower", "graze/browse", "Graze/browse", "graze/browse/frug", "Graze/carn", "graze/frug", "Graze/frug",
+            "graze/ginsect")
+frugivore <- c("browse/frug", "Browse/frug", "browse/frug/ginsect", "Browse/frug/ginsect", "browse/graze/frug", "carn/frug",
+               "carn/ginsect/frug", "carn/invert/frug", "frug", "Frug", "frug/Ainsect", "frug/browse", "Frug/browse", "frug/browse/carn",
+               "frug/browse/ginsect", "frug/browse/graze", "frug/carn", "frug/ginsect", "Frug/ginsect", "frug/ginsect/browse", "frug/ginsect/carn",
+               "frug/graze", "frug/herb", "frug/invert", "ginsect/browse/frug", "ginsect/carn/frug", "ginsect/frug", "Ginsect/frug",
+               "ginsect/frug/browse", "Ginsect/frug/carn", "graze/browse/frug", "graze/frug", "Graze/frug", "invert/carn/frug", "inverts/carn/frug")
+piscivore <- c("Carn/piscivore", "invert/piscivore", "piscivore", "piscivore/invert", "piscivore/invert/carn")
+
+
+troph.diet <- which(mom$trophic %in% c(invertivore, carnivore, browser, grazer, frugivore, piscivore))
+
+mom <- mom %>% 
+  mutate(diet.invertivore = trophic %in% invertivore,
+         diet.carnivore = trophic %in% carnivore,
+         diet.browser = trophic %in% browser,
+         diet.grazer = trophic %in% grazer,
+         diet.frugivore = trophic %in% frugivore,
+         diet.piscivore = trophic %in% piscivore)
+
+# Find NAs and replace them with genereic averages
+mom %>% 
+  dplyr::select(starts_with("diet")) %>% 
+  colSums()
+
+mom$diet.src <- NA
+mom$diet.src[troph.diet] <- "troph.diet"
+
+diet <- mom %>%
+  dplyr::select(order, family, genus, binomial, starts_with("diet"))
+
+species.diet <- filter(diet, !is.na(diet.src)) %>% 
+  group_by(binomial) %>%
+  dplyr::summarise(family = family[1],
+                   genus = genus[1],
+                   diet.invertivore = sum(diet.invertivore, na.rm = TRUE) >= 1,
+                   diet.carnivore = sum(diet.carnivore, na.rm = TRUE) >= 1,
+                   diet.browser = sum(diet.browser, na.rm = TRUE) >= 1,
+                   diet.grazer = sum(diet.grazer, na.rm = TRUE) >= 1,
+                   diet.frugivore = sum(diet.frugivore, na.rm = TRUE) >= 1,
+                   diet.piscivore = sum(diet.piscivore, na.rm = TRUE) >= 1,
+                   diet.src = "species.diet")
+
+genus.diet <- group_by(species.diet, genus) %>%
+  dplyr::summarise(family = family[1],
+                   diet.invertivore = mean(diet.invertivore, na.rm = TRUE) > 0.5,
+                   diet.carnivore = mean(diet.carnivore, na.rm = TRUE) > 0.5,
+                   diet.browser = mean(diet.browser, na.rm = TRUE) > 0.5,
+                   diet.grazer = mean(diet.grazer, na.rm = TRUE) > 0.5,
+                   diet.frugivore = mean(diet.frugivore, na.rm = TRUE) > 0.5,
+                   diet.piscivore = mean(diet.piscivore, na.rm = TRUE) > 0.5,
+                   diet.src = "mean.genus")
+
+family.diet <- group_by(genus.diet, family) %>%
+  dplyr::summarise(diet.invertivore = mean(diet.invertivore, na.rm = TRUE) > 0.5,
+                   diet.carnivore = mean(diet.carnivore, na.rm = TRUE) > 0.5,
+                   diet.browser = mean(diet.browser, na.rm = TRUE) > 0.5,
+                   diet.grazer = mean(diet.grazer, na.rm = TRUE) > 0.5,
+                   diet.frugivore = mean(diet.frugivore, na.rm = TRUE) > 0.5,
+                   diet.piscivore = mean(diet.piscivore, na.rm = TRUE) > 0.5,
+                   diet.src = "mean.family")
+
+for(i in 1:nrow(mom)) {
+  if(mom$binomial[i] %in% species.diet$binomial) {
+    k <- which(species.diet$binomial == mom$binomial[i])
+    mom[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
+      species.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
+  } else if(mom$genus[i] %in% genus.diet$genus) {
+    k <- which(genus.diet$genus == mom$genus[i])
+    mom[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
+      genus.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
+  } else if(mom$family[i] %in% family.diet$family) {
+    k <- which(family.diet$family == mom$family[i])
+    mom[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
+      family.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
+  } else {
+    stop("Cannot find diet")
+  }
+}
+
+table(mom$diet.src, useNA = "always")
+
+## CREATE LONG CONTINENT VERSION
+
+mom <- mom %>% 
+  mutate(Africa = continent == "Africa",
+         North.America = continent == "North.America",
+         South.America = continent == "South.America",
+         Eurasia = continent == "Eurasia",
+         Australia = continent == "Australia")
+
+## GROUP_BY SPECIES ----
+
+#diets differ by continent, taking the widest diet possible
+df.sums <- mom %>%
+  group_by(binomial) %>%
+  dplyr::summarise(diet.invertivore.tot = sum(diet.invertivore),
+                   diet.carnivore.tot = sum(diet.carnivore),
+                   diet.browser.tot = sum(diet.browser), 
+                   diet.grazer.tot = sum(diet.grazer),
+                   diet.piscivore.tot = sum(diet.piscivore),
+                   diet.frugivore.tot = sum(diet.frugivore),
+                   avg.mass = mean(mass),
+                   n.cont = length(unique(continent)))
+
+#NEED TO CHANGE TO T/F TO DO SUM FOR N CONT AND N BREADTH
+
+df.continent <- mom %>%
+  group_by(binomial) %>%
+  dplyr::summarise(continent.Africa = as.logical(sum(Africa)),
+                   continent.North.America = as.logical(sum(North.America)),
+                   continent.South.America = as.logical(sum(South.America)),
+                   continent.Eurasia = as.logical(sum(Eurasia)),
+                   continent.Australia = as.logical(sum(Australia)))
+
+df.taxa <- mom[!duplicated(mom$binomial),] %>%
+  dplyr::select(order,
+                family,
+                genus,
+                species,
+                binomial)
+
+df.sumTaxa <- left_join(df.taxa, df.sums,
+                        by = "binomial")
+df.contTaxaSums <- left_join(df.sumTaxa, df.continent,
+                             by = "binomial")
+
+df.contTaxaSums$diet.breadth <- df.contTaxaSums %>%
+  dplyr::select(starts_with("diet.")) %>% 
+  rowSums()
+table(df.contTaxaSums$diet.breadth)
+
+df.contTaxaSums$n.cont <- df.contTaxaSums %>%
+  dplyr::select(starts_with("continent.")) %>%
+  rowSums()
+table(df.contTaxaSums$n.cont)
+
+length(unique(mom$binomial))
+nrow(df.contTaxaSums)
+
+## AGES----
 
 ### Fossil age
 #age data fossil = PBDB min & max occurence estiamtes. 
@@ -39,10 +252,10 @@ sp <- unique(mom$binomial)
 
 foss.ages <- pbdb %>%
   group_by(accepted_name) %>%
-  summarise(binomial = accepted_name[1],
-            lw.range = max(min_ma),
-            hi.range = max(max_ma),
-            foss.age = (hi.range+lw.range)/2) 
+  dplyr::summarise(binomial = accepted_name[1],
+                   lw.range = max(min_ma),
+                   hi.range = max(max_ma),
+                   foss.age = (hi.range+lw.range)/2) 
 
 ### Faurby ages
 #age data phyl = from Faurby tree estimates. 
@@ -78,7 +291,9 @@ phyl.ages <- phyl.ages %>%
 # genera <- unique(mom$genus)
 # age <- age[(age$genus %in% genera),]
 
-##manipulate data----
+
+## COMBINE DATA ---
+
 ##trim data
 colnames(pacifici)
 pacifici.trim <- pacifici %>%
@@ -111,196 +326,26 @@ pantheria.trim <- pantheria %>%
                 dispersal.age.d = X7.1_DispersalAge_d)
 
 ##Combine data
-mom.origin <- left_join(mom, origin.trim,
+df.origin <- left_join(df, origin.trim,
                         by = "family")
 
-mom.origin.gen <- left_join(mom.origin, pacifici.trim,
+df.origin.gen <- left_join(df.origin, pacifici.trim,
                             by = "binomial") #why is it adding 2 rows?
-x <- mom.origin.gen[duplicated(mom.origin.gen$index),]
-y.1 <- mom.origin.gen[mom.origin.gen$index == x$index[1],]
-pacifici.trim[pacifici.trim$binomial == y.1$binomial,] #no information for GenLength == 3206.296, remove; 1st index
-y.2 <- mom.origin.gen[mom.origin.gen$index == x$index[2],]
-pacifici.trim[pacifici.trim$binomial == y.2$binomial,] #no information for GenLength == 6095.5, remove; 2nd index
-a <- mom.origin.gen
-a.1 <- a[!(a$binomial == y.1$binomial[1] & a$GenerationLength_d == y.1$GenerationLength_d[1]),]
-a.2 <- a.1[!(a.1$binomial == y.2$binomial[1] & a.1$GenerationLength_d == y.2$GenerationLength_d[2]),]
 
-mom.origin.gen.foss <- left_join(a.2, foss.ages,
-                                 by = "binomial")
+df.origin.gen.foss <- left_join(df.origin.gen, foss.ages,
+                                by = "binomial")
 
-mom.origin.gen.foss.phyl <- left_join(mom.origin.gen.foss, phyl.ages,
-                                      by = "binomial")
+df.origin.gen.foss.phyl <- left_join(df.origin.gen.foss, phyl.ages,
+                                     by = "binomial")
 
-mom.origin.gen.foss.phyl.ranges <- left_join(mom.origin.gen.foss.phyl, ranges.trim,
-                                             by = "binomial")
+df.origin.gen.foss.phyl.ranges <- left_join(df.origin.gen.foss.phyl, ranges.trim,
+                                            by = "binomial")
 
-mom.origin.gen.foss.phyl.ranges.pan <- left_join(mom.origin.gen.foss.phyl.ranges, pantheria.trim,
-                                                 by = "binomial")
+df.origin.gen.foss.phyl.ranges.pan <- left_join(df.origin.gen.foss.phyl.ranges, pantheria.trim,
+                                                by = "binomial")
 
-df <- mom.origin.gen.foss.phyl.ranges.pan
-
-##remove marine species
-df <- df %>%
-  # Order Cetacea (Whales s.l.)
-  filter(order != "Cetacea") %>%
-  # Order Sirenia (Sea cows s.l.):
-  filter(order != "Sirenia") %>%
-  # Families in the clade Pinnipedia (Seal s.l.):
-  # Odobenidae (walruses)
-  # Otariidae (fur seals and sea lions)
-  # Phocidae (true seals)
-  filter(!family %in% c("Odobenidae", "Otariidae", "Phocidae")) %>%
-  # Other marine mammals:
-  # Marine otter (Lontra felina)
-  filter(binomial != "Lontra felina")
-# Sea otter (Enhydra lutris)
-
-##fix continents
-# Search for continental mistakes
-table(df$continent, useNA = "always")
-
-# Remove NA's, Insulars, and Marine
-df <- filter(df, !is.na(continent) &
-             continent != "Insular" &
-             continent != "Marine")
-
-##fix diet
-df$trophic[which(df$trophic == "")] <- NA
-sort(table(df$trophic))
-
-
-invertivore <- c("ainsect", "Ainsect", "ainsect/carn", "ainsect/ginsect",
-                 "browse/frug/ginsect", "Browse/frug/ginsect", "browse/ginsect",
-                 "browse/ginsect/carn", "carn/ginsect", "carn/ginsect/frug", "carn/invert",
-                 "carn/ginsect/frug", "carn/invert", "carn/invert/frug", "frug/Ainsect",
-                 "frug/ginsect", "Frug/ginsect", "frug/ginsect/browse", "frug/ginsect/carn",
-                 "frug/browse/ginsect", "frug/invert", "ginsect", "Ginsect", "ginsect (earthworms)",
-                 "ginsect/browse", "ginsect/browse/frug", "ginsect/carn", "Ginsect/carn", "ginsect/carn/frug",
-                 "ginsect/frug", "Ginsect/frug", "ginsect/frug/browse", "Ginsect/frug/carn",
-                 "graze/ginsect", "herb/invert", "insect", "invert", "invert/browse", "invert/carn",
-                 "invert/carn/frug", "invert/piscivore", "inverts/carn/frug", "piscivore/invert", "piscivore/invert/carn")
-carnivore <- c("ainsect/carn", "browse/ginsect/carn", "carn", "Carn", "carn/frug", "carn/ginsect",
-               "carn/ginsect/frug", "carn/invert", "carn/invert/frug", "carn/omnivore", "Carn/piscivore",
-               "frug/browse/carn", "ginsect/carn", "Ginsect/carn", "ginsect/carn/frug", "Ginsect/frug/carn",
-               "Graze/carn", "invert/carn", "invert/carn/frug", "inverts/carn/frug", "piscivore/invert/carn", "frug/carn")
-browser <- c("browse", "Browse", "browse (bamboo)", "browse (roots & tubers)", "browse/frug", "Browse/frug",
-             "browse/frug/ginsect", "Browse/frug/ginsect", "browse/ginsect", "browse/ginsect/carn",
-             "browse/graze", "Browse/graze", "browse/graze/frug", "frug/browse", "Frug/browse", "frug/browse/carn",
-             "frug/browse/ginsect", "frug/browse/graze", "frug/ginsect/browse", "ginsect/browse", "ginsect/browse/frug",
-             "ginsect/frug/browse", "graze/brower", "graze/browse", "Graze/browse", "graze/browse/frug", "invert/browse")
-grazer <- c("browse/graze", "Browse/graze", "browse/graze/frug", "frug/browse/graze", "frug/graze", "graze", "Graze",
-            "graze/brower", "graze/browse", "Graze/browse", "graze/browse/frug", "Graze/carn", "graze/frug", "Graze/frug",
-            "graze/ginsect")
-frugivore <- c("browse/frug", "Browse/frug", "browse/frug/ginsect", "Browse/frug/ginsect", "browse/graze/frug", "carn/frug",
-               "carn/ginsect/frug", "carn/invert/frug", "frug", "Frug", "frug/Ainsect", "frug/browse", "Frug/browse", "frug/browse/carn",
-               "frug/browse/ginsect", "frug/browse/graze", "frug/carn", "frug/ginsect", "Frug/ginsect", "frug/ginsect/browse", "frug/ginsect/carn",
-               "frug/graze", "frug/herb", "frug/invert", "ginsect/browse/frug", "ginsect/carn/frug", "ginsect/frug", "Ginsect/frug",
-               "ginsect/frug/browse", "Ginsect/frug/carn", "graze/browse/frug", "graze/frug", "Graze/frug", "invert/carn/frug", "inverts/carn/frug")
-piscivore <- c("Carn/piscivore", "invert/piscivore", "piscivore", "piscivore/invert", "piscivore/invert/carn")
-
-
-troph.diet <- which(df$trophic %in% c(invertivore, carnivore, browser, grazer, frugivore, piscivore))
-
-df <- df %>% mutate(diet.invertivore = trophic %in% invertivore,
-                    diet.carnivore = trophic %in% carnivore,
-                    diet.browser = trophic %in% browser,
-                    diet.grazer = trophic %in% grazer,
-                    diet.frugivore = trophic %in% frugivore,
-                    diet.piscivore = trophic %in% piscivore)
-
-# Find NAs and replace them with genereic averages
-df %>% 
-  dplyr::select(starts_with("diet")) %>% 
-  colSums()
-
-df$diet.src <- NA
-df$diet.src[troph.diet] <- "troph.diet"
-
-diet <- df %>%
-  dplyr::select(order, family, genus, binomial, starts_with("diet"))
-
-species.diet <- filter(diet, !is.na(diet.src)) %>% group_by(binomial) %>%
-  summarise(family = family[1],
-            genus = genus[1],
-            diet.invertivore = sum(diet.invertivore, na.rm = TRUE) >= 1,
-            diet.carnivore = sum(diet.carnivore, na.rm = TRUE) >= 1,
-            diet.browser = sum(diet.browser, na.rm = TRUE) >= 1,
-            diet.grazer = sum(diet.grazer, na.rm = TRUE) >= 1,
-            diet.frugivore = sum(diet.frugivore, na.rm = TRUE) >= 1,
-            diet.piscivore = sum(diet.piscivore, na.rm = TRUE) >= 1,
-            diet.src = "species.diet")
-
-genus.diet <- group_by(species.diet, genus) %>%
-  summarise(family = family[1],
-            diet.invertivore = mean(diet.invertivore, na.rm = TRUE) > 0.5,
-            diet.carnivore = mean(diet.carnivore, na.rm = TRUE) > 0.5,
-            diet.browser = mean(diet.browser, na.rm = TRUE) > 0.5,
-            diet.grazer = mean(diet.grazer, na.rm = TRUE) > 0.5,
-            diet.frugivore = mean(diet.frugivore, na.rm = TRUE) > 0.5,
-            diet.piscivore = mean(diet.piscivore, na.rm = TRUE) > 0.5,
-            diet.src = "mean.genus")
-
-family.diet <- group_by(genus.diet, family) %>%
-  summarise(diet.invertivore = mean(diet.invertivore, na.rm = TRUE) > 0.5,
-            diet.carnivore = mean(diet.carnivore, na.rm = TRUE) > 0.5,
-            diet.browser = mean(diet.browser, na.rm = TRUE) > 0.5,
-            diet.grazer = mean(diet.grazer, na.rm = TRUE) > 0.5,
-            diet.frugivore = mean(diet.frugivore, na.rm = TRUE) > 0.5,
-            diet.piscivore = mean(diet.piscivore, na.rm = TRUE) > 0.5,
-            diet.src = "mean.family")
-
-for(i in 1:nrow(df)) {
-  if(df$binomial[i] %in% species.diet$binomial) {
-    k <- which(species.diet$binomial == df$binomial[i])
-    df[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
-      species.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
-  } else if(df$genus[i] %in% genus.diet$genus) {
-    k <- which(genus.diet$genus == df$genus[i])
-    df[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
-      genus.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
-  } else if(df$family[i] %in% family.diet$family) {
-    k <- which(family.diet$family == df$family[i])
-    df[i, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")] <-
-      family.diet[k, c("diet.invertivore", "diet.carnivore", "diet.browser", "diet.grazer", "diet.frugivore", "diet.piscivore", "diet.src")]
-  } else {
-    stop("Cannot find diet")
-  }
-}
-
-table(df$diet.src, useNA = "always")
-
-df$diet.breadth <- df %>%
-  dplyr::select(diet.invertivore:diet.piscivore) %>% 
-         rowSums()
-table(df$diet.breadth)
-
-##remove continental duplicates
-# Checking for accidents
-stopifnot(!any(str_trim(df$genus) != df$genus))
-stopifnot(!any(str_trim(df$species) != df$species))
-
-df$binomial[duplicated(df$binomial)]
-
-df[(duplicated(df[c("binomial", "continent")])),]
-
-# Remove introduced species
-table(df$extant.status)
-df <- df[-which(df$extant.status == "introduction"), ]
-
-# Remove domesticated species
-df <- df[-which(df$extant.status == "domesticated"), ]
-
-#create ncont
-cont <- group_by(df, binomial) %>% 
-  dplyr::summarise(n.cont = n())
-df <- left_join(df, cont, 
-                by = "binomial")
-
-#remove humans
-df <- df[df$binomial != "Homo sapiens",]
-
-##data used for analyses----
-#write.csv(df, "global.mammal.data.csv")
+df <- df.origin.gen.foss.phyl.ranges.pan
+write.csv(df, "global.mammal.data.csv")
 
 ##plot themes----
 col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
@@ -736,3 +781,13 @@ hist(df$foss.age)
 plot(df$foss.age ~ log10(df$mass))
 summary(lm(df$foss.age ~ log10(df$mass))) #sig buy r2 = 0.03
 
+
+
+# x <- df.origin.gen[duplicated(df.origin.gen$index),]
+# y.1 <- df.origin.gen[df.origin.gen$index == x$index[1],]
+# pacifici.trim[pacifici.trim$binomial == y.1$binomial,] #no information for GenLength == 3206.296, remove; 1st index
+# y.2 <- df.origin.gen[df.origin.gen$index == x$index[2],]
+# pacifici.trim[pacifici.trim$binomial == y.2$binomial,] #no information for GenLength == 6095.5, remove; 2nd index
+# a <- df.origin.gen
+# a.1 <- a[!(a$binomial == y.1$binomial[1] & a$GenerationLength_d == y.1$GenerationLength_d[1]),]
+# a.2 <- a.1[!(a.1$binomial == y.2$binomial[1] & a.1$GenerationLength_d == y.2$GenerationLength_d[2]),]
