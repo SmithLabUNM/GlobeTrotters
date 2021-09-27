@@ -1,6 +1,6 @@
 # Globe Trotters
 # Meghan A. Balk
-# balkm@email.arizona.edu
+# meghan.balk@gmail.com
 
 ##load packages----
 require(dplyr)
@@ -205,8 +205,6 @@ df.sums <- mom %>%
                    avg.mass = mean(mass),
                    n.cont = length(unique(continent)))
 
-#NEED TO CHANGE TO T/F TO DO SUM FOR N CONT AND N BREADTH
-
 df.continent <- mom %>%
   group_by(binomial) %>%
   dplyr::summarise(continent.Africa = as.logical(sum(Africa)),
@@ -239,6 +237,8 @@ table(df.contTaxaSums$n.cont)
 
 length(unique(mom$binomial))
 nrow(df.contTaxaSums)
+
+write.csv(df.contTaxaSums, "data.long.csv")
 
 ## AGES----
 
@@ -326,11 +326,12 @@ pantheria.trim <- pantheria %>%
                 dispersal.age.d = X7.1_DispersalAge_d)
 
 ##Combine data
-df.origin <- left_join(df, origin.trim,
-                        by = "family")
+  
+df.origin <- left_join(df.contTaxaSums, origin.trim,
+                       by = "family")
 
 df.origin.gen <- left_join(df.origin, pacifici.trim,
-                            by = "binomial") #why is it adding 2 rows?
+                           by = "binomial") #why is it adding 2 rows?
 
 df.origin.gen.foss <- left_join(df.origin.gen, foss.ages,
                                 by = "binomial")
@@ -348,7 +349,9 @@ df <- df.origin.gen.foss.phyl.ranges.pan
 write.csv(df, "global.mammal.data.csv")
 
 ##plot themes----
+## COLOR SCHEME
 col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+
 plot_theme <- theme(panel.grid = element_blank(), 
                     aspect.ratio = .75, #adjust as needed
                     axis.text = element_text(size = 21, color = "black"), 
@@ -363,10 +366,10 @@ plot_theme <- theme(panel.grid = element_blank(),
                     legend.position = "none",
                     text = element_text(family = 'Helvetica')) 
 
-##data for analyses----
-#df <- read.csv("data.csv", header = TRUE)
+##data for analyses ----
+#df <- read.csv("global.mammal.data.csv", header = TRUE)
 
-## TEST: How many sp are on each continent?----
+## NUM SP PER CONTINENT ----
 length(unique(df$binomial))
 length(unique(df$binomial[df$n.cont == 1]))
 length(unique(df$binomial[df$n.cont == 2])) 
@@ -374,9 +377,90 @@ length(unique(df$binomial[df$n.cont >= 3]))
 
 unique(df[which(df$n.cont >= 3), "binomial"])
 
-##DIET----
+## DIET BREADTH ----
+#are there diet breadth differences between endemics, limited dispersers, and globe trotters?
 
-#figure: stacked bar graph
+null.breadth <- df %>%
+  group_by(diet.breadth) %>%
+  drop_na(diet.breadth) %>%
+  dplyr::summarise(N = n()) %>%
+  dplyr::select(diet.breadth,
+                N)
+
+breadth <- df %>%
+  group_by(n.cont, diet.breadth) %>%
+  drop_na(diet.breadth) %>%
+  dplyr::summarise(N = n())
+
+endemic.breadth <- breadth[breadth$n.cont == 1,]
+limited.breadth <- breadth[breadth$n.cont == 2,]
+trotter.breadth <- breadth[breadth$n.cont >= 3,]
+
+## test null.breadth v 1
+#is variance equal?
+var.test(null.breadth, endemic.breadth)
+#variance is not equal, meaning that we cannot run a t-test
+
+# Wilcoxon rank-sum test (equivalent to the Mann-Whitney U test)
+# Does not assume normality
+wilcox.test(null.breadth, endemic.breadth, paired = FALSE) #p-value = 4.095e-07
+median(null.breadth) - median(endemic.breadth) #medians are so close it doesn't make sense to report the difference (0)
+mean(null.breadth) - mean(endemic.breadth) #0.13 difference in means
+
+#percentage difference
+(mean(null.breadth) - mean(endemic.breadth))/mean(null.breadth)*100 #8.575447 
+
+##test null.breadth v 2
+#is variance equal?
+var.test(null.breadth, limited.breadth)
+#variance is not equal, meaning that we cannot run a t-test
+
+# Wilcoxon rank-sum test (equivalent to the Mann-Whitney U test)
+# Does not assume normality
+wilcox.test(null.breadth, limited.breadth, paired = FALSE) #p-value = 4.095e-07
+median(null.breadth) - median(limited.breadth) #medians are so close it doesn't make sense to report the difference (0)
+mean(null.breadth) - mean(limited.breadth) #0.13 difference in means
+
+#percentage difference
+(mean(null.breadth) - mean(limited.breadth))/mean(null.breadth)*100 #8.575447 
+
+##test null.breadth v 3
+#is variance equal?
+var.test(null.breadth, trotter.breadth)
+#variance is not equal, meaning that we cannot run a t-test
+
+# Wilcoxon rank-sum test (equivalent to the Mann-Whitney U test)
+# Does not assume normality
+wilcox.test(null.breadth, trotter.breadth, paired = FALSE) #p-value = 4.095e-07
+median(null.breadth) - median(trotter.breadth) #medians are so close it doesn't make sense to report the difference (0)
+mean(null.breadth) - mean(trotter.breadth) #0.13 difference in means
+
+#percentage difference
+(mean(null.breadth) - mean(trotter.breadth))/mean(null.breadth)*100 #8.575447 
+
+#RESULTS:
+#narrower diets disperse more
+
+##figure: stacked bar graph
+ggplot(breadth) +
+  aes(n.cont, fill = diet.breadth) +
+  geom_bar()
+
+## DIET ----
+#what type of diets do endemics, limited disperses, and globe trotters have?
+
+diet <- df %>%
+  group_by(n.cont) %>%
+  select(starts_with("diet."), -diet.src, -diet.breadth)
+
+
+null.diet <- df %>%
+  group_by(starts_with("diet.")) %>%
+  filter(-diet.src, -diet.breadth)
+
+## DIET & BREADTH ----
+#investigate interaction between the two
+
 
 ##DISPERSAL----
 ## TEST: How far can an animal go?----
@@ -417,7 +501,7 @@ ggplot(data = dist) +
 dist$disp.dist[dist$carn == TRUE] = (dist$age[dist$carn == TRUE]*365/(dist$gen.length[dist$carn == TRUE]+dist$disp.age[dist$carn == TRUE]))*(40.7*(dist$avg.mass[dist$carn == TRUE]^0.81))
 dist$disp.dist[dist$carn != TRUE] = (dist$age[dist$carn != TRUE]*365/(dist$gen.length[dist$carn != TRUE]+dist$disp.age[dist$carn != TRUE]))*(3.31*(dist$avg.mass[dist$carn != TRUE]^0.65))
 
-Eurasia = 54750000
+Eurasia = 54750000 #I think these are square miles, not distance....
 Africa = 30380000
 North.America = 24700000
 South.America = 17830000
