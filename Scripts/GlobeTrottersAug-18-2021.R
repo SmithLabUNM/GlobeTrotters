@@ -377,149 +377,702 @@ length(unique(df$binomial[df$n.cont >= 3]))
 
 unique(df[which(df$n.cont >= 3), "binomial"])
 
+##limited disperses
+ld <- df[df$n.cont == 2,]
+length(unique(ld$order))
+length(unique(ld$family))
+length(unique(ld$genus))
+
+sort(table(ld$order, useNA = "always"))
+
+##bats
+length(unique(df$binomial[df$order == "Chiroptera"]))
+##rodents
+length(unique(df$binomial[df$order == "Rodentia"]))
+##artiodactyla
+length(unique(df$binomial[df$order == "Artiodactyla"]))
+##carnivora
+length(unique(df$binomial[df$order == "Carnivora"]))
+
 ## DIET BREADTH ----
 #are there diet breadth differences between endemics, limited dispersers, and globe trotters?
 
 null.breadth <- df %>%
   group_by(diet.breadth) %>%
   drop_na(diet.breadth) %>%
-  dplyr::summarise(N = n()) %>%
+  dplyr::summarise(null.N = n()) %>%
   dplyr::select(diet.breadth,
-                N)
+                null.N) %>%
+  as.data.frame()
 
 breadth <- df %>%
   group_by(n.cont, diet.breadth) %>%
   drop_na(diet.breadth) %>%
-  dplyr::summarise(N = n())
-
-endemic.breadth <- breadth[breadth$n.cont == 1,]
-limited.breadth <- breadth[breadth$n.cont == 2,]
-trotter.breadth <- breadth[breadth$n.cont >= 3,]
-
-## test null.breadth v 1
-#is variance equal?
-var.test(null.breadth, endemic.breadth)
-#variance is not equal, meaning that we cannot run a t-test
-
-# Wilcoxon rank-sum test (equivalent to the Mann-Whitney U test)
-# Does not assume normality
-wilcox.test(null.breadth, endemic.breadth, paired = FALSE) #p-value = 4.095e-07
-median(null.breadth) - median(endemic.breadth) #medians are so close it doesn't make sense to report the difference (0)
-mean(null.breadth) - mean(endemic.breadth) #0.13 difference in means
-
-#percentage difference
-(mean(null.breadth) - mean(endemic.breadth))/mean(null.breadth)*100 #8.575447 
-
-##test null.breadth v 2
-#is variance equal?
-var.test(null.breadth, limited.breadth)
-#variance is not equal, meaning that we cannot run a t-test
-
-# Wilcoxon rank-sum test (equivalent to the Mann-Whitney U test)
-# Does not assume normality
-wilcox.test(null.breadth, limited.breadth, paired = FALSE) #p-value = 4.095e-07
-median(null.breadth) - median(limited.breadth) #medians are so close it doesn't make sense to report the difference (0)
-mean(null.breadth) - mean(limited.breadth) #0.13 difference in means
-
-#percentage difference
-(mean(null.breadth) - mean(limited.breadth))/mean(null.breadth)*100 #8.575447 
-
-##test null.breadth v 3
-#is variance equal?
-var.test(null.breadth, trotter.breadth)
-#variance is not equal, meaning that we cannot run a t-test
-
-# Wilcoxon rank-sum test (equivalent to the Mann-Whitney U test)
-# Does not assume normality
-wilcox.test(null.breadth, trotter.breadth, paired = FALSE) #p-value = 4.095e-07
-median(null.breadth) - median(trotter.breadth) #medians are so close it doesn't make sense to report the difference (0)
-mean(null.breadth) - mean(trotter.breadth) #0.13 difference in means
-
-#percentage difference
-(mean(null.breadth) - mean(trotter.breadth))/mean(null.breadth)*100 #8.575447 
-
-#RESULTS:
-#narrower diets disperse more
-
-##figure: stacked bar graph
-ggplot(breadth) +
-  aes(n.cont, fill = diet.breadth) +
-  geom_bar()
-
-## DIET ----
-#what type of diets do endemics, limited disperses, and globe trotters have?
-
-diet <- df %>%
-  group_by(n.cont) %>%
-  select(starts_with("diet."), -diet.src, -diet.breadth)
-
-
-null.diet <- df %>%
-  group_by(starts_with("diet.")) %>%
-  filter(-diet.src, -diet.breadth)
-
-## DIET & BREADTH ----
-#investigate interaction between the two
-
-
-##DISPERSAL----
-## TEST: How far can an animal go?----
-df$AFR_d <- as.numeric(df$AFR_d)
-
-dist <- df %>%
-  dplyr::group_by(binomial) %>%
-  dplyr::summarise(n = n(),
-                   foss.avg.age = fossil.age[1]*1000000,
-                   age = age.median[1]*1000000,
-                   avg.mass = mean(mass, na.rm = TRUE),
-                   hmrg = home.range.km2[1],
-                   disp.age = dispersal.age.d[1],
-                   gen.length = GenerationLength_d[1],
-                   repro.age = AFR_d[1], 
-                   n.cont = n.cont[1],
-                   carn = isTRUE(sum(diet.piscivore + diet.invertivore + diet.carnivore) >= 1 & sum(diet.browser + diet.grazer + diet.frugivore) == 0)) %>%
+  dplyr::summarise(N = n()) %>% 
   as.data.frame()
 
-dist <- dist %>%
+endemic.breadth <- breadth[breadth$n.cont == 1,]
+colnames(endemic.breadth)[colnames(endemic.breadth) == "N"] <- "endemic.N"
+endemic.breadth <- endemic.breadth %>%
+  dplyr::select(-n.cont)
+
+limited.breadth <- breadth[breadth$n.cont == 2,]
+colnames(limited.breadth)[colnames(limited.breadth) == "N"] <- "limited.N"
+limited.breadth <- limited.breadth %>%
+  dplyr::select(-n.cont)
+
+trotter.breadth <- breadth[breadth$n.cont >= 3,]
+colnames(trotter.breadth)[colnames(trotter.breadth) == "N"] <- "trotter.N"
+trotter.breadth <- trotter.breadth %>%
+  dplyr::select(-n.cont)
+
+#look at differences in breadth
+#endemic
+median(null.breadth$diet.breadth) - median(endemic.breadth$diet.breadth) 
+mean(null.breadth$diet.breadth) - mean(endemic.breadth$diet.breadth) #1.2 difference in means
+#percentage difference
+(mean(null.breadth$diet.breadth) - mean(endemic.breadth$diet.breadth))/mean(null.breadth$diet.breadth)*100 #37.5%
+
+#limited
+median(null.breadth$diet.breadth) - median(limited.breadth$diet.breadth)
+mean(null.breadth$diet.breadth) - mean(limited.breadth$diet.breadth) #0.8 difference in means
+
+#percentage difference
+(mean(null.breadth$diet.breadth) - mean(limited.breadth$diet.breadth))/mean(null.breadth$diet.breadth)*100 #-25% 
+
+#trtoters
+median(null.breadth$diet.breadth) - median(trotter.breadth$diet.breadth) 
+mean(null.breadth$diet.breadth) - mean(trotter.breadth$diet.breadth) #1.13 difference in means
+
+#percentage difference
+(mean(null.breadth$diet.breadth) - mean(trotter.breadth$diet.breadth))/mean(null.breadth$diet.breadth)*100 #35.4% 
+
+#create full dataset
+breadth.null.trot <- merge(null.breadth, trotter.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
+breadth.null.trot.lim <- merge(breadth.null.trot, limited.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
+breadth.null.trol.lim.end <- merge(breadth.null.trot.lim, endemic.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
+
+df.breadth <- breadth.null.trol.lim.end
+df.breadth[is.na(df.breadth)] <- 0
+
+df.breadth$prop.null <- df.breadth$null.N/sum(df.breadth$null.N)
+
+df.breadth$prop.end <- df.breadth$endemic.N/sum(df.breadth$endemic.N)
+df.breadth$prop.lim <- df.breadth$limited.N/sum(df.breadth$limited.N)
+df.breadth$prop.trot <- df.breadth$trotter.N/sum(df.breadth$trotter.N)
+
+
+#binomial test with correction
+
+test.endemic <- binom.test(df.breadth$endemic.N, sum(df.breadth$endemic.N), p = df.breadth$null.prop, alternative = "greater")
+
+for(i in 1:nrow(df.breadth)){
+  test <- binom.test(df.breadth$endemic.N[i], sum(df.breadth$endemic.N), p = df.breadth$prop.null[i], alternative = "two.sided")
+  df.breadth$p.end[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.breadth)){
+  test <- binom.test(df.breadth$limited.N[i], sum(df.breadth$limited.N), p = df.breadth$prop.null[i], alternative = "two.sided")
+  df.breadth$p.lim[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.breadth)){
+  test <- binom.test(df.breadth$trotter.N[i], sum(df.breadth$trotter.N), p = df.breadth$prop.null[i], alternative = "two.sided")
+  df.breadth$p.trot[i] <- test$p.value
+}
+
+#add sidak correction
+df.breadth <- arrange(df.breadth, p.end) %>%
+  dplyr::mutate(signif.end = p.end < 0.05,
+                signif.bonferoni.end = p.end < 0.05/n(),
+                signif.holm.end = !0.05/(n() + 1 - 1:n()) < p.end,
+                signif.sidak.end = p.end < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.end = !(1 - (1 - 0.05)^(1/n())) < p.end)
+
+df.breadth <- arrange(df.breadth, p.lim) %>%
+  dplyr::mutate(signif.lim = p.lim < 0.05,
+                signif.bonferoni.lim = p.lim < 0.05/n(),
+                signif.holm.lim = !0.05/(n() + 1 - 1:n()) < p.lim,
+                signif.sidak.lim = p.lim < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.lim = !(1 - (1 - 0.05)^(1/n())) < p.lim)
+
+df.breadth <- arrange(df.breadth, p.trot) %>%
+  dplyr::mutate(signif.trot = p.trot < 0.05,
+                signif.bonferoni.trot = p.trot < 0.05/n(),
+                signif.holm.trot = !0.05/(n() + 1 - 1:n()) < p.trot,
+                signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
+
+write.csv(df.breadth, "diet.breadth.results.csv")
+
+
+## DIET TYPE ----
+#are there diet types differences between endemics, limited dispersers, and globe trotters?
+diets <- names(dplyr::select(df, starts_with("diet"), -diet.breadth))
+df.diet <- data.frame(diet = diets)
+
+df.diet["null.N"] <- colSums(df[diets])
+df.diet["endemic.N"] <- colSums(df[df$n.cont == 1, diets])
+df.diet["limited.N"] <- colSums(df[df$n.cont == 2, diets])
+df.diet["trotter.N"] <- colSums(df[df$n.cont >= 3, diets])
+
+df.diet$prop.null <- df.diet$null.N/sum(df.diet$null.N)
+
+df.diet$prop.end <- df.diet$endemic.N/sum(df.diet$endemic.N)
+df.diet$prop.lim <- df.diet$limited.N/sum(df.diet$limited.N)
+df.diet$prop.trot <- df.diet$trotter.N/sum(df.diet$trotter.N)
+
+#binomial test with correction
+
+for(i in 1:nrow(df.diet)){
+  test <- binom.test(df.diet$endemic.N[i], sum(df.diet$endemic.N), p = df.diet$prop.null[i], alternative = "two.sided")
+  df.diet$p.end[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.diet)){
+  test <- binom.test(df.diet$limited.N[i], sum(df.diet$limited.N), p = df.diet$prop.null[i], alternative = "two.sided")
+  df.diet$p.lim[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.diet)){
+  test <- binom.test(df.diet$trotter.N[i], sum(df.diet$trotter.N), p = df.diet$prop.null[i], alternative = "two.sided")
+  df.diet$p.trot[i] <- test$p.value
+}
+
+#add sidak correction
+df.diet <- arrange(df.diet, p.end) %>%
+  dplyr::mutate(signif.end = p.end < 0.05,
+                signif.bonferoni.end = p.end < 0.05/n(),
+                signif.holm.end = !0.05/(n() + 1 - 1:n()) < p.end,
+                signif.sidak.end = p.end < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.end = !(1 - (1 - 0.05)^(1/n())) < p.end)
+
+df.diet <- arrange(df.diet, p.lim) %>%
+  dplyr::mutate(signif.lim = p.lim < 0.05,
+                signif.bonferoni.lim = p.lim < 0.05/n(),
+                signif.holm.lim = !0.05/(n() + 1 - 1:n()) < p.lim,
+                signif.sidak.lim = p.lim < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.lim = !(1 - (1 - 0.05)^(1/n())) < p.lim)
+
+df.diet <- arrange(df.diet, p.trot) %>%
+  dplyr::mutate(signif.trot = p.trot < 0.05,
+                signif.bonferoni.trot = p.trot < 0.05/n(),
+                signif.holm.trot = !0.05/(n() + 1 - 1:n()) < p.trot,
+                signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
+
+write.csv(df.diet, "diet.diet.results.csv")
+
+##FIGURE
+
+##DISPERSAL----
+df$AFR_d <- as.numeric(df$AFR_d)
+  
+df.dispersal <- df %>%
+  dplyr::group_by(binomial) %>%
+  dplyr::summarise(n = n(),
+                   foss.avg.age = foss.age*1000000, #in yrs
+                   age = age.median*1000000, #in yrs
+                   avg.mass = avg.mass,
+                   hmrg = home.range.km2,
+                   disp.age = dispersal.age.d,
+                   gen.length = GenerationLength_d,
+                   repro.age = AFR_d, 
+                   n.cont = n.cont,
+                   carn = isTRUE(sum(diet.piscivore.tot + diet.invertivore.tot + diet.carnivore.tot) >= 1 & sum(diet.browser.tot + diet.grazer.tot + diet.frugivore.tot) == 0)) %>%
+  as.data.frame()
+
+df.dispersal <- df.dispersal %>%
   drop_na(hmrg, avg.mass)
   
-
-#model: include lineage age, generation length, dispersal distance, age of reproduction
-dist$tot.disp.hmrg = ((dist$age*365)/(dist$gen.length+dist$disp.age))*(dist$hmrg/2) #go radius of homerange
-dist$dist.hmrg.per.bs = dist$tot.disp.hmrg/dist$avg.mass
-
-ggplot(data = dist) +
-  geom_density(aes(dist.hmrg.per.bs))
-
-
-#calculate dispersal (From Smith et al. 2016)
+#calculate dispersal (from Sutherland et al. 2000) (distance in km)
 #carnivore: Dc = 40.7M^0.81
-#herb or omni = Dho = D3.31M^0.65
+#herb or omni = Dho = 3.31M^0.65
+df.dispersal$dispersal.distance[df.dispersal$carn == TRUE] = 40.7*(df.dispersal$avg.mass^0.81)
+df.dispersal$dispersal.distance[df.dispersal$carn != TRUE] = 3.31*(df.dispersal$avg.mass^0.65)
+ 
+#model: age of dispersal (delay), generation length, age of lineage (fossil age), and dispersal amount
+df.dispersal$dispersal.tot =  ((df.dispersal$gen.length * 365)/(df.dispersal$gen.length + df.dispersal$disp.age))*df.dispersal$dispersal.distance
 
-#model: include lineage age divided by number of generations (generation length + age of first reproduction) multiply by dispersal from above equation
+ggplot(data = df.dispersal) +
+  geom_density(aes(dispersal.tot))
 
-dist$disp.dist[dist$carn == TRUE] = (dist$age[dist$carn == TRUE]*365/(dist$gen.length[dist$carn == TRUE]+dist$disp.age[dist$carn == TRUE]))*(40.7*(dist$avg.mass[dist$carn == TRUE]^0.81))
-dist$disp.dist[dist$carn != TRUE] = (dist$age[dist$carn != TRUE]*365/(dist$gen.length[dist$carn != TRUE]+dist$disp.age[dist$carn != TRUE]))*(3.31*(dist$avg.mass[dist$carn != TRUE]^0.65))
 
-Eurasia = 54750000 #I think these are square miles, not distance....
-Africa = 30380000
-North.America = 24700000
-South.America = 17830000
-Australia = 7690000
+##Eurasia 
+#54750000 km2
+#8403.60 #km from coast of Portugal to north-eastern most point of Russia 
+#9906.94 #km from coast of Portugal to coast of China
+#7969.22 #km from tip of India to north coast of Russia
+##Africa 
+#30380000 km2
+#8022.72 #km from tip of South Africa to top of Tunisia 
+#7325.79  #km from coast of Gambia to coast/tip of Somalia
+##North.America 
+#24700000 km2
+#7611.82 #km from Panama to Northwest Territories, Canada 
+#5948.90 #from coast of Alaska to coast of Newfoundland
+##South.America 
+#17830000 km2
+#7428.91 #km from tip of Chile to top of Venezuela/Colombia 
+#5054.76 #km from coast of Peru to coast of Brazil
+##Australia
+#7690000 km2
+#2992.65 #km from Melbourne to Northern tip of Queensland 
+#3624.46 #km from Perth to Brisbane
 
-length(dist$binomial[!is.na(dist$disp.dist)])
-length(dist$binomial[!is.na(dist$tot.disp.hmrg)]) 
-length(dist$binomial[!is.na(dist$dist.hmrg.per.bs)]) 
+#round up
+Eurasia.EW = 9907
+Eurasia.NS = 7969
+Africa.EW = 7326
+Africa.NS = 8023
+North.America.EW = 5949
+North.America.NS = 7612
+South.America.EW = 5055
+South.America.NS = 7429
+Australia.EW = 3624
+Australia.NS = 2993
 
-length(dist$binomial[dist$disp.dist >= Australia & !is.na(dist$disp.dist)]) 
+length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.tot)]) #85
 
-length(dist$binomial[dist$disp.dist >= South.America & !is.na(dist$tot.disp.hmrg)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Australia.EW & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Australia.NS & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Eurasia.EW & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Eurasia.NS & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Africa.EW & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Africa.NS & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= North.America.EW & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= North.America.NS & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= South.America.EW & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.tot >= South.America.NS & !is.na(df.dispersal$dispersal.tot)]) 
 
-length(dist$binomial[dist$disp.dist >= North.America & !is.na(dist$tot.disp.hmrg)]) 
+## FAMILY AND ORDER ----
 
-length(dist$binomial[dist$disp.dist >= Africa & !is.na(dist$tot.disp.hmrg)]) 
+##FAMILY
+null.family <- df %>%
+  group_by(family) %>%
+  dplyr::summarise(null.N = n()) %>%
+  dplyr::select(family,
+                null.N) %>%
+  as.data.frame()
+  
+family <- df %>%
+  group_by(n.cont, family) %>%
+  dplyr::summarise(N = n()) %>% 
+  as.data.frame()
 
-length(dist$binomial[dist$disp.dist >= Eurasia & !is.na(dist$tot.disp.hmrg)]) 
+endemic.family <- family[family$n.cont == 1,]
+colnames(endemic.family)[colnames(endemic.family) == "N"] <- "endemic.N"
+endemic.family <- endemic.family %>%
+  dplyr::select(-n.cont)
+
+limited.family <- family[family$n.cont == 2,]
+colnames(limited.family)[colnames(limited.family) == "N"] <- "limited.N"
+limited.family <- limited.family %>%
+  dplyr::select(-n.cont)
+
+trotter.family <- family[family$n.cont >= 3,]
+colnames(trotter.family)[colnames(trotter.family) == "N"] <- "trotter.N"
+trotter.family <- trotter.family %>%
+  dplyr::select(-n.cont)
+
+#create full dataset
+fam.null.trot <- merge(null.family, trotter.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.trot.lim <- merge(fam.null.trot, limited.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.trol.lim.end <- merge(fam.null.trot.lim, endemic.family, by = "family", all.x = TRUE, all.y = TRUE)
+
+df.family <- fam.null.trol.lim.end
+df.family[is.na(df.family)] <- 0
+
+df.family$prop.null <- df.family$null.N/sum(df.family$null.N)
+
+df.family$prop.end <- df.family$endemic.N/sum(df.family$endemic.N)
+df.family$prop.lim <- df.family$limited.N/sum(df.family$limited.N)
+df.family$prop.trot <- df.family$trotter.N/sum(df.family$trotter.N)
+
+#binomial test
+for(i in 1:nrow(df.family)){
+  test <- binom.test(df.family$endemic.N[i], sum(df.family$endemic.N), p = df.family$prop.null[i], alternative = "two.sided")
+  df.family$p.end[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.family)){
+  test <- binom.test(df.family$limited.N[i], sum(df.family$limited.N), p = df.family$prop.null[i], alternative = "two.sided")
+  df.family$p.lim[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.family)){
+  test <- binom.test(df.family$trotter.N[i], sum(df.family$trotter.N), p = df.family$prop.null[i], alternative = "two.sided")
+  df.family$p.trot[i] <- test$p.value
+}
+
+#add sidak correction
+df.family <- arrange(df.family, p.end) %>%
+  dplyr::mutate(signif.end = p.end < 0.05,
+                signif.bonferoni.end = p.end < 0.05/n(),
+                signif.holm.end = !0.05/(n() + 1 - 1:n()) < p.end,
+                signif.sidak.end = p.end < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.end = !(1 - (1 - 0.05)^(1/n())) < p.end)
+
+df.family <- arrange(df.family, p.lim) %>%
+  dplyr::mutate(signif.lim = p.lim < 0.05,
+                signif.bonferoni.lim = p.lim < 0.05/n(),
+                signif.holm.lim = !0.05/(n() + 1 - 1:n()) < p.lim,
+                signif.sidak.lim = p.lim < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.lim = !(1 - (1 - 0.05)^(1/n())) < p.lim)
+
+df.family <- arrange(df.family, p.trot) %>%
+  dplyr::mutate(signif.trot = p.trot < 0.05,
+                signif.bonferoni.trot = p.trot < 0.05/n(),
+                signif.holm.trot = !0.05/(n() + 1 - 1:n()) < p.trot,
+                signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
+
+write.csv(df.family, "family.results.csv")
+
+#test for body size bias
+##limited dispersers
+lim.true <- subset(df.family, df.family$signif.sidak.lim == TRUE, select = c(family,
+                                                                             null.N,
+                                                                             limited.N,
+                                                                             prop.null,
+                                                                             prop.lim,
+                                                                             signif.sidak.lim))
+
+lim.false <- subset(df.family, df.family$signif.sidak.lim == FALSE, select = c(family,
+                                                                               null.N,
+                                                                               limited.N,
+                                                                               prop.null,
+                                                                               prop.lim,
+                                                                               signif.sidak.lim))
+
+family.lim.true <- df[df$family %in% lim.true$family,]
+hist(log10(family.lim.true$avg.mass))
+
+family.lim.false <- df[df$family %in% lim.false$family,]
+hist(log10(family.lim.false$avg.mass))
+
+ks.test(family.lim.true$avg.mass, family.lim.false$avg.mass) #sig diff
+ks.test(family.lim.true$avg.mass, family.lim.false$avg.mass, alternative = "greater") ##sig
+ks.test(family.lim.true$avg.mass, family.lim.false$avg.mass, alternative = "less") #not sig
+
+##globe trotters
+trot.true <- subset(df.family, df.family$signif.sidak.trot == TRUE, select = c(family,
+                                                                               null.N,
+                                                                               trotter.N,
+                                                                               prop.null,
+                                                                               prop.trot,
+                                                                               signif.sidak.trot))
+#THERE AREN'T ANY
+
+##ORDER
+null.order <- df %>%
+  group_by(order) %>%
+  dplyr::summarise(null.N = n()) %>%
+  dplyr::select(order,
+                null.N) %>%
+  as.data.frame()
+
+order <- df %>%
+  group_by(n.cont, order) %>%
+  dplyr::summarise(N = n()) %>% 
+  as.data.frame()
+
+endemic.order <- order[order$n.cont == 1,]
+colnames(endemic.order)[colnames(endemic.order) == "N"] <- "endemic.N"
+endemic.order <- endemic.order %>%
+  dplyr::select(-n.cont)
+
+limited.order <- order[order$n.cont == 2,]
+colnames(limited.order)[colnames(limited.order) == "N"] <- "limited.N"
+limited.order <- limited.order %>%
+  dplyr::select(-n.cont)
+
+trotter.order <- order[order$n.cont >= 3,]
+colnames(trotter.order)[colnames(trotter.order) == "N"] <- "trotter.N"
+trotter.order <- trotter.order %>%
+  dplyr::select(-n.cont)
+
+#create full dataset
+ord.null.trot <- merge(null.order, trotter.order, by = "order", all.x = TRUE, all.y = TRUE)
+ord.null.trot.lim <- merge(ord.null.trot, limited.order, by = "order", all.x = TRUE, all.y = TRUE)
+ord.null.trol.lim.end <- merge(ord.null.trot.lim, endemic.order, by = "order", all.x = TRUE, all.y = TRUE)
+
+df.order <- ord.null.trol.lim.end
+df.order[is.na(df.order)] <- 0
+
+df.order$prop.null <- df.order$null.N/sum(df.order$null.N)
+
+df.order$prop.end <- df.order$endemic.N/sum(df.order$endemic.N)
+df.order$prop.lim <- df.order$limited.N/sum(df.order$limited.N)
+df.order$prop.trot <- df.order$trotter.N/sum(df.order$trotter.N)
+
+#binomial test
+for(i in 1:nrow(df.order)){
+  test <- binom.test(df.order$endemic.N[i], sum(df.order$endemic.N), p = df.order$prop.null[i], alternative = "two.sided")
+  df.order$p.end[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.order)){
+  test <- binom.test(df.order$limited.N[i], sum(df.order$limited.N), p = df.order$prop.null[i], alternative = "two.sided")
+  df.order$p.lim[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.order)){
+  test <- binom.test(df.order$trotter.N[i], sum(df.order$trotter.N), p = df.order$prop.null[i], alternative = "two.sided")
+  df.order$p.trot[i] <- test$p.value
+}
+
+#add sidak correction
+df.order <- arrange(df.order, p.end) %>%
+  dplyr::mutate(signif.end = p.end < 0.05,
+                signif.bonferoni.end = p.end < 0.05/n(),
+                signif.holm.end = !0.05/(n() + 1 - 1:n()) < p.end,
+                signif.sidak.end = p.end < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.end = !(1 - (1 - 0.05)^(1/n())) < p.end)
+
+df.order <- arrange(df.order, p.lim) %>%
+  dplyr::mutate(signif.lim = p.lim < 0.05,
+                signif.bonferoni.lim = p.lim < 0.05/n(),
+                signif.holm.lim = !0.05/(n() + 1 - 1:n()) < p.lim,
+                signif.sidak.lim = p.lim < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.lim = !(1 - (1 - 0.05)^(1/n())) < p.lim)
+
+df.order <- arrange(df.order, p.trot) %>%
+  dplyr::mutate(signif.trot = p.trot < 0.05,
+                signif.bonferoni.trot = p.trot < 0.05/n(),
+                signif.holm.trot = !0.05/(n() + 1 - 1:n()) < p.trot,
+                signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
+
+write.csv(df.order, "order.results.csv")
+
+#test if body size dependent
+##limited dispersers
+lim.true <- subset(df.order, df.order$signif.sidak.lim == TRUE, select = c(order,
+                                                                           null.N,
+                                                                           limited.N,
+                                                                           prop.null,
+                                                                           prop.lim,
+                                                                           signif.sidak.lim))
+
+lim.false <- subset(df.order, df.order$signif.sidak.lim == FALSE, select = c(order,
+                                                                             null.N,
+                                                                             limited.N,
+                                                                             prop.null,
+                                                                             prop.lim,
+                                                                             signif.sidak.lim))
+
+order.lim.true <- df[df$order %in% lim.true$order,]
+hist(log10(order.lim.true$avg.mass))
+
+order.lim.false <- df[df$order %in% lim.false$order,]
+hist(log10(order.lim.false$avg.mass))
+
+ks.test(order.lim.true$avg.mass, order.lim.false$avg.mass) #sig diff
+ks.test(order.lim.true$avg.mass, order.lim.false$avg.mass, alternative = "greater") ##sig
+ks.test(order.lim.true$avg.mass, order.lim.false$avg.mass, alternative = "less") #not sig
+
+##globe trotters
+trot.true <- subset(df.order, df.order$signif.sidak.trot == TRUE, select = c(order,
+                                                                             null.N,
+                                                                             trotter.N,
+                                                                             prop.null,
+                                                                             prop.trot,
+                                                                             signif.sidak.trot))
+##THERE AREN'T ANY (means something else is at play to be truly wide ranging)
+
+## ORIGIN OF FAMILY ----
+#jumpers (no longer living where family originated) and spreaders (living where family originated and other continents too)
+
+#gather data
+colnames(df)[colnames(df) == "continent.family"] <- "family.origin"
+
+endemics <- df[df$n.cont == 1,]
+limited <- df[df$n.cont == 2,]
+trotter <- df[df$n.cont >= 3,]
+
+#endemics
+endemic.origin <- endemics %>%
+  group_by(family.origin) %>%
+  dplyr::summarise(N = n(),
+            N.Africa = length(continent.Africa[continent.Africa == TRUE]),
+            N.Australia = length(continent.Australia[continent.Australia == TRUE]),
+            N.South.America = length(continent.South.America[continent.South.America == TRUE]),
+            N.North.America = length(continent.North.America[continent.North.America == TRUE]),
+            N.Eurasia = length(continent.Eurasia[continent.Eurasia == TRUE])) %>%
+  as.data.frame() 
+endemic.origin <- endemic.origin[endemic.origin$family.origin != "",]
+
+#get proportions
+endemic.origin$N.jump <- ""
+endemic.origin$prop.origin <- ""
+endemic.origin$prop.jump <- ""
+
+endemic.origin$N.jump[endemic.origin$family.origin == "Africa"] <- as.numeric(endemic.origin$N[endemic.origin$family.origin == "Africa"] - endemic.origin$N.Africa[endemic.origin$family.origin == "Africa"])
+endemic.origin$prop.origin[endemic.origin$family.origin == "Africa"] <- as.numeric(endemic.origin$N.Africa[endemic.origin$family.origin == "Africa"]/endemic.origin$N[endemic.origin$family.origin == "Africa"])
+endemic.origin$prop.jump[endemic.origin$family.origin == "Africa"] <- as.numeric(endemic.origin$N.jump[endemic.origin$family.origin == "Africa"])/as.numeric(endemic.origin$N[endemic.origin$family.origin == "Africa"])
+
+endemic.origin$N.jump[endemic.origin$family.origin == "Australia"] <- as.numeric(endemic.origin$N[endemic.origin$family.origin == "Australia"] - endemic.origin$N.Australia[endemic.origin$family.origin == "Australia"])
+endemic.origin$prop.origin[endemic.origin$family.origin == "Australia"] <- as.numeric(endemic.origin$N.Australia[endemic.origin$family.origin == "Australia"]/endemic.origin$N[endemic.origin$family.origin == "Australia"])
+endemic.origin$prop.jump[endemic.origin$family.origin == "Australia"] <- as.numeric(endemic.origin$N.jump[endemic.origin$family.origin == "Australia"])/as.numeric(endemic.origin$N[endemic.origin$family.origin == "Australia"])
+
+endemic.origin$N.jump[endemic.origin$family.origin == "North.America"] <- as.numeric(endemic.origin$N[endemic.origin$family.origin == "North.America"] - endemic.origin$N.North.America[endemic.origin$family.origin == "North.America"])
+endemic.origin$prop.origin[endemic.origin$family.origin == "North.America"] <- as.numeric(endemic.origin$N.North.America[endemic.origin$family.origin == "North.America"]/endemic.origin$N[endemic.origin$family.origin == "North.America"])
+endemic.origin$prop.jump[endemic.origin$family.origin == "North.America"] <- as.numeric(endemic.origin$N.jump[endemic.origin$family.origin == "North.America"])/as.numeric(endemic.origin$N[endemic.origin$family.origin == "North.America"])
+
+endemic.origin$N.jump[endemic.origin$family.origin == "South.America"] <- as.numeric(endemic.origin$N[endemic.origin$family.origin == "Africa"] - endemic.origin$N.Africa[endemic.origin$family.origin == "Africa"])
+endemic.origin$prop.origin[endemic.origin$family.origin == "Africa"] <- as.numeric(endemic.origin$N.Africa[endemic.origin$family.origin == "Africa"]/endemic.origin$N[endemic.origin$family.origin == "Africa"])
+endemic.origin$prop.jump[endemic.origin$family.origin == "Africa"] <- as.numeric(endemic.origin$N.jump[endemic.origin$family.origin == "Africa"])/as.numeric(endemic.origin$N[endemic.origin$family.origin == "Africa"])
+
+endemic.origin$N.jump[endemic.origin$family.origin == "Eurasia"] <- as.numeric(endemic.origin$N[endemic.origin$family.origin == "Eurasia"] - endemic.origin$N.Eurasia[endemic.origin$family.origin == "Eurasia"])
+endemic.origin$prop.origin[endemic.origin$family.origin == "Eurasia"] <- as.numeric(endemic.origin$N.Eurasia[endemic.origin$family.origin == "Eurasia"]/endemic.origin$N[endemic.origin$family.origin == "Eurasia"])
+endemic.origin$prop.jump[endemic.origin$family.origin == "Eurasia"] <- as.numeric(endemic.origin$N.jump[endemic.origin$family.origin == "Eurasia"])/as.numeric(endemic.origin$N[endemic.origin$family.origin == "Eurasia"])
+
+write.csv(endemic.origin, "endemic.family.origin.csv")
+
+##limited dispersers
+limited.origin <- limited %>%
+  group_by(family.origin) %>%
+  dplyr::summarise(N = n(),
+                   N.Africa = length(continent.Africa[continent.Africa == TRUE]),
+                   N.Australia = length(continent.Australia[continent.Australia == TRUE]),
+                   N.South.America = length(continent.South.America[continent.South.America == TRUE]),
+                   N.North.America = length(continent.North.America[continent.North.America == TRUE]),
+                   N.Eurasia = length(continent.Eurasia[continent.Eurasia == TRUE])) %>%
+  as.data.frame() 
+limited.origin <- limited.origin[limited.origin$family.origin != "",]
+
+#get proportions
+limited.origin$prop.spread <- ""
+limited.origin$prop.spread[limited.origin$family.origin == "Africa"] <- limited.origin$N.Africa[limited.origin$family.origin == "Africa"]/limited.origin$N[limited.origin$family.origin == "Africa"]
+limited.origin$prop.spread[limited.origin$family.origin == "Eurasia"] <- limited.origin$N.Eurasia[limited.origin$family.origin == "Eurasia"]/limited.origin$N[limited.origin$family.origin == "Eurasia"]
+limited.origin$prop.spread[limited.origin$family.origin == "Australia"] <- limited.origin$N.Australia[limited.origin$family.origin == "Australia"]/limited.origin$N[limited.origin$family.origin == "Australia"]
+limited.origin$prop.spread[limited.origin$family.origin == "South.America"] <- limited.origin$N.South.America[limited.origin$family.origin == "South.America"]/limited.origin$N[limited.origin$family.origin == "South.America"]
+limited.origin$prop.spread[limited.origin$family.origin == "North.America"] <- limited.origin$N.North.America[limited.origin$family.origin == "North.America"]/limited.origin$N[limited.origin$family.origin == "North.America"]
+#no jumpers in North.America
+#no spreaders from Australia
+
+limited.origin$prop.jump <- 1- as.numeric(limited.origin$prop.spread)
+
+#want to know where the jumpers and spreaders went to
+limited.cont <- limited %>%
+  group_by(family.origin) %>%
+  dplyr::summarise(N = n(),
+                   N.Africa.Eurasia = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE]),
+                   N.Africa.Australia = length(continent.Africa[continent.Africa == TRUE & continent.Australia == TRUE]),
+                   N.Africa.North.America = length(continent.Africa[continent.Africa == TRUE & continent.North.America == TRUE]),
+                   N.Africa.South.America = length(continent.Africa[continent.Africa == TRUE & continent.South.America == TRUE]),
+                   N.Australia.Eurasia = length(continent.Australia[continent.Australia == TRUE & continent.Eurasia == TRUE]),
+                   N.Australia.South.America = length(continent.Australia[continent.Australia == TRUE & continent.South.America == TRUE]),
+                   N.Australia.North.America = length(continent.Australia[continent.Australia == TRUE & continent.North.America == TRUE]),
+                   N.Eurasia.North.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE]),
+                   N.Eurasia.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE]),
+                   N.South.America.North.America = length(continent.South.America[continent.South.America == TRUE & continent.North.America == TRUE])) %>%
+  as.data.frame() 
+limited.cont <- limited.cont[limited.cont$family.origin != "",]
+#Australia not here...? No family now on two continents originated in Australia
+
+limited.cont$prop.spread <- ""
+limited.cont$prop.jump <- ""
+
+limited.cont$prop.spread[limited.cont$family.origin == "Africa"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Africa"] + 
+                                                                        limited.cont$N.Africa.Australia[limited.cont$family.origin == "Africa"] + 
+                                                                        limited.cont$N.Africa.North.America[limited.cont$family.origin == "Africa"] +
+                                                                        limited.cont$N.Africa.South.America[limited.cont$family.origin == "Africa"])/limited.cont$N[limited.cont$family.origin == "Africa"]
+limited.cont$prop.jump[limited.cont$family.origin == "Africa"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "Africa"])
+
+limited.cont$prop.spread[limited.cont$family.origin == "Eurasia"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Eurasia"] + 
+                                                                         limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
+                                                                         limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
+                                                                         limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"])/limited.cont$N[limited.cont$family.origin == "Eurasia"]
+limited.cont$prop.jump[limited.cont$family.origin == "Eurasia"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "Eurasia"])
+
+limited.cont$prop.spread[limited.cont$family.origin == "North.America"] <- sum(limited.cont$N.Africa.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                               limited.cont$N.Australia.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                               limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                              limited.cont$N.South.America.North.America[limited.cont$family.origin == "North.America"])/limited.cont$N[limited.cont$family.origin == "North.America"]
+limited.cont$prop.jump[limited.cont$family.origin == "North.America"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "North.America"])
+
+limited.cont$prop.spread[limited.cont$family.origin == "South.America"] <- sum(limited.cont$N.Africa.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                               limited.cont$N.Australia.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                               limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                               limited.cont$N.South.America.North.America[limited.cont$family.origin == "South.America"])/limited.cont$N[limited.cont$family.origin == "South.America"]
+limited.cont$prop.jump[limited.cont$family.origin == "South.America"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "South.America"])
+#100% spread
+
+write.csv(limited.cont, "limited.family.origin.csv")
+
+## CONNECTIVITY ----
+#calculate sørensen index
+sorensen <- function(x,y) {
+  index = (2*(length(intersect(x, y))))/(length(x) + length(y))
+  return(index)
+}
+
+continents <- names(dplyr::select(df, starts_with("continent")))
+continent <- gsub("continent.", "", continents)
+indeces <- matrix(nrow = 5, ncol = 5, dimnames = list(continents, continents))
+
+indeces[1,2] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
+                         y = df$binomial[df$continent.South.America == TRUE])
+indeces[1,3] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
+                         y = df$binomial[df$continent.Eurasia == TRUE])
+indeces[1,4] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
+                         y = df$binomial[df$continent.Africa == TRUE])
+indeces[1,5] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
+                         y = df$binomial[df$continent.Australia == TRUE])
+indeces[2, 3] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
+                          y = df$binomial[df$continent.Eurasia == TRUE])
+indeces[2,4] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
+                         y = df$binomial[df$continent.Africa == TRUE])
+indeces[2,5] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
+                         y = df$binomial[df$continent.Australia == TRUE])
+indeces[3,4] <- sorensen(x = df$binomial[df$continent.Eurasia == TRUE], 
+                         y = df$binomial[df$continent.Africa == TRUE])
+indeces[3,5] <- sorensen(x = df$binomial[df$continent.Eurasia == TRUE], 
+                         y = df$binomial[df$continent.Australia == TRUE])
+indeces[4,5] <- sorensen(x = df$binomial[df$continent.Africa == TRUE], 
+                         y = df$binomial[df$continent.Australia == TRUE])
+write.csv(indeces, "sorensen.index.csv")
+
+
+
+
+
+endemic.origin$N.jump[endemic.origin$family.origin == "Africa"] <- as.numeric(endemic.origin$total[endemic.origin$family.origin == "Africa"] - endemic.origin$N.Africa[endemic.origin$family.origin == "Africa"])
+endemic.origin$prop.origin[endemic.origin$family.origin == "Africa"] <- as.numeric(endemic.origin$N.Africa[endemic.origin$family.origin == "Africa"]/endemic.origin$total[endemic.origin$family.origin == "Africa"])
+endemic.origin$prop.jump[endemic.origin$family.origin == "Africa"] <- as.numeric(endemic.origin$N.jump[endemic.origin$family.origin == "Africa"])/as.numeric(endemic.origin$total[endemic.origin$family.origin == "Africa"])
+
+continent <- names(dplyr::select(df, starts_with("continent")))
+endemic.origin <- data.frame(continent  = continents)
+
+
+family.origin <- df %>%
+  group_by(n.cont, family) %>%
+  dplyr::summarise(N = n()) %>% 
+  dplyr::select(n.cont,
+                family,
+                starts_with("continent")) %>%
+  as.data.frame()
+
+endemic.family <- family[family$n.cont == 1,]
+colnames(endemic.family)[colnames(endemic.family) == "N"] <- "endemic.N"
+endemic.family <- endemic.family %>%
+  dplyr::select(-n.cont)
+
+limited.family <- family[family$n.cont == 2,]
+colnames(limited.family)[colnames(limited.family) == "N"] <- "limited.N"
+limited.family <- limited.family %>%
+  dplyr::select(-n.cont)
+
+trotter.family <- family[family$n.cont >= 3,]
+colnames(trotter.family)[colnames(trotter.family) == "N"] <- "trotter.N"
+trotter.family <- trotter.family %>%
+  dplyr::select(-n.cont)
+
+#gather proportions
+
+
 
 
 # what does that look like for those on lots of continents?

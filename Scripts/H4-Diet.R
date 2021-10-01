@@ -32,25 +32,25 @@ data$n.cont[data$n.cont == 3] <- "3+"
 data$n.cont <- as.factor(data$n.cont)
 
 #H5 spp on mult cont are omnivores
-df = data[!duplicated(data$binomial),]
-length(df$binomial) #4426
+data = data[!duplicated(data$binomial),]
+length(data$binomial) #4426
 
 #understand data
-length(df$binomial[df$diet.invertivore == TRUE]) #1998
-length(df$binomial[df$diet.carnivore == TRUE]) #333
-length(df$binomial[df$diet.browser == TRUE]) #1631
-length(df$binomial[df$diet.grazer == TRUE]) #618
-length(df$binomial[df$diet.frugivore == TRUE]) #1941
-length(df$binomial[df$diet.piscivore == TRUE]) #30
+length(data$binomial[data$diet.invertivore == TRUE]) #1998
+length(data$binomial[data$diet.carnivore == TRUE]) #333
+length(data$binomial[data$diet.browser == TRUE]) #1631
+length(data$binomial[data$diet.grazer == TRUE]) #618
+length(data$binomial[data$diet.frugivore == TRUE]) #1941
+length(data$binomial[data$diet.piscivore == TRUE]) #30
 
-length(df$binomial[df$diet.breadth == 1]) #2490
-length(df$binomial[df$diet.breadth == 2]) #1747
-length(df$binomial[df$diet.breadth == 3]) #189
-length(df$binomial[df$diet.breadth == 4]) #0
-length(df$binomial[df$diet.breadth == 5]) #0
-length(df$binomial[df$diet.breadth == 6]) #0
+length(data$binomial[data$diet.breadth == 1]) #2490
+length(data$binomial[data$diet.breadth == 2]) #1747
+length(data$binomial[data$diet.breadth == 3]) #189
+length(data$binomial[data$diet.breadth == 4]) #0
+length(data$binomial[data$diet.breadth == 5]) #0
+length(data$binomial[data$diet.breadth == 6]) #0
 
-df.clean <- subset(df, df$diet.breadth > 0 & !is.na(df$diet.breadth))
+df.clean <- subset(data, data$diet.breadth > 0 & !is.na(data$diet.breadth))
 length(unique(df.clean$binomial)) #4426
 length(unique(df.clean$binomial[df.clean$n.cont == 1])) #4248
 length(unique(df.clean$binomial[df.clean$n.cont == 2])) #272
@@ -60,9 +60,9 @@ plot(as.factor(df.clean$n.cont), df.clean$diet.breadth)
 
 #1 v 2+ diet breadth
 not.glob <- filter(df.clean, n.cont == 1) %>% 
-  select(diet.breadth) %>% .[[1]]
+  dplyr::select(diet.breadth) %>% .[[1]]
 glob <- filter(df.clean, n.cont != 1) %>% 
-  select(diet.breadth) %>% .[[1]]
+  dplyr::select(diet.breadth) %>% .[[1]]
 
 # Is variance equal? No
 var.test(not.glob, glob) #1.171249, p = 0.01549
@@ -105,23 +105,23 @@ mean(not.glob) - mean(glob) # basically 0 difference in means
 
 
 #1 v 2+ cont
-df <- filter(df.clean, !duplicated(binomial))
+data <- filter(df.clean, !duplicated(binomial))
 
 # Assign if species is global or not by if it occurs on more than 1 continent
-df$global <- df$n.cont != 1
+data$global <- data$n.cont != 1
 
 # Create a data frame with all species
-diets <- names(dplyr::select(df, starts_with("diet"), -diet.src, -diet.breadth))
+diets <- names(dplyr::select(data, starts_with("diet"), -diet.src, -diet.breadth))
 res <- data.frame(diet = diets)
 
-res["count"] <- colSums(df[diets])
-res["onMult"] <- colSums(df[df$global, diets])
+res["count"] <- colSums(data[diets])
+res["onMult"] <- colSums(data[data$global, diets])
 
 # Count how large a proportion we expect of a given diet
-res <- mutate(res, glob.proportion = count/nrow(df))
+res <- mutate(res, glob.proportion = count/nrow(data))
 
 # Find the total species number on 2+ continents
-onMult.tot <- sum(df$global)
+onMult.tot <- sum(data$global)
 res <- mutate(res, onMult.proportion = onMult/onMult.tot)
 # Run binomial test and add that to the result
 # The test compares each diet presence globally to their overall precense in mammalia
@@ -146,23 +146,23 @@ res
 #write.csv(res, "onecontvmult.diets.csv", row.names = FALSE)
 
 #1+2 v 3+
-df <- filter(df.clean, !duplicated(binomial))
+data <- filter(data.clean, !duplicated(binomial))
 
 # Assign if species is global or not by if it occurs on more than 1 continent
-df$global <- df$n.cont == "3+"
+data$global <- data$n.cont == "3+"
 
 # Create a data frame with all species
-diets <- names(select(df, starts_with("diet"), -diet.src, -diet.breadth))
+diets <- names(select(data, starts_with("diet"), -diet.src, -diet.breadth))
 res <- data.frame(diet = diets)
 
-res["count"] <- colSums(df[diets])
-res["on3"] <- colSums(df[df$global, diets])
+res["count"] <- colSums(data[diets])
+res["on3"] <- colSums(data[data$global, diets])
 
 # Count how large a proportion we expect of a given diet
-res <- mutate(res, glob.proportion = count/nrow(df))
+res <- mutate(res, glob.proportion = count/nrow(data))
 
 # Find the total species number on 3+ continents
-on3.tot <- sum(df$global)
+on3.tot <- sum(data$global)
 res <- mutate(res, on3.proportion = on3/on3.tot)
 # Run binomial test and add that to the result
 # The test compares each diet presence globally to their overall precense in mammalia
