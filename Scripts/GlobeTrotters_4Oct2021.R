@@ -344,6 +344,11 @@ df.origin.gen.foss.phyl.ranges.pan <- left_join(df.origin.gen.foss.phyl.ranges, 
                                                 by = "binomial")
 
 df <- df.origin.gen.foss.phyl.ranges.pan
+
+
+df$n.cont[df$n.cont == "3+"] <- "3+"
+colnames(df)[colnames(df) == "continent.family"] <- "family.origin"
+
 write.csv(df, "global.mammal.data.csv")
 
 ##plot themes----
@@ -371,13 +376,68 @@ plot_theme <- theme(panel.grid = element_blank(),
 ##data for analyses ----
 #df <- read.csv("global.mammal.data.csv", header = TRUE)
 
+## BIASES IN DATA ----
+
+#want to check that we get same skewed & bimodal distributions as in MOM
+ggplot() +
+  geom_density(aes(log10(df$avg.mass)), colour = "black") +
+  geom_density(aes(log10(df$avg.mass[df$continent.North.America == TRUE])), colour = "#B4D9C8") +
+  geom_density(aes(log10(df$avg.mass[df$continent.South.America == TRUE])), colour = "#E2C9F2") +
+  geom_density(aes(log10(df$avg.mass[df$continent.Eurasia == TRUE])), colour = "#F2CDA0") +
+  geom_density(aes(log10(df$avg.mass[df$continent.Australia == TRUE])), colour = "#D9967E") +
+  geom_density(aes(log10(df$avg.mass[df$continent.Africa == TRUE])), colour = "#C2D991") +
+  plot_theme +
+  scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
+  scale_y_continuous(name = "Density")
+
+#want to check for taxonomic and geographic coverage
+cont.counts <- df %>%
+  dplyr::select(starts_with("continent.")) %>%
+  dplyr::summarise_all(sum)
+
+fam.counts <- table(df$family)
+
+#want to look for coverage in species (genus) age
+#species (genus) age by body size
+ggplot() +
+  geom_point(aes(x = log10(df$avg.mass), y = df$foss.age)) +
+  geom_smooth(aes(x = log10(df$avg.mass), y = df$foss.age)) +
+  plot_theme + 
+  scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
+  scale_y_continuous(name = "Fossil Age (Genus)")
+
+ggplot() +
+  geom_point(aes(x = log10(df$avg.mass), y = df$age.median)) +
+  geom_smooth(aes(x = log10(df$avg.mass), y = df$age.median)) +
+  plot_theme + 
+  scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
+  scale_y_continuous(name = "Median Phylogenetic Age (Genus)")
+
+#species (genus) age by taxnomic coverage
+tax.foss.count <- df %>%
+  dplyr::group_by(family) %>%
+  dplyr::summarise(n.foss = length(!is.na(foss.age)),
+                   n.age = length(!is.na(age.median)))
+
+#species (genus) age by geographic coverage
+df.short <- df %>%
+  pivot_longer(cols = starts_with("continent."),
+               names_to = "continent",
+               values_to = "TorF") %>%
+  filter(TorF == TRUE)
+
+df.cont.short <- df.short %>%
+  group_by(continent) %>%
+  dplyr::summarise(N.foss = length(!is.na(foss.age)),
+                   N.age = length(!is.na(age.median)))
+
 ## NUM SP PER CONTINENT ----
 length(unique(df$binomial))
 length(unique(df$binomial[df$n.cont == 1]))
 length(unique(df$binomial[df$n.cont == 2])) 
-length(unique(df$binomial[df$n.cont >= 3]))
+length(unique(df$binomial[df$n.cont == "3+"]))
 
-unique(df[which(df$n.cont >= 3), "binomial"])
+unique(df[which(df$n.cont == "3+"), "binomial"])
 
 ##limited disperses
 ld <- df[df$n.cont == 2,]
@@ -423,72 +483,49 @@ colnames(limited.breadth)[colnames(limited.breadth) == "N"] <- "limited.N"
 limited.breadth <- limited.breadth %>%
   dplyr::select(-n.cont)
 
-trotter.breadth <- breadth[breadth$n.cont >= 3,]
+trotter.breadth <- breadth[breadth$n.cont == "3+",]
 colnames(trotter.breadth)[colnames(trotter.breadth) == "N"] <- "trotter.N"
 trotter.breadth <- trotter.breadth %>%
   dplyr::select(-n.cont)
 
-#look at differences in breadth
-#homies
-median(null.breadth$diet.breadth) - median(homies.breadth$diet.breadth) 
-mean(null.breadth$diet.breadth) - mean(homies.breadth$diet.breadth) #1.2 difference in means
-#percentage difference
-(mean(null.breadth$diet.breadth) - mean(homies.breadth$diet.breadth))/mean(null.breadth$diet.breadth)*100 #37.5%
-
-#limited
-median(null.breadth$diet.breadth) - median(limited.breadth$diet.breadth)
-mean(null.breadth$diet.breadth) - mean(limited.breadth$diet.breadth) #0.8 difference in means
-
-#percentage difference
-(mean(null.breadth$diet.breadth) - mean(limited.breadth$diet.breadth))/mean(null.breadth$diet.breadth)*100 #-25% 
-
-#trtoters
-median(null.breadth$diet.breadth) - median(trotter.breadth$diet.breadth) 
-mean(null.breadth$diet.breadth) - mean(trotter.breadth$diet.breadth) #1.13 difference in means
-
-#percentage difference
-(mean(null.breadth$diet.breadth) - mean(trotter.breadth$diet.breadth))/mean(null.breadth$diet.breadth)*100 #35.4% 
-
 #create full dataset
 breadth.null.trot <- merge(null.breadth, trotter.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
 breadth.null.trot.lim <- merge(breadth.null.trot, limited.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
-breadth.null.trol.lim.end <- merge(breadth.null.trot.lim, homies.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
+breadth.null.trol.lim.homies <- merge(breadth.null.trot.lim, homies.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
 
-df.breadth <- breadth.null.trol.lim.end
+df.breadth <- breadth.null.trol.lim.homies
 df.breadth[is.na(df.breadth)] <- 0
 
-df.breadth$prop.null <- df.breadth$null.N/sum(df.breadth$null.N)
+df.breadth$prop.null <- df.breadth$null.N/nrow(df)
 
-df.breadth$prop.end <- df.breadth$homies.N/sum(df.breadth$homies.N)
-df.breadth$prop.lim <- df.breadth$limited.N/sum(df.breadth$limited.N)
-df.breadth$prop.trot <- df.breadth$trotter.N/sum(df.breadth$trotter.N)
+df.breadth$prop.homies <- df.breadth$homies.N/nrow(df[df$n.cont == 1,])
+df.breadth$prop.lim <- df.breadth$limited.N/nrow(df[df$n.cont == 2,])
+df.breadth$prop.trot <- df.breadth$trotter.N/nrow(df[df$n.cont == "3+",])
 
 #binomial test
 
-test.homies <- binom.test(df.breadth$homies.N, sum(df.breadth$homies.N), p = df.breadth$null.prop, alternative = "greater")
-
 for(i in 1:nrow(df.breadth)){
-  test <- binom.test(df.breadth$homies.N[i], sum(df.breadth$homies.N), p = df.breadth$prop.null[i], alternative = "two.sided")
-  df.breadth$p.end[i] <- test$p.value
+  test <- binom.test(df.breadth$homies.N[i], nrow(df[df$n.cont == 1,]), p = df.breadth$prop.null[i], alternative = "two.sided")
+  df.breadth$p.homies[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.breadth)){
-  test <- binom.test(df.breadth$limited.N[i], sum(df.breadth$limited.N), p = df.breadth$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.breadth$limited.N[i], nrow(df[df$n.cont == 2,]), p = df.breadth$prop.null[i], alternative = "two.sided")
   df.breadth$p.lim[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.breadth)){
-  test <- binom.test(df.breadth$trotter.N[i], sum(df.breadth$trotter.N), p = df.breadth$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.breadth$trotter.N[i], nrow(df[df$n.cont == "3+",]), p = df.breadth$prop.null[i], alternative = "two.sided")
   df.breadth$p.trot[i] <- test$p.value
 }
 
 #add sidak correction
-df.breadth <- arrange(df.breadth, p.end) %>%
-  dplyr::mutate(signif.end = p.end < 0.05,
-                signif.bonferoni.end = p.end < 0.05/n(),
-                signif.holm.end = !0.05/(n() + 1 - 1:n()) < p.end,
-                signif.sidak.end = p.end < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.end = !(1 - (1 - 0.05)^(1/n())) < p.end)
+df.breadth <- arrange(df.breadth, p.homies) %>%
+  dplyr::mutate(signif.homies = p.homies < 0.05,
+                signif.bonferoni.homies = p.homies < 0.05/n(),
+                signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
 
 df.breadth <- arrange(df.breadth, p.lim) %>%
   dplyr::mutate(signif.lim = p.lim < 0.05,
@@ -517,38 +554,38 @@ df.diet <- data.frame(diet = diets)
 df.diet["null.N"] <- colSums(df[diets])
 df.diet["homies.N"] <- colSums(df[df$n.cont == 1, diets])
 df.diet["limited.N"] <- colSums(df[df$n.cont == 2, diets])
-df.diet["trotter.N"] <- colSums(df[df$n.cont >= 3, diets])
+df.diet["trotter.N"] <- colSums(df[df$n.cont == "3+", diets])
 
-df.diet$prop.null <- df.diet$null.N/sum(df.diet$null.N)
+df.diet$prop.null <- df.diet$null.N/nrow(df)
 
-df.diet$prop.end <- df.diet$homies.N/sum(df.diet$homies.N)
-df.diet$prop.lim <- df.diet$limited.N/sum(df.diet$limited.N)
-df.diet$prop.trot <- df.diet$trotter.N/sum(df.diet$trotter.N)
+df.diet$prop.homies <- df.diet$homies.N/nrow(df[df$n.cont == 1,])
+df.diet$prop.lim <- df.diet$limited.N/nrow(df[df$n.cont == 2,])
+df.diet$prop.trot <- df.diet$trotter.N/nrow(df[df$n.cont == "3+",])
 
-#binomial test with correction
+#binomial test
 
 for(i in 1:nrow(df.diet)){
-  test <- binom.test(df.diet$homies.N[i], sum(df.diet$homies.N), p = df.diet$prop.null[i], alternative = "two.sided")
-  df.diet$p.end[i] <- test$p.value
+  test <- binom.test(df.diet$homies.N[i], nrow(df[df$n.cont == 1,]), p = df.diet$prop.null[i], alternative = "two.sided")
+  df.diet$p.homies[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.diet)){
-  test <- binom.test(df.diet$limited.N[i], sum(df.diet$limited.N), p = df.diet$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.diet$limited.N[i], nrow(df[df$n.cont == 2,]), p = df.diet$prop.null[i], alternative = "two.sided")
   df.diet$p.lim[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.diet)){
-  test <- binom.test(df.diet$trotter.N[i], sum(df.diet$trotter.N), p = df.diet$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.diet$trotter.N[i], nrow(df[df$n.cont == "3+",]), p = df.diet$prop.null[i], alternative = "two.sided")
   df.diet$p.trot[i] <- test$p.value
 }
 
 #add sidak correction
-df.diet <- arrange(df.diet, p.end) %>%
-  dplyr::mutate(signif.end = p.end < 0.05,
-                signif.bonferoni.end = p.end < 0.05/n(),
-                signif.holm.end = !0.05/(n() + 1 - 1:n()) < p.end,
-                signif.sidak.end = p.end < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.end = !(1 - (1 - 0.05)^(1/n())) < p.end)
+df.diet <- arrange(df.diet, p.homies) %>%
+  dplyr::mutate(signif.homies = p.homies < 0.05,
+                signif.bonferoni.homies = p.homies < 0.05/n(),
+                signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
 
 df.diet <- arrange(df.diet, p.lim) %>%
   dplyr::mutate(signif.lim = p.lim < 0.05,
@@ -566,7 +603,73 @@ df.diet <- arrange(df.diet, p.trot) %>%
 
 write.csv(df.diet, "diet.results.csv")
 
-##FIGURE
+## DIET FIGURES ----
+#stacked bar graph
+
+##DIET BREADTH
+dietbreadth_bargraph <- plyr::ddply(df, c("n.cont", "diet.breadth"), function(x){
+  nrow(x)
+})
+
+dietbreadth_bargraph_full <- tidyr::complete(dietbreadth_bargraph, n.cont, diet.breadth)
+
+dietbreadth_bargraph_full$tots <- NA
+dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "1"] <- sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "1"], na.rm = TRUE) #4148
+dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "2"] <- sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "2"], na.rm = TRUE) #272
+dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "3+"] <-sum(dietbreadth_bargraph_full$V1[dietbreadth_bargraph_full$n.cont == "3+"], na.rm = TRUE) #6 #phew, they match!
+
+dietbreadth_bargraph_full$prop <- dietbreadth_bargraph_full$V1 / dietbreadth_bargraph_full$tots
+
+#show as proportions
+ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth, 
+                                      y = prop, 
+                                      fill = n.cont)) + 
+  geom_bar(stat = "identity") +
+  xlab("Dietary Breadth") + 
+  ylab("Proportion") + 
+  theme(legend.position = "none") + 
+  plot_theme
+
+##DIET TYPE
+diet.melt <- melt(df, id.vars = c("binomial", "n.cont"), 
+                  measure.vars = c("diet.carnivore.tot", "diet.browser.tot", "diet.grazer.tot", "diet.invertivore.tot", "diet.piscivore.tot", "diet.frugivore.tot"),
+                  variable.name = "diet.type")
+
+diet.melt <- diet.melt %>%
+  filter(data.melt$value == TRUE)
+
+#group by binomial so don't recount
+unique.diet.melt <- diet.melt %>%
+  group_by(binomial) %>%
+  dplyr:: summarise(diettype = diet.type[1], numconts = n.cont[1]) %>%
+  mutate_at("diettype", as.factor) %>%
+  as.data.frame()
+
+diettype_bargraph <- plyr::ddply(unique.diet.melt, c("numconts", "diettype"), function(x){
+  nrow(x)
+})
+diettype_bargraph_full <- complete(diettype_bargraph, numconts, diettype)
+
+diettype_bargraph_full$tots <- NA
+diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "1"] <- sum(diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "1"], na.rm = TRUE) #4120
+diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "2"] <- sum(diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "2"], na.rm = TRUE) #260
+diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "3+"] <- sum(diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "3+"], na.rm = TRUE) #6
+
+diettype_bargraph_full$prop <- diettype_bargraph_full$V1 / diettype_bargraph_full$tots
+
+#show as proportions
+ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = numconts)) + 
+  geom_bar(stat = "identity") +
+  xlab("Diet Type") + 
+  ylab("Proportion") + 
+  scale_x_discrete(labels=c("diet.carnivore" = "Carnivore", "diet.piscivore" = "Piscivore", 
+                            "diet.invertivore" = "Invertivore", "diet.browser" = "Browser", 
+                            "diet.grazer" = "Grazer", "diet.frugivore" = "Frugivore")) + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1, size=14)) + 
+  plot_theme +theme(panel.border = element_rect(fill=NA),
+                    strip.background = element_rect(fill=NA),
+                    legend.position = c(1.15, 0.5))+
+  theme(axis.title.y = element_text(margin = margin(r = 5)))
 
 ##DISPERSAL----
 df$AFR_d <- as.numeric(df$AFR_d)
@@ -673,7 +776,7 @@ colnames(limited.family)[colnames(limited.family) == "N"] <- "limited.N"
 limited.family <- limited.family %>%
   dplyr::select(-n.cont)
 
-trotter.family <- family[family$n.cont >= 3,]
+trotter.family <- family[family$n.cont == "3+",]
 colnames(trotter.family)[colnames(trotter.family) == "N"] <- "trotter.N"
 trotter.family <- trotter.family %>%
   dplyr::select(-n.cont)
@@ -790,7 +893,7 @@ colnames(limited.order)[colnames(limited.order) == "N"] <- "limited.N"
 limited.order <- limited.order %>%
   dplyr::select(-n.cont)
 
-trotter.order <- order[order$n.cont >= 3,]
+trotter.order <- order[order$n.cont == "3+",]
 colnames(trotter.order)[colnames(trotter.order) == "N"] <- "trotter.N"
 trotter.order <- trotter.order %>%
   dplyr::select(-n.cont)
@@ -888,11 +991,10 @@ trot.true <- subset(df.order, df.order$signif.sidak.trot == TRUE, select = c(ord
 #jumpers (no longer living where family originated) and spreaders (living where family originated and other continents too)
 
 #gather data
-colnames(df)[colnames(df) == "continent.family"] <- "family.origin"
 
 homiess <- df[df$n.cont == 1,]
 limited <- df[df$n.cont == 2,]
-trotter <- df[df$n.cont >= 3,]
+trotter <- df[df$n.cont == "3+",]
 
 #homiess
 homies.origin <- homiess %>%
@@ -1068,7 +1170,7 @@ colnames(limited.family)[colnames(limited.family) == "N"] <- "limited.N"
 limited.family <- limited.family %>%
   dplyr::select(-n.cont)
 
-trotter.family <- family[family$n.cont >= 3,]
+trotter.family <- family[family$n.cont == "3+",]
 colnames(trotter.family)[colnames(trotter.family) == "N"] <- "trotter.N"
 trotter.family <- trotter.family %>%
   dplyr::select(-n.cont)
