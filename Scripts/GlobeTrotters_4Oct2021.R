@@ -406,12 +406,16 @@ ggplot() +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
   scale_y_continuous(name = "Fossil Age (Genus)")
 
+summary(lm(df$foss.age ~ df$avg.mass))
+
 ggplot() +
   geom_point(aes(x = log10(df$avg.mass), y = df$age.median)) +
   geom_smooth(aes(x = log10(df$avg.mass), y = df$age.median)) +
   plot_theme + 
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
   scale_y_continuous(name = "Median Phylogenetic Age (Genus)")
+
+summary(lm(df$age.median ~ df$avg.mass))
 
 #species (genus) age by taxnomic coverage
 tax.foss.count <- df %>%
@@ -430,6 +434,29 @@ df.cont.short <- df.short %>%
   group_by(continent) %>%
   dplyr::summarise(N.foss = length(!is.na(foss.age)),
                    N.age = length(!is.na(age.median)))
+
+##biases in family of origin data
+ggplot(df[!is.na(df$family.origin),]) +
+  geom_density(aes(log10(avg.mass))) + 
+  plot_theme + 
+  scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+
+length(unique(df$family[df$family.origin != ""])) #128
+length(unique(df$family[df$family.origin == ""])) #7
+length(df$binomial[df$family.origin == ""]) #814
+unique(df$order[df$family.origin == ""])
+
+length(df$binomial[df$family.origin == "" & df$order == "Chiroptera"]) #87 
+length(unique(df$family[df$family.origin == "" & df$order == "Chiroptera"])) #2
+
+length(df$binomial[df$family.origin == "" & df$order == "Rodentia"]) #713
+length(unique(df$family[df$family.origin == "" & df$order == "Rodentia"])) #2
+
+#geographic bias
+df %>%
+  filter(family.origin != "") %>%
+  group_by(family.origin) %>%
+  summarise(N = n())
 
 ## NUM SP PER CONTINENT ----
 length(unique(df$binomial))
@@ -606,6 +633,8 @@ write.csv(df.diet, "diet.results.csv")
 ## DIET FIGURES ----
 #stacked bar graph
 
+col <- c("gray72", "gray47", "black")
+
 ##DIET BREADTH
 dietbreadth_bargraph <- plyr::ddply(df, c("n.cont", "diet.breadth"), function(x){
   nrow(x)
@@ -620,15 +649,28 @@ dietbreadth_bargraph_full$tots[dietbreadth_bargraph_full$n.cont == "3+"] <-sum(d
 
 dietbreadth_bargraph_full$prop <- dietbreadth_bargraph_full$V1 / dietbreadth_bargraph_full$tots
 
+dietbreadth_bargraph_full$n.cont <- as.factor(dietbreadth_bargraph_full$n.cont)
+dietbreadth_bargraph_full$n.cont <- factor(dietbreadth_bargraph_full$n.cont,                                    # Change ordering manually
+                                           levels = c("1", "2", "3+"))
+
 #show as proportions
 ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth, 
                                       y = prop, 
                                       fill = n.cont)) + 
+  #scale_fill_manual("Continents", values = col) +
+  scale_fill_manual(values = c("1" = "black",
+                               "2" = "gray47",
+                               "3+" = "gray72")) +
   geom_bar(stat = "identity") +
   xlab("Dietary Breadth") + 
   ylab("Proportion") + 
-  theme(legend.position = "none") + 
-  plot_theme
+  geom_col(position = position_stack(reverse = TRUE)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) + 
+  plot_theme +theme(panel.border = element_rect(fill = NA),
+                    strip.background = element_rect(fill = NA),
+                    legend.position = c(1.15, 0.5)) +
+  theme(axis.title.y = element_text(margin = margin(r = 5)))
+
 
 ##DIET TYPE
 diet.melt <- melt(df, id.vars = c("binomial", "n.cont"), 
@@ -636,7 +678,7 @@ diet.melt <- melt(df, id.vars = c("binomial", "n.cont"),
                   variable.name = "diet.type")
 
 diet.melt <- diet.melt %>%
-  filter(data.melt$value == TRUE)
+  filter(diet.melt$value == TRUE)
 
 #group by binomial so don't recount
 unique.diet.melt <- diet.melt %>%
@@ -666,9 +708,13 @@ ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = numconts)) +
                             "diet.invertivore" = "Invertivore", "diet.browser" = "Browser", 
                             "diet.grazer" = "Grazer", "diet.frugivore" = "Frugivore")) + 
   theme(axis.text.x = element_text(angle = 45, hjust=1, size=14)) + 
-  plot_theme +theme(panel.border = element_rect(fill=NA),
-                    strip.background = element_rect(fill=NA),
-                    legend.position = c(1.15, 0.5))+
+  scale_fill_manual(values = c("1" = "black",
+                               "2" = "gray47",
+                               "3+" = "gray72")) +
+  geom_col(position = position_stack(reverse = TRUE)) +
+  plot_theme +theme(panel.border = element_rect(fill = NA),
+                    strip.background = element_rect(fill = NA),
+                    legend.position = c(1.15, 0.5)) +
   theme(axis.title.y = element_text(margin = margin(r = 5)))
 
 ##DISPERSAL----
@@ -789,25 +835,25 @@ fam.null.trol.lim.end <- merge(fam.null.trot.lim, homies.family, by = "family", 
 df.family <- fam.null.trol.lim.end
 df.family[is.na(df.family)] <- 0
 
-df.family$prop.null <- df.family$null.N/sum(df.family$null.N)
+df.family$prop.null <- df.family$null.N/nrow(df)
 
-df.family$prop.end <- df.family$homies.N/sum(df.family$homies.N)
-df.family$prop.lim <- df.family$limited.N/sum(df.family$limited.N)
-df.family$prop.trot <- df.family$trotter.N/sum(df.family$trotter.N)
+df.family$prop.end <- df.family$homies.N/nrow(df[df$n.cont == "1",])
+df.family$prop.lim <- df.family$limited.N/nrow(df[df$n.cont == "2",])
+df.family$prop.trot <- df.family$trotter.N/nrow(df[df$n.cont == "3+",])
 
 #binomial test
 for(i in 1:nrow(df.family)){
-  test <- binom.test(df.family$homies.N[i], sum(df.family$homies.N), p = df.family$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.family$homies.N[i], nrow(df[df$n.cont == "1",]), p = df.family$prop.null[i], alternative = "two.sided")
   df.family$p.end[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.family)){
-  test <- binom.test(df.family$limited.N[i], sum(df.family$limited.N), p = df.family$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.family$limited.N[i], nrow(df[df$n.cont == "2",]), p = df.family$prop.null[i], alternative = "two.sided")
   df.family$p.lim[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.family)){
-  test <- binom.test(df.family$trotter.N[i], sum(df.family$trotter.N), p = df.family$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.family$trotter.N[i], nrow(df[df$n.cont == "3+",]), p = df.family$prop.null[i], alternative = "two.sided")
   df.family$p.trot[i] <- test$p.value
 }
 
@@ -906,25 +952,25 @@ ord.null.trol.lim.end <- merge(ord.null.trot.lim, homies.order, by = "order", al
 df.order <- ord.null.trol.lim.end
 df.order[is.na(df.order)] <- 0
 
-df.order$prop.null <- df.order$null.N/sum(df.order$null.N)
+df.order$prop.null <- df.order$null.N/nrow(df)
 
-df.order$prop.end <- df.order$homies.N/sum(df.order$homies.N)
-df.order$prop.lim <- df.order$limited.N/sum(df.order$limited.N)
-df.order$prop.trot <- df.order$trotter.N/sum(df.order$trotter.N)
+df.order$prop.end <- df.order$homies.N/nrow(df[df$n.cont == "1",])
+df.order$prop.lim <- df.order$limited.N/nrow(df[df$n.cont == "2",])
+df.order$prop.trot <- df.order$trotter.N/nrow(df[df$n.cont == "3+",])
 
 #binomial test
 for(i in 1:nrow(df.order)){
-  test <- binom.test(df.order$homies.N[i], sum(df.order$homies.N), p = df.order$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.order$homies.N[i], nrow(df[df$n.cont == "1",]), p = df.order$prop.null[i], alternative = "two.sided")
   df.order$p.end[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.order)){
-  test <- binom.test(df.order$limited.N[i], sum(df.order$limited.N), p = df.order$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.order$limited.N[i], nrow(df[df$n.cont == "2",]), p = df.order$prop.null[i], alternative = "two.sided")
   df.order$p.lim[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.order)){
-  test <- binom.test(df.order$trotter.N[i], sum(df.order$trotter.N), p = df.order$prop.null[i], alternative = "two.sided")
+  test <- binom.test(df.order$trotter.N[i], nrow(df[df$n.cont == "3+",]), p = df.order$prop.null[i], alternative = "two.sided")
   df.order$p.trot[i] <- test$p.value
 }
 
@@ -992,12 +1038,12 @@ trot.true <- subset(df.order, df.order$signif.sidak.trot == TRUE, select = c(ord
 
 #gather data
 
-homiess <- df[df$n.cont == 1,]
+homies <- df[df$n.cont == 1,]
 limited <- df[df$n.cont == 2,]
 trotter <- df[df$n.cont == "3+",]
 
-#homiess
-homies.origin <- homiess %>%
+#homies
+homies.origin <- homies %>%
   group_by(family.origin) %>%
   dplyr::summarise(N = n(),
             N.Africa = length(continent.Africa[continent.Africa == TRUE]),
@@ -1114,30 +1160,30 @@ sorensen <- function(x,y) {
   return(index)
 }
 
-continents <- names(dplyr::select(df, starts_with("continent")))
+continents <- names(dplyr::select(df, starts_with("continent.")))
 continent <- gsub("continent.", "", continents)
-indeces <- matrix(nrow = 5, ncol = 5, dimnames = list(continents, continents))
+indeces <- matrix(nrow = 5, ncol = 5, dimnames = list(continent, continent))
 
-indeces[1,2] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
-                         y = df$binomial[df$continent.South.America == TRUE])
-indeces[1,3] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
-                         y = df$binomial[df$continent.Eurasia == TRUE])
-indeces[1,4] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
-                         y = df$binomial[df$continent.Africa == TRUE])
-indeces[1,5] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
-                         y = df$binomial[df$continent.Australia == TRUE])
-indeces[2, 3] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
-                          y = df$binomial[df$continent.Eurasia == TRUE])
-indeces[2,4] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
-                         y = df$binomial[df$continent.Africa == TRUE])
-indeces[2,5] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
-                         y = df$binomial[df$continent.Australia == TRUE])
-indeces[3,4] <- sorensen(x = df$binomial[df$continent.Eurasia == TRUE], 
-                         y = df$binomial[df$continent.Africa == TRUE])
-indeces[3,5] <- sorensen(x = df$binomial[df$continent.Eurasia == TRUE], 
-                         y = df$binomial[df$continent.Australia == TRUE])
-indeces[4,5] <- sorensen(x = df$binomial[df$continent.Africa == TRUE], 
-                         y = df$binomial[df$continent.Australia == TRUE])
+indeces["North.America", "South.America"] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
+                                                      y = df$binomial[df$continent.South.America == TRUE])
+indeces["North.America", "Eurasia"] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
+                                                y = df$binomial[df$continent.Eurasia == TRUE])
+indeces["North.America", "Africa"] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
+                                               y = df$binomial[df$continent.Africa == TRUE])
+indeces["North.America", "Australia"] <- sorensen(x = df$binomial[df$continent.North.America == TRUE], 
+                                                  y = df$binomial[df$continent.Australia == TRUE])
+indeces["South.America", "Eurasia"] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
+                                                y = df$binomial[df$continent.Eurasia == TRUE])
+indeces["South.America", "Africa"] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
+                                               y = df$binomial[df$continent.Africa == TRUE])
+indeces["South.America", "Australia"] <- sorensen(x = df$binomial[df$continent.South.America == TRUE], 
+                                                  y = df$binomial[df$continent.Australia == TRUE])
+indeces["Eurasia", "Africa"] <- sorensen(x = df$binomial[df$continent.Eurasia == TRUE], 
+                                         y = df$binomial[df$continent.Africa == TRUE])
+indeces["Eurasia", "Australia"] <- sorensen(x = df$binomial[df$continent.Eurasia == TRUE], 
+                                            y = df$binomial[df$continent.Australia == TRUE])
+indeces["Africa", "Australia"] <- sorensen(x = df$binomial[df$continent.Africa == TRUE], 
+                                           y = df$binomial[df$continent.Australia == TRUE])
 write.csv(indeces, "sorensen.index.csv")
 
 
