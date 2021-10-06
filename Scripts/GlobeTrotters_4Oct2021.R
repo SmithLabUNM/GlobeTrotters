@@ -395,7 +395,7 @@ cont.counts <- df %>%
   dplyr::select(starts_with("continent.")) %>%
   dplyr::summarise_all(sum)
 
-fam.counts <- table(df$family)
+table(df$family)
 
 #want to look for coverage in species (genus) age
 #species (genus) age by body size
@@ -744,7 +744,7 @@ df.dispersal$dispersal.distance[df.dispersal$carn == TRUE] = 40.7*(df.dispersal$
 df.dispersal$dispersal.distance[df.dispersal$carn != TRUE] = 3.31*(df.dispersal$avg.mass^0.65)
  
 #model: age of dispersal (delay), generation length, age of lineage (fossil age), and dispersal amount
-df.dispersal$dispersal.tot =  ((df.dispersal$gen.length * 365)/(df.dispersal$gen.length + df.dispersal$disp.age))*df.dispersal$dispersal.distance
+df.dispersal$dispersal.tot =  ((df.dispersal$foss.avg.age * 365)/(df.dispersal$gen.length + df.dispersal$disp.age))*df.dispersal$dispersal.distance
 
 ggplot(data = df.dispersal) +
   geom_density(aes(dispersal.tot))
