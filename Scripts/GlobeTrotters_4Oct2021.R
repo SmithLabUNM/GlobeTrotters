@@ -630,6 +630,13 @@ df.diet <- arrange(df.diet, p.trot) %>%
 
 write.csv(df.diet, "diet.results.csv")
 
+#test if carnivorans of n=2 and n=3+ are larger than expected
+ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]))
+ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]), alternative = "greater")
+ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]), alternative = "less") #sig; y less than x
+
+ks.test(log10(df$avg.mass[df$n.cont == "3+" & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == "3+"])) #not sig
+
 ## DIET FIGURES ----
 #stacked bar graph
 
@@ -657,10 +664,13 @@ dietbreadth_bargraph_full$n.cont <- factor(dietbreadth_bargraph_full$n.cont,    
 ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth, 
                                       y = prop, 
                                       fill = n.cont)) + 
-  #scale_fill_manual("Continents", values = col) +
   scale_fill_manual(values = c("1" = "black",
                                "2" = "gray47",
-                               "3+" = "gray72")) +
+                               "3+" = "gray72"),
+                    name = "Number of Continents",
+                    labels = c("Home bodies",
+                               "Limited dispersers",
+                               "Globe trotters")) +
   geom_bar(stat = "identity") +
   xlab("Dietary Breadth") + 
   ylab("Proportion") + 
@@ -674,7 +684,12 @@ ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth,
 
 ##DIET TYPE
 diet.melt <- melt(df, id.vars = c("binomial", "n.cont"), 
-                  measure.vars = c("diet.carnivore.tot", "diet.browser.tot", "diet.grazer.tot", "diet.invertivore.tot", "diet.piscivore.tot", "diet.frugivore.tot"),
+                  measure.vars = c("diet.carnivore.tot", 
+                                   "diet.browser.tot", 
+                                   "diet.grazer.tot", 
+                                   "diet.invertivore.tot", 
+                                   "diet.piscivore.tot", 
+                                   "diet.frugivore.tot"),
                   variable.name = "diet.type")
 
 diet.melt <- diet.melt %>%
@@ -699,18 +714,23 @@ diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "3+"] <- sum(diet
 
 diettype_bargraph_full$prop <- diettype_bargraph_full$V1 / diettype_bargraph_full$tots
 
+
 #show as proportions
 ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = numconts)) + 
   geom_bar(stat = "identity") +
   xlab("Diet Type") + 
   ylab("Proportion") + 
-  scale_x_discrete(labels=c("diet.carnivore" = "Carnivore", "diet.piscivore" = "Piscivore", 
-                            "diet.invertivore" = "Invertivore", "diet.browser" = "Browser", 
-                            "diet.grazer" = "Grazer", "diet.frugivore" = "Frugivore")) + 
-  theme(axis.text.x = element_text(angle = 45, hjust=1, size=14)) + 
+  scale_x_discrete(labels=c("diet.carnivore.tot" = "Carnivore", "diet.piscivore.tot" = "Piscivore", 
+                            "diet.invertivore.tot" = "Invertivore", "diet.browser.tot" = "Browser", 
+                            "diet.grazer.tot" = "Grazer", "diet.frugivore.tot" = "Frugivore")) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 11)) + 
   scale_fill_manual(values = c("1" = "black",
-                               "2" = "gray47",
-                               "3+" = "gray72")) +
+                                  "2" = "gray47",
+                                  "3+" = "gray72"),
+                       name = "Number of Continents",
+                       labels = c("Home bodies",
+                                  "Limited dispersers",
+                                  "Globe trotters")) +
   geom_col(position = position_stack(reverse = TRUE)) +
   plot_theme +theme(panel.border = element_rect(fill = NA),
                     strip.background = element_rect(fill = NA),
@@ -740,15 +760,23 @@ df.dispersal <- df.dispersal %>%
 #calculate dispersal (from Sutherland et al. 2000) (distance in km)
 #carnivore: Dc = 40.7M^0.81
 #herb or omni = Dho = 3.31M^0.65
-df.dispersal$dispersal.distance[df.dispersal$carn == TRUE] = 40.7*(df.dispersal$avg.mass^0.81)
-df.dispersal$dispersal.distance[df.dispersal$carn != TRUE] = 3.31*(df.dispersal$avg.mass^0.65)
- 
+df.dispersal$dispersal.distance <- ""
+df.dispersal$dispersal.distance[df.dispersal$carn == TRUE] = 40.7*(df.dispersal$avg.mass[df.dispersal$carn == TRUE]^0.81)
+df.dispersal$dispersal.distance[df.dispersal$carn != TRUE] = 3.31*(df.dispersal$avg.mass[df.dispersal$carn != TRUE]^0.65)
+
+df.dispersal$dispersal.distance <- as.numeric(df.dispersal$dispersal.distance)
+
 #model: age of dispersal (delay), generation length, age of lineage (fossil age), and dispersal amount
-df.dispersal$dispersal.tot =  ((df.dispersal$foss.avg.age * 365)/(df.dispersal$gen.length + df.dispersal$disp.age))*df.dispersal$dispersal.distance
+df.dispersal$dispersal.foss =  ((df.dispersal$foss.avg.age * 365)/(df.dispersal$gen.length + df.dispersal$disp.age))*df.dispersal$dispersal.distance
+df.dispersal$dispersal.phylo =  ((df.dispersal$age * 365)/(df.dispersal$gen.length + df.dispersal$disp.age))*df.dispersal$dispersal.distance
 
 ggplot(data = df.dispersal) +
-  geom_density(aes(dispersal.tot))
+  geom_density(aes(dispersal.foss))
+length(df.dispersal$dispersal.foss[!is.na(df.dispersal$dispersal.foss)]) #68
 
+ggplot(data = df.dispersal) +
+  geom_density(aes(dispersal.phylo))
+length(df.dispersal$dispersal.phylo[!is.na(df.dispersal$dispersal.phylo)]) #84
 
 ##Eurasia 
 #54750000 km2
@@ -784,18 +812,54 @@ South.America.NS = 7429
 Australia.EW = 3624
 Australia.NS = 2993
 
-length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.tot)]) #85
+length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.foss)]) #68
 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Australia.EW & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Australia.NS & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Eurasia.EW & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Eurasia.NS & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Africa.EW & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= Africa.NS & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= North.America.EW & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= North.America.NS & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= South.America.EW & !is.na(df.dispersal$dispersal.tot)]) 
-length(df.dispersal$binomial[df.dispersal$dispersal.tot >= South.America.NS & !is.na(df.dispersal$dispersal.tot)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Australia.EW & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Australia.NS & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Eurasia.EW & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Eurasia.NS & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Africa.EW & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Africa.NS & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= North.America.EW & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= North.America.NS & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= South.America.EW & !is.na(df.dispersal$dispersal.foss)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.foss >= South.America.NS & !is.na(df.dispersal$dispersal.foss)]) 
+
+length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.phylo)]) #84
+
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= Australia.EW & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= Australia.NS & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= Eurasia.EW & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= Eurasia.NS & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= Africa.EW & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= Africa.NS & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= North.America.EW & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= North.America.NS & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= South.America.EW & !is.na(df.dispersal$dispersal.phylo)]) 
+length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= South.America.NS & !is.na(df.dispersal$dispersal.phylo)]) 
+
+hist(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]))
+hist(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]))
+
+min(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) #21.2
+max(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) #2949986
+
+min(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]) #4.5
+max(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]) #3940034
+
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]))
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]), alternative = "greater")
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]), alternative = "less") #sig
+
+min(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) #same as above
+max(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)])
+
+min(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
+max(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
+
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]))
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]), alternative = "greater")
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]), alternative = "less") #sig
 
 ## FAMILY AND ORDER ----
 
@@ -830,21 +894,21 @@ trotter.family <- trotter.family %>%
 #create full dataset
 fam.null.trot <- merge(null.family, trotter.family, by = "family", all.x = TRUE, all.y = TRUE)
 fam.null.trot.lim <- merge(fam.null.trot, limited.family, by = "family", all.x = TRUE, all.y = TRUE)
-fam.null.trol.lim.end <- merge(fam.null.trot.lim, homies.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.trol.lim.homies <- merge(fam.null.trot.lim, homies.family, by = "family", all.x = TRUE, all.y = TRUE)
 
-df.family <- fam.null.trol.lim.end
+df.family <- fam.null.trol.lim.homies
 df.family[is.na(df.family)] <- 0
 
 df.family$prop.null <- df.family$null.N/nrow(df)
 
-df.family$prop.end <- df.family$homies.N/nrow(df[df$n.cont == "1",])
+df.family$prop.homies <- df.family$homies.N/nrow(df[df$n.cont == "1",])
 df.family$prop.lim <- df.family$limited.N/nrow(df[df$n.cont == "2",])
 df.family$prop.trot <- df.family$trotter.N/nrow(df[df$n.cont == "3+",])
 
 #binomial test
 for(i in 1:nrow(df.family)){
   test <- binom.test(df.family$homies.N[i], nrow(df[df$n.cont == "1",]), p = df.family$prop.null[i], alternative = "two.sided")
-  df.family$p.end[i] <- test$p.value
+  df.family$p.homies[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.family)){
@@ -858,12 +922,12 @@ for(i in 1:nrow(df.family)){
 }
 
 #add sidak correction
-df.family <- arrange(df.family, p.end) %>%
-  dplyr::mutate(signif.end = p.end < 0.05,
-                signif.bonferoni.end = p.end < 0.05/n(),
-                signif.holm.end = !0.05/(n() + 1 - 1:n()) < p.end,
-                signif.sidak.end = p.end < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.end = !(1 - (1 - 0.05)^(1/n())) < p.end)
+df.family <- arrange(df.family, p.homies) %>%
+  dplyr::mutate(signif.homies = p.homies < 0.05,
+                signif.bonferoni.homies = p.homies < 0.05/n(),
+                signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
 
 df.family <- arrange(df.family, p.lim) %>%
   dplyr::mutate(signif.lim = p.lim < 0.05,
@@ -947,21 +1011,21 @@ trotter.order <- trotter.order %>%
 #create full dataset
 ord.null.trot <- merge(null.order, trotter.order, by = "order", all.x = TRUE, all.y = TRUE)
 ord.null.trot.lim <- merge(ord.null.trot, limited.order, by = "order", all.x = TRUE, all.y = TRUE)
-ord.null.trol.lim.end <- merge(ord.null.trot.lim, homies.order, by = "order", all.x = TRUE, all.y = TRUE)
+ord.null.trol.lim.homies <- merge(ord.null.trot.lim, homies.order, by = "order", all.x = TRUE, all.y = TRUE)
 
-df.order <- ord.null.trol.lim.end
+df.order <- ord.null.trol.lim.homies
 df.order[is.na(df.order)] <- 0
 
 df.order$prop.null <- df.order$null.N/nrow(df)
 
-df.order$prop.end <- df.order$homies.N/nrow(df[df$n.cont == "1",])
+df.order$prop.homies <- df.order$homies.N/nrow(df[df$n.cont == "1",])
 df.order$prop.lim <- df.order$limited.N/nrow(df[df$n.cont == "2",])
 df.order$prop.trot <- df.order$trotter.N/nrow(df[df$n.cont == "3+",])
 
 #binomial test
 for(i in 1:nrow(df.order)){
   test <- binom.test(df.order$homies.N[i], nrow(df[df$n.cont == "1",]), p = df.order$prop.null[i], alternative = "two.sided")
-  df.order$p.end[i] <- test$p.value
+  df.order$p.homies[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.order)){
@@ -975,12 +1039,12 @@ for(i in 1:nrow(df.order)){
 }
 
 #add sidak correction
-df.order <- arrange(df.order, p.end) %>%
-  dplyr::mutate(signif.end = p.end < 0.05,
-                signif.bonferoni.end = p.end < 0.05/n(),
-                signif.holm.end = !0.05/(n() + 1 - 1:n()) < p.end,
-                signif.sidak.end = p.end < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.end = !(1 - (1 - 0.05)^(1/n())) < p.end)
+df.order <- arrange(df.order, p.homies) %>%
+  dplyr::mutate(signif.homies = p.homies < 0.05,
+                signif.bonferoni.homies = p.homies < 0.05/n(),
+                signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
 
 df.order <- arrange(df.order, p.lim) %>%
   dplyr::mutate(signif.lim = p.lim < 0.05,
@@ -1071,15 +1135,61 @@ homies.origin$N.jump[homies.origin$family.origin == "North.America"] <- as.numer
 homies.origin$prop.origin[homies.origin$family.origin == "North.America"] <- as.numeric(homies.origin$N.North.America[homies.origin$family.origin == "North.America"]/homies.origin$N[homies.origin$family.origin == "North.America"])
 homies.origin$prop.jump[homies.origin$family.origin == "North.America"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "North.America"])/as.numeric(homies.origin$N[homies.origin$family.origin == "North.America"])
 
-homies.origin$N.jump[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N[homies.origin$family.origin == "Africa"] - homies.origin$N.Africa[homies.origin$family.origin == "Africa"])
-homies.origin$prop.origin[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N.Africa[homies.origin$family.origin == "Africa"]/homies.origin$N[homies.origin$family.origin == "Africa"])
-homies.origin$prop.jump[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Africa"])/as.numeric(homies.origin$N[homies.origin$family.origin == "Africa"])
+homies.origin$N.jump[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N[homies.origin$family.origin == "South.America"] - homies.origin$N.South.America[homies.origin$family.origin == "South.America"])
+homies.origin$prop.origin[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N.South.America[homies.origin$family.origin == "South.America"]/homies.origin$N[homies.origin$family.origin == "South.America"])
+homies.origin$prop.jump[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "South.America"])/as.numeric(homies.origin$N[homies.origin$family.origin == "South.America"])
 
 homies.origin$N.jump[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N[homies.origin$family.origin == "Eurasia"] - homies.origin$N.Eurasia[homies.origin$family.origin == "Eurasia"])
 homies.origin$prop.origin[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.Eurasia[homies.origin$family.origin == "Eurasia"]/homies.origin$N[homies.origin$family.origin == "Eurasia"])
 homies.origin$prop.jump[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Eurasia"])/as.numeric(homies.origin$N[homies.origin$family.origin == "Eurasia"])
 
 write.csv(homies.origin, "homies.family.origin.csv")
+
+##FIGURE
+homies.origin$per.origin <- as.numeric(homies.origin$prop.origin)*100
+homies.origin$per.jump <- as.numeric(homies.origin$prop.jump)*100
+
+homies.origin.melt <- melt(homies.origin, 
+                           id.vars = "family.origin",
+                           measure.vars = c("per.origin",
+                                            "per.jump"),
+                           variable.name = "per")
+homies.origin.melt$family.origin.per <- paste(homies.origin.melt$family.origin, 
+                                              homies.origin.melt$per,
+                                              sep = ".")
+
+##pie chart
+## COLOR SCHEME
+#South America = #E2C9F2; dark #9A8AA6
+#North America = #B4D9C8; dark #748C81
+#Africa = #C2D991; dark #7E8C5E
+#Eurasia = #F2CDA0; dark #A68C6D
+#Australia = #D9967E; dark #8C6151
+
+p <- ggplot(homies.origin.melt, aes(x = "", y = value, fill = family.origin.per)) +
+  geom_col(color = 'black', 
+           position = position_stack(reverse = TRUE), 
+           show.legend = TRUE) +
+  #geom_bar(stat="identity", width=1) +
+  geom_bar(stat="identity", width=1, color="white") +
+  scale_fill_manual(values = c("Africa.per.origin" = "#C2D991",
+                               "Australia.per.origin" = "#D9967E",
+                               "Eurasia.per.origin" = "#F2CDA0",
+                               "North.America.per.origin" = "#B4D9C8",
+                               "South.America.per.origin" = "#E2C9F2",
+                               "Africa.per.jump" = "#7E8C5E",
+                               "Australia.per.jump" = "#8C6151",
+                               "Eurasia.per.jump" = "#A68C6D",
+                               "North.America.per.jump" = "#748C81",
+                               "South.America.per.jump" = "#9A8AA6"),
+                    name = "Continent of Family Origin",
+                    labels = c("Africa",
+                               "Australia",
+                               "Eurasia",
+                               "North America",
+                               "South America")) +
+  coord_polar("y", start = 0) +
+  theme_void()
 
 ##limited dispersers
 limited.origin <- limited %>%
@@ -1117,7 +1227,7 @@ limited.cont <- limited %>%
                    N.Australia.South.America = length(continent.Australia[continent.Australia == TRUE & continent.South.America == TRUE]),
                    N.Australia.North.America = length(continent.Australia[continent.Australia == TRUE & continent.North.America == TRUE]),
                    N.Eurasia.North.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE]),
-                   N.Eurasia.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE]),
+                   N.Eurasia.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.South.America == TRUE]),
                    N.South.America.North.America = length(continent.South.America[continent.South.America == TRUE & continent.North.America == TRUE])) %>%
   as.data.frame() 
 limited.cont <- limited.cont[limited.cont$family.origin != "",]
@@ -1153,6 +1263,87 @@ limited.cont$prop.jump[limited.cont$family.origin == "South.America"] <- 1 - as.
 
 write.csv(limited.cont, "limited.family.origin.csv")
 
+##trotter
+trotter.origin <- trotter %>%
+  group_by(family.origin) %>%
+  dplyr::summarise(N = n(),
+                   N.Africa = length(continent.Africa[continent.Africa == TRUE]),
+                   N.Australia = length(continent.Australia[continent.Australia == TRUE]),
+                   N.South.America = length(continent.South.America[continent.South.America == TRUE]),
+                   N.North.America = length(continent.North.America[continent.North.America == TRUE]),
+                   N.Eurasia = length(continent.Eurasia[continent.Eurasia == TRUE])) %>%
+  as.data.frame() 
+trotter.origin <- trotter.origin[trotter.origin$family.origin != "",]
+
+#get proportions
+trotter.origin$prop.spread <- ""
+trotter.origin$prop.spread[trotter.origin$family.origin == "Africa"] <- trotter.origin$N.Africa[trotter.origin$family.origin == "Africa"]/trotter.origin$N[trotter.origin$family.origin == "Africa"]
+trotter.origin$prop.spread[trotter.origin$family.origin == "Eurasia"] <- trotter.origin$N.Eurasia[trotter.origin$family.origin == "Eurasia"]/trotter.origin$N[trotter.origin$family.origin == "Eurasia"]
+trotter.origin$prop.spread[trotter.origin$family.origin == "Australia"] <- trotter.origin$N.Australia[trotter.origin$family.origin == "Australia"]/trotter.origin$N[trotter.origin$family.origin == "Australia"]
+trotter.origin$prop.spread[trotter.origin$family.origin == "South.America"] <- trotter.origin$N.South.America[trotter.origin$family.origin == "South.America"]/trotter.origin$N[trotter.origin$family.origin == "South.America"]
+trotter.origin$prop.spread[trotter.origin$family.origin == "North.America"] <- trotter.origin$N.North.America[trotter.origin$family.origin == "North.America"]/trotter.origin$N[trotter.origin$family.origin == "North.America"]
+#no jumpers in North.America
+#no spreaders from Australia
+
+trotter.origin$prop.jump <- 1- as.numeric(trotter.origin$prop.spread)
+
+#want to know where the jumpers and spreaders went to
+trotter.cont <- trotter %>%
+  group_by(family.origin) %>%
+  dplyr::summarise(N = n(),
+                   N.Africa.Eurasia.North.America = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE & continent.North.America == TRUE]),
+                   N.Eurasia.North.America.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE & continent.South.America == TRUE]),
+                   N.Africa.Eurasia.Australia = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE & continent.Australia == TRUE])) %>%
+  as.data.frame() 
+trotter.cont <- trotter.cont[trotter.cont$family.origin != "",]
+write.csv(trotter.cont, "trotter.family.origin.csv")
+
+##FIGURE
+limited.cont$per.spread <- as.numeric(limited.cont$prop.spread)*100
+limited.cont$per.jump <- as.numeric(limited.cont$prop.jump)*100
+
+limited.cont.melt <- melt(limited.cont, 
+                           id.vars = "family.origin",
+                           measure.vars = c("per.spread",
+                                            "per.jump"),
+                           variable.name = "per")
+limited.cont.melt$family.origin.per <- paste(limited.cont.melt$family.origin, 
+                                             limited.cont.melt$per,
+                                              sep = ".")
+
+##pie chart
+## COLOR SCHEME
+#South America = #E2C9F2; dark #9A8AA6
+#North America = #B4D9C8; dark #748C81
+#Africa = #C2D991; dark #7E8C5E
+#Eurasia = #F2CDA0; dark #A68C6D
+#Australia = #D9967E; dark #8C6151
+
+q <- ggplot(limited.cont.melt, aes(x = "", y = value, fill = family.origin.per)) +
+  geom_col(color = 'black', 
+           position = position_stack(reverse = TRUE), 
+           show.legend = TRUE) +
+  #geom_bar(stat="identity", width=1) +
+  geom_bar(stat="identity", width=1, color="white") +
+  scale_fill_manual(values = c("Africa.per.spread" = "#C2D991",
+                               "Australia.per.spread" = "#D9967E",
+                               "Eurasia.per.spread" = "#F2CDA0",
+                               "North.America.per.spread" = "#B4D9C8",
+                               "South.America.per.spread" = "#E2C9F2",
+                               "Africa.per.jump" = "#7E8C5E",
+                               "Australia.per.jump" = "#8C6151",
+                               "Eurasia.per.jump" = "#A68C6D",
+                               "North.America.per.jump" = "#748C81",
+                               "South.America.per.jump" = "#9A8AA6"),
+                    name = "Continent of Family Origin",
+                    labels = c("Africa",
+                               "Australia",
+                               "Eurasia",
+                               "North America",
+                               "South America")) +
+  coord_polar("y", start = 0) +
+  theme_void()
+
 ## CONNECTIVITY ----
 #calculate sørensen index
 sorensen <- function(x,y) {
@@ -1185,8 +1376,6 @@ indeces["Eurasia", "Australia"] <- sorensen(x = df$binomial[df$continent.Eurasia
 indeces["Africa", "Australia"] <- sorensen(x = df$binomial[df$continent.Africa == TRUE], 
                                            y = df$binomial[df$continent.Australia == TRUE])
 write.csv(indeces, "sorensen.index.csv")
-
-
 
 
 
