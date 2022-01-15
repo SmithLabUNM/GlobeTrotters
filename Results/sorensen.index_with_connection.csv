@@ -1,0 +1,22 @@
+SORENSON,Africa,North.America,South.America,Eurasia,Australia
+Africa,,,,,
+North.America,0.005107252,,,,
+South.America,0.000851064,0.162350598,,,
+Eurasia,0.073434125,0.020273695,0.000845666,,
+Australia,0.001345895,0,0,0.006662225,
+,,,,,
+CONTINUOUS,Africa,North.America,South.America,Eurasia,Australia
+Africa,,,,,
+North.America,,,,,
+South.America,,continuous 3 mya,,,
+Eurasia,intermittent oligocene,intermitten recent,,,
+Australia,,,,,
+,,,,,
+,,,,,
+,,,,,
+# CONNECTIONS,Africa,North.America,South.America,Eurasia,Australia
+Africa,,,,,
+North.America,0,,,,
+South.America,0,1,,,
+Eurasia,2,1,0,,
+Australia,0,0,0,0,

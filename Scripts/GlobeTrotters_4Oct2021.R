@@ -10,11 +10,8 @@ require(tidyr)
 require(reshape2)
 require(ggplot2)
 require(stringr)
-require(ape)
-require(caper)
-require(phytools)
 
-##load data----
+## LOAD DATA ----
 options(stringsAsFactors = FALSE)
 
 mom <- read.csv("MOMv11.csv", header = TRUE)
@@ -24,6 +21,14 @@ pbdb <- read.csv("pbdb.data.csv", as.is = T)
 faurby.ages <- read.csv("species.age.csv", header = TRUE, row.names = 1)
 ranges <- read.csv("ranges.csv", header = TRUE)
 pantheria <- read.csv("pantheria.csv", header = TRUE)
+
+##ABOUT DATA ----
+invasive <- length(unique(mom$binomial[mom$extant.status == "introduction" |
+                                       mom$extant.status == "domesticated"]))
+
+total <- length(unique(mom$binomial))
+
+(invasive/total)*100
 
 ## TRIM DATA ----
 
@@ -668,9 +673,9 @@ ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth,
                                "2" = "gray47",
                                "3+" = "gray72"),
                     name = "Number of Continents",
-                    labels = c("Home bodies",
+                    labels = c("Homebodies",
                                "Limited dispersers",
-                               "Globe trotters")) +
+                               "Globetrotters")) +
   geom_bar(stat = "identity") +
   xlab("Dietary Breadth") + 
   ylab("Proportion") + 
@@ -729,15 +734,15 @@ ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = numconts)) +
                                   "2" = "gray47",
                                   "3+" = "gray72"),
                        name = "Number of Continents",
-                       labels = c("Home bodies",
+                       labels = c("Homebodies",
                                   "Limited dispersers",
-                                  "Globe trotters")) +
+                                  "Globetrotters")) +
   geom_col(position = position_stack(reverse = TRUE)) +
-  plot_theme +theme(panel.border = element_rect(fill = NA),
-                    strip.background = element_rect(fill = NA),
-                    legend.position = c(1.15, 0.5)) +
+  plot_theme +
+  theme(panel.border = element_rect(fill = NA),
+        strip.background = element_rect(fill = NA),
+        legend.position = c(1.25, 0.5)) +
   theme(axis.title.y = element_text(margin = margin(r = 5)))
-
 ##DISPERSAL----
 df$AFR_d <- as.numeric(df$AFR_d)
   
@@ -1189,33 +1194,43 @@ homies.origin$prop.jump <- ""
 homies.origin$N.jump[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N[homies.origin$family.origin == "Africa"] - homies.origin$N.Africa[homies.origin$family.origin == "Africa"])
 homies.origin$prop.origin[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N.Africa[homies.origin$family.origin == "Africa"]/homies.origin$N[homies.origin$family.origin == "Africa"])
 homies.origin$prop.jump[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Africa"])/as.numeric(homies.origin$N[homies.origin$family.origin == "Africa"])
-
+homies.origin$prop.stay[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N.Africa[homies.origin$family.origin == "Africa"])/as.numeric(sum(homies.origin$N))
+homies.origin$prop.leave[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Africa"])/as.numeric(sum(homies.origin$N))
+  
 homies.origin$N.jump[homies.origin$family.origin == "Australia"] <- as.numeric(homies.origin$N[homies.origin$family.origin == "Australia"] - homies.origin$N.Australia[homies.origin$family.origin == "Australia"])
 homies.origin$prop.origin[homies.origin$family.origin == "Australia"] <- as.numeric(homies.origin$N.Australia[homies.origin$family.origin == "Australia"]/homies.origin$N[homies.origin$family.origin == "Australia"])
 homies.origin$prop.jump[homies.origin$family.origin == "Australia"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Australia"])/as.numeric(homies.origin$N[homies.origin$family.origin == "Australia"])
+homies.origin$prop.stay[homies.origin$family.origin == "Australia"] <- as.numeric(homies.origin$N.Australia[homies.origin$family.origin == "Australia"])/as.numeric(sum(homies.origin$N))
+homies.origin$prop.leave[homies.origin$family.origin == "Australia"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Australia"])/as.numeric(sum(homies.origin$N))
 
 homies.origin$N.jump[homies.origin$family.origin == "North.America"] <- as.numeric(homies.origin$N[homies.origin$family.origin == "North.America"] - homies.origin$N.North.America[homies.origin$family.origin == "North.America"])
 homies.origin$prop.origin[homies.origin$family.origin == "North.America"] <- as.numeric(homies.origin$N.North.America[homies.origin$family.origin == "North.America"]/homies.origin$N[homies.origin$family.origin == "North.America"])
 homies.origin$prop.jump[homies.origin$family.origin == "North.America"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "North.America"])/as.numeric(homies.origin$N[homies.origin$family.origin == "North.America"])
+homies.origin$prop.stay[homies.origin$family.origin == "North.America"] <- as.numeric(homies.origin$N.North.America[homies.origin$family.origin == "North.America"])/as.numeric(sum(homies.origin$N))
+homies.origin$prop.leave[homies.origin$family.origin == "North.America"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "North.America"])/as.numeric(sum(homies.origin$N))
 
 homies.origin$N.jump[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N[homies.origin$family.origin == "South.America"] - homies.origin$N.South.America[homies.origin$family.origin == "South.America"])
 homies.origin$prop.origin[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N.South.America[homies.origin$family.origin == "South.America"]/homies.origin$N[homies.origin$family.origin == "South.America"])
 homies.origin$prop.jump[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "South.America"])/as.numeric(homies.origin$N[homies.origin$family.origin == "South.America"])
+homies.origin$prop.stay[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N.South.America[homies.origin$family.origin == "South.America"])/as.numeric(sum(homies.origin$N))
+homies.origin$prop.leave[homies.origin$family.origin == "South.America"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "South.America"])/as.numeric(sum(homies.origin$N))
 
 homies.origin$N.jump[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N[homies.origin$family.origin == "Eurasia"] - homies.origin$N.Eurasia[homies.origin$family.origin == "Eurasia"])
 homies.origin$prop.origin[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.Eurasia[homies.origin$family.origin == "Eurasia"]/homies.origin$N[homies.origin$family.origin == "Eurasia"])
 homies.origin$prop.jump[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Eurasia"])/as.numeric(homies.origin$N[homies.origin$family.origin == "Eurasia"])
+homies.origin$prop.stay[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.Eurasia[homies.origin$family.origin == "Eurasia"])/as.numeric(sum(homies.origin$N))
+homies.origin$prop.leave[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Eurasia"])/as.numeric(sum(homies.origin$N))
 
 write.csv(homies.origin, "homies.family.origin.csv")
 
 ##FIGURE
-homies.origin$per.origin <- as.numeric(homies.origin$prop.origin)*100
-homies.origin$per.jump <- as.numeric(homies.origin$prop.jump)*100
+homies.origin$per.stay <- as.numeric(homies.origin$prop.stay)*100
+homies.origin$per.leave <- as.numeric(homies.origin$prop.leave)*100
 
 homies.origin.melt <- melt(homies.origin, 
                            id.vars = "family.origin",
-                           measure.vars = c("per.origin",
-                                            "per.jump"),
+                           measure.vars = c("per.stay",
+                                            "per.leave"),
                            variable.name = "per")
 homies.origin.melt$family.origin.per <- paste(homies.origin.melt$family.origin, 
                                               homies.origin.melt$per,
@@ -1235,16 +1250,16 @@ p <- ggplot(homies.origin.melt, aes(x = "", y = value, fill = family.origin.per)
            show.legend = TRUE) +
   #geom_bar(stat="identity", width=1) +
   geom_bar(stat="identity", width=1, color="white") +
-  scale_fill_manual(values = c("Africa.per.origin" = "#C2D991",
-                               "Australia.per.origin" = "#D9967E",
-                               "Eurasia.per.origin" = "#F2CDA0",
-                               "North.America.per.origin" = "#B4D9C8",
-                               "South.America.per.origin" = "#E2C9F2",
-                               "Africa.per.jump" = "#7E8C5E",
-                               "Australia.per.jump" = "#8C6151",
-                               "Eurasia.per.jump" = "#A68C6D",
-                               "North.America.per.jump" = "#748C81",
-                               "South.America.per.jump" = "#9A8AA6"),
+  scale_fill_manual(values = c("Africa.per.stay" = "#C2D991",
+                               "Australia.per.stay" = "#D9967E",
+                               "Eurasia.per.stay" = "#F2CDA0",
+                               "North.America.per.stay" = "#B4D9C8",
+                               "South.America.per.stay" = "#E2C9F2",
+                               "Africa.per.leave" = "#7E8C5E",
+                               "Australia.per.leave" = "#8C6151",
+                               "Eurasia.per.leave" = "#A68C6D",
+                               "North.America.per.leave" = "#748C81",
+                               "South.America.per.leave" = "#9A8AA6"),
                     name = "Continent of Family Origin",
                     labels = c("Africa",
                                "Australia",
@@ -1305,17 +1320,49 @@ limited.cont$prop.spread[limited.cont$family.origin == "Africa"] <- sum(limited.
                                                                         limited.cont$N.Africa.South.America[limited.cont$family.origin == "Africa"])/limited.cont$N[limited.cont$family.origin == "Africa"]
 limited.cont$prop.jump[limited.cont$family.origin == "Africa"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "Africa"])
 
+limited.cont$prop.stay[limited.cont$family.origin == "Africa"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Africa"] + 
+                                                                          limited.cont$N.Africa.Australia[limited.cont$family.origin == "Africa"] + 
+                                                                          limited.cont$N.Africa.North.America[limited.cont$family.origin == "Africa"] +
+                                                                          limited.cont$N.Africa.South.America[limited.cont$family.origin == "Africa"])/sum(limited.cont$N)
+limited.cont$prop.leave[limited.cont$family.origin == "Africa"] <- (limited.cont$N[limited.cont$family.origin == "Africa"] - sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Africa"] + 
+                                                                                                                                 limited.cont$N.Africa.Australia[limited.cont$family.origin == "Africa"] + 
+                                                                                                                                 limited.cont$N.Africa.North.America[limited.cont$family.origin == "Africa"] +
+                                                                                                                                 limited.cont$N.Africa.South.America[limited.cont$family.origin == "Africa"]))/as.numeric(sum(limited.cont$N))
+
+
 limited.cont$prop.spread[limited.cont$family.origin == "Eurasia"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Eurasia"] + 
                                                                          limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
                                                                          limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
                                                                          limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"])/limited.cont$N[limited.cont$family.origin == "Eurasia"]
 limited.cont$prop.jump[limited.cont$family.origin == "Eurasia"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "Eurasia"])
 
+
+limited.cont$prop.stay[limited.cont$family.origin == "Eurasia"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Eurasia"] + 
+                                                                         limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
+                                                                         limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
+                                                                         limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"])/sum(limited.cont$N)
+limited.cont$prop.leave[limited.cont$family.origin == "Eurasia"] <- (limited.cont$N[limited.cont$family.origin == "Eurasia"] - sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Eurasia"] + 
+                                                                                                                                     limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
+                                                                                                                                     limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
+                                                                                                                                     limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"]))/as.numeric(sum(limited.cont$N))
+
+
+
 limited.cont$prop.spread[limited.cont$family.origin == "North.America"] <- sum(limited.cont$N.Africa.North.America[limited.cont$family.origin == "North.America"] + 
                                                                                limited.cont$N.Australia.North.America[limited.cont$family.origin == "North.America"] + 
                                                                                limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "North.America"] + 
                                                                               limited.cont$N.South.America.North.America[limited.cont$family.origin == "North.America"])/limited.cont$N[limited.cont$family.origin == "North.America"]
 limited.cont$prop.jump[limited.cont$family.origin == "North.America"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "North.America"])
+
+
+limited.cont$prop.stay[limited.cont$family.origin == "North.America"] <- sum(limited.cont$N.Africa.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                               limited.cont$N.Australia.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                               limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                               limited.cont$N.South.America.North.America[limited.cont$family.origin == "North.America"])/sum(limited.cont$N)
+limited.cont$prop.leave[limited.cont$family.origin == "North.America"] <- (limited.cont$N[limited.cont$family.origin == "North.America"] - sum(limited.cont$N.Africa.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                                                                                                 limited.cont$N.Australia.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                                                                                                 limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "North.America"] + 
+                                                                                                                                                 limited.cont$N.South.America.North.America[limited.cont$family.origin == "North.America"]))/as.numeric(sum(limited.cont$N))
 
 limited.cont$prop.spread[limited.cont$family.origin == "South.America"] <- sum(limited.cont$N.Africa.South.America[limited.cont$family.origin == "South.America"] + 
                                                                                limited.cont$N.Australia.South.America[limited.cont$family.origin == "South.America"] + 
@@ -1324,7 +1371,64 @@ limited.cont$prop.spread[limited.cont$family.origin == "South.America"] <- sum(l
 limited.cont$prop.jump[limited.cont$family.origin == "South.America"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "South.America"])
 #100% spread
 
+limited.cont$prop.stay[limited.cont$family.origin == "South.America"] <- sum(limited.cont$N.Africa.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                               limited.cont$N.Australia.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                               limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                               limited.cont$N.South.America.North.America[limited.cont$family.origin == "South.America"])/sum(limited.cont$N)
+limited.cont$prop.leave[limited.cont$family.origin == "South.America"] <- (limited.cont$N[limited.cont$family.origin == "South.America"] - sum(limited.cont$N.Africa.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                                                                                                 limited.cont$N.Australia.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                                                                                                 limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "South.America"] + 
+                                                                                                                                                 limited.cont$N.South.America.North.America[limited.cont$family.origin == "South.America"]))/as.numeric(sum(limited.cont$N))
+
+
+sum(limited.cont$prop.leave)+sum(limited.cont$prop.stay)
 write.csv(limited.cont, "limited.family.origin.csv")
+
+##FIGURE
+limited.cont$per.stay <- as.numeric(limited.cont$prop.stay)*100
+limited.cont$per.leave <- as.numeric(limited.cont$prop.leave)*100
+
+limited.cont.melt <- melt(limited.cont, 
+                          id.vars = "family.origin",
+                          measure.vars = c("per.stay",
+                                           "per.leave"),
+                          variable.name = "per")
+limited.cont.melt$family.origin.per <- paste(limited.cont.melt$family.origin, 
+                                             limited.cont.melt$per,
+                                             sep = ".")
+
+##pie chart
+## COLOR SCHEME
+#South America = #E2C9F2; dark #9A8AA6
+#North America = #B4D9C8; dark #748C81
+#Africa = #C2D991; dark #7E8C5E
+#Eurasia = #F2CDA0; dark #A68C6D
+#Australia = #D9967E; dark #8C6151
+
+q <- ggplot(limited.cont.melt, aes(x = "", y = value, fill = family.origin.per)) +
+  geom_col(color = 'black', 
+           position = position_stack(reverse = TRUE), 
+           show.legend = TRUE) +
+  #geom_bar(stat="identity", width=1) +
+  geom_bar(stat="identity", width=1, color="white") +
+  scale_fill_manual(values = c("Africa.per.stay" = "#C2D991",
+                               "Australia.per.stay" = "#D9967E",
+                               "Eurasia.per.stay" = "#F2CDA0",
+                               "North.America.per.stay" = "#B4D9C8",
+                               "South.America.per.stay" = "#E2C9F2",
+                               "Africa.per.leave" = "#7E8C5E",
+                               "Australia.per.leave" = "#8C6151",
+                               "Eurasia.per.leave" = "#A68C6D",
+                               "North.America.per.leave" = "#748C81",
+                               "South.America.per.leave" = "#9A8AA6"),
+                    name = "Continent of Family Origin",
+                    labels = c("Africa",
+                               "Australia",
+                               "Eurasia",
+                               "North America",
+                               "South America")) +
+  coord_polar("y", start = 0) +
+  theme_void()
 
 ##trotter
 trotter.origin <- trotter %>%
@@ -1360,52 +1464,6 @@ trotter.cont <- trotter %>%
   as.data.frame() 
 trotter.cont <- trotter.cont[trotter.cont$family.origin != "",]
 write.csv(trotter.cont, "trotter.family.origin.csv")
-
-##FIGURE
-limited.cont$per.spread <- as.numeric(limited.cont$prop.spread)*100
-limited.cont$per.jump <- as.numeric(limited.cont$prop.jump)*100
-
-limited.cont.melt <- melt(limited.cont, 
-                           id.vars = "family.origin",
-                           measure.vars = c("per.spread",
-                                            "per.jump"),
-                           variable.name = "per")
-limited.cont.melt$family.origin.per <- paste(limited.cont.melt$family.origin, 
-                                             limited.cont.melt$per,
-                                              sep = ".")
-
-##pie chart
-## COLOR SCHEME
-#South America = #E2C9F2; dark #9A8AA6
-#North America = #B4D9C8; dark #748C81
-#Africa = #C2D991; dark #7E8C5E
-#Eurasia = #F2CDA0; dark #A68C6D
-#Australia = #D9967E; dark #8C6151
-
-q <- ggplot(limited.cont.melt, aes(x = "", y = value, fill = family.origin.per)) +
-  geom_col(color = 'black', 
-           position = position_stack(reverse = TRUE), 
-           show.legend = TRUE) +
-  #geom_bar(stat="identity", width=1) +
-  geom_bar(stat="identity", width=1, color="white") +
-  scale_fill_manual(values = c("Africa.per.spread" = "#C2D991",
-                               "Australia.per.spread" = "#D9967E",
-                               "Eurasia.per.spread" = "#F2CDA0",
-                               "North.America.per.spread" = "#B4D9C8",
-                               "South.America.per.spread" = "#E2C9F2",
-                               "Africa.per.jump" = "#7E8C5E",
-                               "Australia.per.jump" = "#8C6151",
-                               "Eurasia.per.jump" = "#A68C6D",
-                               "North.America.per.jump" = "#748C81",
-                               "South.America.per.jump" = "#9A8AA6"),
-                    name = "Continent of Family Origin",
-                    labels = c("Africa",
-                               "Australia",
-                               "Eurasia",
-                               "North America",
-                               "South America")) +
-  coord_polar("y", start = 0) +
-  theme_void()
 
 ## CONNECTIVITY ----
 #calculate sørensen index
@@ -1483,7 +1541,28 @@ length(unique(df$binomial[df$order == "Didelphimorphia" &
 length(unique(df$binomial[df$continent.South.America == TRUE])) #1200
 length(unique(df$binomial[df$continent.South.America == TRUE &
                           df$n.cont == 2])) #162
-  
+
+##deeper look into dietary breadth of 3
+df.3 <- df[df$diet.breadth ==3,]
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                     df.3$diet.invertivore.tot == TRUE &
+                     df.3$diet.frugivore.tot == TRUE]) #152
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                       df.3$diet.carnivore.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #2
+
+length(df.3$binomial[df.3$diet.invertivore.tot == TRUE &
+                       df.3$diet.carnivore.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #16
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                       df.3$diet.grazer.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #12
+
+table(df.3$n.cont) #179 on 1 continent, 5 on 2 continents
+
 ##deeper look into those with dietary breadth of 2
 #only for diet.breadth == 2
 ## total

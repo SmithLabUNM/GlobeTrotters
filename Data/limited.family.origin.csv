@@ -1,0 +1,5 @@
+"","family.origin","N","N.Africa.Eurasia","N.Africa.Australia","N.Africa.North.America","N.Africa.South.America","N.Australia.Eurasia","N.Australia.South.America","N.Australia.North.America","N.Eurasia.North.America","N.Eurasia.South.America","N.South.America.North.America","prop.spread","prop.jump","prop.stay","prop.leave"
+"2","Africa",20,7,0,0,0,1,0,0,1,0,11,"0.35","0.65",0.03125,0.0580357142857143
+"3","Eurasia",75,34,0,0,0,2,0,0,10,0,29,"0.613333333333333","0.386666666666667",0.205357142857143,0.129464285714286
+"4","North.America",46,20,0,0,0,1,0,0,3,0,22,"0.543478260869565","0.456521739130435",0.111607142857143,0.09375
+"5","South.America",83,0,0,0,0,0,0,0,0,0,83,"1","0",0.370535714285714,0
