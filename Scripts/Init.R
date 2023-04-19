@@ -7,7 +7,8 @@ require(stringr)
 options(stringsAsFactors = FALSE)
 
 # Readt data
-df <- read.csv("MOMv11.csv", header = TRUE)
+df <- read.csv("./Data/MOMv11.csv",
+               header = TRUE)
 
 ###### SETUP
 
@@ -153,13 +154,15 @@ df[which(df$diet.breadth == 4),]
 ###### ADD RANGES
 binomials <- df$binomial
 
-pan <- read.csv("pantheria.csv", header = TRUE)
+pan <- read.csv("./Data/pantheria.csv",
+                header = TRUE)
 pan <- pan %>%
   dplyr::rename(binomial = MSW05_Binomial) %>%
   dplyr::select(binomial, X26.1_GR_Area_km2)
 pan <- pan[(pan$binomial %in% binomials),]
 
-ranges <- read.csv("ranges.csv", header = TRUE)
+ranges <- read.csv("./Data/ranges.csv",
+                   header = TRUE)
 ranges <- ranges %>%
   rename(binomial = Binomial.1.2) %>%
   dplyr::select(binomial, current.range.km2, present.natural.range.km2)
@@ -180,7 +183,8 @@ df <- left_join(df, ranges, "binomial")
 #To get the most likely age of species origin we found the oldest minimum species age, and the oldest maximum species age for each species. 
 #The midpoint of this range was used as species age. Because of species name mismatches and missing species the following analysis includes 693 species out of 4443 possible.
 
-pbdb <- read.csv("pbdb.data.csv", as.is = T)
+pbdb <- read.csv("./Data/pbdb.data.csv",
+                 as.is = T)
 foss.age <-
   pbdb %>%
   mutate(binomial = accepted_name) %>%
@@ -198,7 +202,9 @@ df <- left_join(df, foss.age, "binomial")
 #The species ages were extracted as branch length to the parent node of each species for all trees. 
 #The estimate used for species ages were the median ages found by this method. Because of species name mismatches the following analysis includes 4019 species out of 4443 possible.
 
-age <- read.csv("species.age.csv", header = TRUE, row.names = 1)
+age <- read.csv("./Data/species.age.csv",
+                header = TRUE,
+                row.names = 1)
 species.age.summary <- function(x) {
   c(age.mean = mean(x),
     age.median = median(x),
@@ -231,7 +237,6 @@ df <- left_join(df, faurby.ages, "binomial")
 
 ###### CONTINENTAL DUPLICATES
 # Checking for accidents
-require(stringr)
 stopifnot(!any(str_trim(df$genus) != df$genus))
 stopifnot(!any(str_trim(df$species) != df$species))
 
