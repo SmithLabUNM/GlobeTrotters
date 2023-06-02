@@ -1,3 +1,18 @@
+#Meghan A. Balk
+#meghan.balk@gmail.com
+#Rasmus Ø. Pedersen
+
+#Setting up data set to:
+#1. remove marine species
+#2. remove introduced and domesticated species
+#3. fix continental names
+#4. categorize diet
+#5. add diet breadth
+#6. add geographic ranges via Pantheria and Faurby present natural ranges
+#7. add fossil ages via Faurby phylogeny and PBDB data
+#8. remove duplicates
+#9. write out a dataset for subsequent analyses
+
 ###### SETUP >>>>>>
 # Set working directory
 
@@ -6,13 +21,23 @@ require(tidyverse)
 require(stringr)
 options(stringsAsFactors = FALSE)
 
-# Readt data
-df <- read.csv("./Data/MOMv11.csv",
+#### LOAD DATA ----
+df <- read.csv("../Data/MOMv11.csv",
                header = TRUE)
 
-###### SETUP
+pan <- read.csv("../Data/pantheria.csv",
+                header = TRUE)
 
-###### REMOVE MARINE SPECIES
+ranges <- read.csv("../Data/ranges.csv",
+                   header = TRUE)
+
+pacifici <- read.csv("../Data/Generation Length for Mammals.csv", 
+                     header = TRUE)
+
+origin <- read.csv("../Data/familyOrigin.csv", 
+                   header = TRUE)
+
+#### REMOVE MARINE SPECIES ----
 
 df <- df %>%
   # Order Cetacea (Whales s.l.)
@@ -29,13 +54,13 @@ df <- df %>%
   filter(binomial != "Lontra felina")
   # Sea otter (Enhydra lutris)
 
-###### REMOVE INTRODUCED AND DOMESTICATED SPECIES
+#### REMOVE INTRODUCED AND DOMESTICATED SPECIES ----
 
 df <- df %>%
   filter(extant.status != "introduction") %>%
   filter(extant.status != "domesticated")
 
-###### FIX CONTINENTS
+#### FIX CONTINENTS ----
 # Search for continental mistakes
 table(df$continent, useNA = "always")
 
@@ -44,7 +69,7 @@ df <- filter(df, !is.na(continent) &
                  continent != "Insular" &
                  continent != "Marine")
 
-###### FIX DIET
+#### FIX DIET ----
 df$trophic[which(df$trophic == "")] <- NA
 sort(table(df$trophic))
 
@@ -146,23 +171,27 @@ for(i in 1:nrow(df)) {
 
 table(df$diet.src, useNA = "always")
 
+#### ADD DIET BREADTH ----
+
 df$diet.breadth <- select(df, diet.invertivore:diet.piscivore) %>% rowSums()
 table(df$diet.breadth)
 
 df[which(df$diet.breadth == 4),]
 
-###### ADD RANGES
+#### ADD RANGES ----
 binomials <- df$binomial
 
-pan <- read.csv("./Data/pantheria.csv",
-                header = TRUE)
 pan <- pan %>%
-  dplyr::rename(binomial = MSW05_Binomial) %>%
-  dplyr::select(binomial, X26.1_GR_Area_km2)
+  dplyr::rename(binomial = MSW05_Binomial,
+                home.range.km2 = X22.1_HomeRange_km2,
+                gr.area.km2 = X26.1_GR_Area_km2,
+                indiv.home.range.km2 = X22.2_HomeRange_Indiv_km2,
+                dispersal.age.d = X7.1_DispersalAge_d) %>%
+  dplyr::select(binomial, gr.area.km2,
+                home.range.km2, indiv.home.range.km2,
+                dispersal.age.d)
 pan <- pan[(pan$binomial %in% binomials),]
 
-ranges <- read.csv("./Data/ranges.csv",
-                   header = TRUE)
 ranges <- ranges %>%
   rename(binomial = Binomial.1.2) %>%
   dplyr::select(binomial, current.range.km2, present.natural.range.km2)
@@ -173,9 +202,9 @@ ranges <- ranges[(ranges$binomial %in% binomials),]
 df <- left_join(df, pan, "binomial")
 df <- left_join(df, ranges, "binomial")
 
-###### ADD AGES
+#### ADD AGES ----
 
-### Fossil age
+##### Fossil age -----
 #age data fossil = PBDB min & max occurence estiamtes. 
 #This provides different fossil data at different resolutions. 
 #The ages extracted here are based only on species level identifications of fossils. 
@@ -183,7 +212,7 @@ df <- left_join(df, ranges, "binomial")
 #To get the most likely age of species origin we found the oldest minimum species age, and the oldest maximum species age for each species. 
 #The midpoint of this range was used as species age. Because of species name mismatches and missing species the following analysis includes 693 species out of 4443 possible.
 
-pbdb <- read.csv("./Data/pbdb.data.csv",
+pbdb <- read.csv("../Data/pbdb.data.csv",
                  as.is = T)
 foss.age <-
   pbdb %>%
@@ -196,13 +225,13 @@ foss.age <-
 
 df <- left_join(df, foss.age, "binomial")
 
-### Faurby ages
+##### Faurby ages -----
 #age data phyl = from Faurby tree estimates. 
 #This source provides 1000 equally likely trees. 
 #The species ages were extracted as branch length to the parent node of each species for all trees. 
 #The estimate used for species ages were the median ages found by this method. Because of species name mismatches the following analysis includes 4019 species out of 4443 possible.
 
-age <- read.csv("./Data/species.age.csv",
+age <- read.csv("../Data/species.age_Faurby.csv", #from Faurby
                 header = TRUE,
                 row.names = 1)
 species.age.summary <- function(x) {
@@ -235,7 +264,7 @@ df <- left_join(df, faurby.ages, "binomial")
 # genera <- unique(mom$genus)
 # age <- age[(age$genus %in% genera),]
 
-###### CONTINENTAL DUPLICATES
+#### CONTINENTAL DUPLICATES ----
 # Checking for accidents
 stopifnot(!any(str_trim(df$genus) != df$genus))
 stopifnot(!any(str_trim(df$species) != df$species))
@@ -244,9 +273,35 @@ df$binomial[duplicated(df$binomial)]
 
 df[(duplicated(df[c("binomial", "continent")])),]
 
-
-
 cont <- group_by(df, binomial) %>% summarise(n.cont = n())
 df <- left_join(df, cont, by = "binomial")
 
-write.csv(df, "MOM.global.mammals.csv", row.names = FALSE)
+#### DATA WRANGEL ----
+
+df$n.cont[df$n.cont == 4] <- "3+"
+df$n.cont[df$n.cont == 3] <- "3+"
+df$n.cont <- as.factor(df$n.cont)
+
+#### ADD OTHER DATA ----
+
+pacifici.trim <- pacifici %>%
+  dplyr::select(binomial = Scientific_name, 
+                Max_longevity_d, 
+                Rspan_d, 
+                AFR_d, 
+                Calculated_GL_d, 
+                GenerationLength_d)
+
+df <- left_join(df, pacifici.trim,
+                  by = "binomial")
+
+origin.trim <- origin %>%
+  dplyr::select(family,
+                continent.family = final.continent)
+
+df <- left_join(df, origin.trim,
+                by = "family")
+
+#### WRITE OUT DATA ----
+
+write.csv(df, "../Data/MOM.global.mammals.csv", row.names = FALSE)

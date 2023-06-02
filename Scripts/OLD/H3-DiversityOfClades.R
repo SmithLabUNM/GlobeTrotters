@@ -1,10 +1,24 @@
-#load libraries
+#Do certain clades have more species that are globe trotters than others?
+#meghan.balk@gmail.com
+#Rasmus Ø. Pedersen
+
+#### LOAD DATA ----
+options(stringsAsFactors = FALSE)
+
+## Data does not include oceanic (marine) species; does include aquatic spp.
+## Data does not include introduced species (only native ranges)
+data <- read.table("../Data/MOM.global.mammals.csv", 
+                   header = TRUE, sep = ",")
+
+#### LOAD LIBRARIES ----
 require(dplyr)
 require(purrrlyr)
 require(tidyverse)
 require(tidyr)
 require(reshape2)
 require(ggplot2)
+
+#### SET GRAPHING THEME ----
 
 col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
 plot_theme <- theme(panel.grid = element_blank(), 
@@ -21,69 +35,28 @@ plot_theme <- theme(panel.grid = element_blank(),
                     legend.position = "none",
                     text = element_text(family = 'Helvetica'))
 
-#load data
-options(stringsAsFactors = FALSE)
+#### TEST: species that come from diverse clades are on more continents ----
 
-## Data does not include oceanic (marine) species; does include aquatic spp.
-## Data does not include introduced species (only native ranges)
-data <- read.table("MOM.global.mammals.csv", header = TRUE, sep = ",")
-
-data$n.cont[data$n.cont == 4] <- "3+"
-data$n.cont[data$n.cont == 3] <- "3+"
-data$n.cont <- as.factor(data$n.cont)
-
-## calculate sørensen index
-sorensen <- function(x,y) {
-  index = (2*(length(intersect(x, y))))/(length(x) + length(y))
-  return(index)
-}
-
-continents <- c("North.America", "South.America", "Eurasia", "Africa", "Australia")
-indeces <- matrix(nrow = 5, ncol = 5, dimnames = list(continents, continents))
-
-indeces[1,2] <- sorensen(x = data$binomial[data$continent == "North.America"], 
-         y = data$binomial[data$continent == "South.America"])
-indeces[1,3] <- sorensen(x = data$binomial[data$continent == "North.America"], 
-         y = data$binomial[data$continent == "Eurasia"])
-indeces[1,4] <- sorensen(x = data$binomial[data$continent == "North.America"], 
-         y = data$binomial[data$continent == "Africa"])
-indeces[1,5] <- sorensen(x = data$binomial[data$continent == "North.America"], 
-         y = data$binomial[data$continent == "Australia"])
-indeces[2, 3] <- sorensen(x = data$binomial[data$continent == "South.America"], 
-         y = data$binomial[data$continent == "Eurasia"])
-indeces[2,4] <- sorensen(x = data$binomial[data$continent == "South.America"], 
-         y = data$binomial[data$continent == "Africa"])
-indeces[2,5] <- sorensen(x = data$binomial[data$continent == "South.America"], 
-         y = data$binomial[data$continent == "Australia"])
-indeces[3,4] <- sorensen(x = data$binomial[data$continent == "Eurasia"], 
-         y = data$binomial[data$continent == "Africa"])
-indeces[3,5] <- sorensen(x = data$binomial[data$continent == "Eurasia"], 
-         y = data$binomial[data$continent == "Australia"])
-indeces[4,5] <- sorensen(x = data$binomial[data$continent == "Africa"], 
-         y = data$binomial[data$continent == "Australia"])
-#write.csv(indeces, "sorensen.index.csv")
-
-#H2 spp that come from diverse grps are on more continents
 df <- data
 df <- filter(df, !duplicated(binomial))
 
 length(unique(df$family)) #135
-length(unique(df$family[df$n.cont == 1])) #132
+length(unique(df$family[df$n.cont == 1])) #135
 length(unique(df$family[df$n.cont == 2])) #54
 length(unique(df$family[df$n.cont == "3+"])) #6
 
-####1 v 2+ cont####
+##### 1 v 2+ cont -----
 df$global <- df$n.cont != 1
 
 # Create a data frame with all species
 res <- data.frame(family = unique(df$family))
 
-# Create a dataframe with famlies and count how many species are in each family
+# Create a dataframe with famalies and count how many species are in each family
 res0 <- df %>% 
   group_by(family) %>% 
   dplyr::summarise(count = n())
 
-# Create a dataframe with global famlies and count how many species are global
+# Create a dataframe with global famalies and count how many species are global
 res1 <- filter(df, global) %>% 
   group_by(family) %>% 
   dplyr::summarise(onMult = n())
@@ -122,9 +95,9 @@ res <- arrange(res, p.value) %>% mutate(signif = p.value < 0.05,
 # Look at the significants
 filter(res, signif)
 
-#write.csv(res, "onecontvmult.fams.csv", row.names = FALSE)
+write.csv(res, "../Results/onecontvmult.fams.csv", row.names = FALSE)
 
-####1+2 v 3+####
+##### 1+2 v 3+ -----
 df$global <- df$n.cont == "3+"
 
 # Create a data frame with all species
@@ -150,7 +123,7 @@ res[is.na(res)] <- 0
 # Count how large a proportion we expect of a given family
 res <- mutate(res, glob.proportion = count/sum(count))
 
-# Find the total species number on 2+ continents
+# Find the total species number on 3+ continents
 on3.tot <- sum(res$on3)
 res <- mutate(res, on3.proportion = on3/on3.tot)
 # Run binomial test and add that to the result
@@ -174,4 +147,91 @@ res <- arrange(res, p.value) %>% mutate(signif = p.value < 0.05,
 # Look at the significants
 filter(res, signif)
 
-#write.csv(res, "onetwocontvthree.fams.csv", row.names = FALSE)
+write.csv(res, "../Results/onetwocontvthree.fams.csv", row.names = FALSE)
+
+## how many bats are there?
+length(unique(data$binomial[data$order == "Chiroptera"]))
+
+#### WHICH GROUPS ARE UNIQUE ----
+
+null.family <- df %>%
+  group_by(family) %>%
+  dplyr::summarise(null.N = n()) %>%
+  dplyr::select(family,
+                null.N) %>%
+  as.data.frame()
+
+family <- df %>%
+  group_by(n.cont, family) %>%
+  dplyr::summarise(N = n()) %>% 
+  as.data.frame()
+
+homies.family <- family[family$n.cont == 1,]
+colnames(homies.family)[colnames(homies.family) == "N"] <- "homies.N"
+homies.family <- homies.family %>%
+  dplyr::select(-n.cont)
+
+limited.family <- family[family$n.cont == 2,]
+colnames(limited.family)[colnames(limited.family) == "N"] <- "limited.N"
+limited.family <- limited.family %>%
+  dplyr::select(-n.cont)
+
+trotter.family <- family[family$n.cont == "3+",]
+colnames(trotter.family)[colnames(trotter.family) == "N"] <- "trotter.N"
+trotter.family <- trotter.family %>%
+  dplyr::select(-n.cont)
+
+#create full dataset
+fam.null.trot <- merge(null.family, trotter.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.trot.lim <- merge(fam.null.trot, limited.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.trol.lim.homies <- merge(fam.null.trot.lim, homies.family, by = "family", all.x = TRUE, all.y = TRUE)
+
+df.family <- fam.null.trol.lim.homies
+df.family[is.na(df.family)] <- 0
+
+df.family$prop.null <- df.family$null.N/nrow(df)
+
+df.family$prop.homies <- df.family$homies.N/nrow(df[df$n.cont == "1",])
+df.family$prop.lim <- df.family$limited.N/nrow(df[df$n.cont == "2",])
+df.family$prop.trot <- df.family$trotter.N/nrow(df[df$n.cont == "3+",])
+
+#binomial test
+for(i in 1:nrow(df.family)){
+  test <- binom.test(df.family$homies.N[i], nrow(df[df$n.cont == "1",]), p = df.family$prop.null[i], alternative = "two.sided")
+  df.family$p.homies[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.family)){
+  test <- binom.test(df.family$limited.N[i], nrow(df[df$n.cont == "2",]), p = df.family$prop.null[i], alternative = "two.sided")
+  df.family$p.lim[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.family)){
+  test <- binom.test(df.family$trotter.N[i], nrow(df[df$n.cont == "3+",]), p = df.family$prop.null[i], alternative = "two.sided")
+  df.family$p.trot[i] <- test$p.value
+}
+
+#add sidak correction
+df.family <- arrange(df.family, p.homies) %>%
+  dplyr::mutate(signif.homies = p.homies < 0.05,
+                signif.bonferoni.homies = p.homies < 0.05/n(),
+                signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
+
+df.family <- arrange(df.family, p.lim) %>%
+  dplyr::mutate(signif.lim = p.lim < 0.05,
+                signif.bonferoni.lim = p.lim < 0.05/n(),
+                signif.holm.lim = !0.05/(n() + 1 - 1:n()) < p.lim,
+                signif.sidak.lim = p.lim < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.lim = !(1 - (1 - 0.05)^(1/n())) < p.lim)
+
+df.family <- arrange(df.family, p.trot) %>%
+  dplyr::mutate(signif.trot = p.trot < 0.05,
+                signif.bonferoni.trot = p.trot < 0.05/n(),
+                signif.holm.trot = !0.05/(n() + 1 - 1:n()) < p.trot,
+                signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
+
+write.csv(df.family, "family.results.csv")
+

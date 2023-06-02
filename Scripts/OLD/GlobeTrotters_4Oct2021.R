@@ -1,8 +1,9 @@
 # Globe Trotters
 # Meghan A. Balk
 # meghan.balk@gmail.com
+#
 
-##load packages----
+#### LOAD PACKAGES ----
 require(dplyr)
 require(purrrlyr)
 require(tidyverse)
@@ -14,13 +15,16 @@ require(stringr)
 ## LOAD DATA ----
 options(stringsAsFactors = FALSE)
 
-mom <- read.csv("MOMv11.csv", header = TRUE)
-pacifici <- read.csv("Generation Lenght for Mammals.csv", header = TRUE)
-origin <- read.csv("familyOrigin.csv", header = TRUE)
-pbdb <- read.csv("pbdb.data.csv", as.is = T)
-faurby.ages <- read.csv("species.age.csv", header = TRUE, row.names = 1)
-ranges <- read.csv("ranges.csv", header = TRUE)
-pantheria <- read.csv("pantheria.csv", header = TRUE)
+mom <- read.csv("../Data/MOMv11.csv", header = TRUE)
+pacifici <- read.csv("../Data/Generation Length for Mammals.csv", header = TRUE)
+origin <- read.csv("../Data/familyOrigin.csv", header = TRUE)
+pbdb <- read.csv("../Data/pbdb.data.csv", as.is = T)
+faurby.ages <- read.csv("../Data/species.age_Faurby.csv", header = TRUE, row.names = 1)
+ranges <- read.csv("../Data/ranges.csv", header = TRUE)
+pantheria <- read.csv("../Data/pantheria.csv", header = TRUE)
+
+
+
 
 ##ABOUT DATA ----
 invasive <- length(unique(mom$binomial[mom$extant.status == "introduction" |

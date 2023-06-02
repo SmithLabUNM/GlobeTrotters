@@ -23,10 +23,10 @@ age <- foreach(i = 1:1000, .packages = c("ape"), .combine = cbind) %dopar% {
 stopCluster(cl)
 gc()
 
-write.csv(age, "species.age.csv")
+write.csv(age, "species.age_Faurby.csv")
 
 
-age <- read.csv("species.age.csv", header = TRUE, row.names = 1)
+age <- read.csv("species.age_Faurby.csv", header = TRUE, row.names = 1)
 species.age.summary <- function(x) {
   c(age.mean = mean(x),
     age.median = median(x),
