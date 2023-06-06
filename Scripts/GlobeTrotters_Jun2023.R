@@ -548,31 +548,31 @@ ggsave(bs.cont, file = paste0("./Figures/bodyMassDensityByContinent",".png"),
 
 #from which groups are we missing things from?
 
-df.clade.mass <- data %>% 
+df.clade.mass <- df %>% 
   group_by(family) %>% 
   summarise(order = order[1],
-            n.mass = sum(!is.na(mass)),
-            n.na = sum(is.na(mass)),
+            n.mass = sum(!is.na(avg.mass)),
+            n.na = sum(is.na(avg.mass)),
             percent = n.na/(n.na + n.mass),
-            avg.size = mean(mass, na.rm = TRUE)) %>% 
+            avg.size = mean(avg.mass, na.rm = TRUE)) %>% 
   as.data.frame()
 
 write.csv(df.clade.mass,
-          "./Results/DataExploration/clade.missing.mass.csv",
+          "./Results/clade.missing.mass.csv",
           row.names = FALSE)
 
 ## BY CONTINENT
 
-df.cont.mass <- data %>% 
+df.cont.mass <- df %>% 
   group_by(continent) %>% 
-  summarise(n.mass = sum(!is.na(mass)),
-            n.na = sum(is.na(mass)),
+  summarise(n.mass = sum(!is.na(avg.mass)),
+            n.na = sum(is.na(avg.mass)),
             percent = n.na/(n.na + n.mass),
-            avg.size = mean(mass, na.rm = TRUE)) %>% 
+            avg.size = mean(avg.mass, na.rm = TRUE)) %>% 
   as.data.frame()
 
 write.csv(df.cont.mass,
-          "./Results/DataExploration/cont.missing.mass.csv",
+          "./Results/cont.missing.mass.csv",
           row.names = FALSE)
 
 ##### FOSSIL AGES ----
@@ -957,6 +957,9 @@ write.csv(indeces,
 #### H2: FAMILY ORIGIN ----
 
 #jumpers (no longer living where family originated) and spreaders (living where family originated and other continents too)
+
+length(unique(df$order[df$family.origin != ""])) #28
+length(df$family.origin[df$family.origin != ""]) #3572
 
 #gather data
 
@@ -1969,10 +1972,12 @@ summary(lm(df.wr$n.cont.sp ~ df.wr$n.ord.sp))
 
 global.mass <- df$log.mass[!is.na(df$log.mass)] #3310 records
 median(global.mass) #1.95424
+median(df$avg.mass[!is.na(df$avg.mass)]) #89.9995
 
 ##### 1 compared to global -----
 hb.mass <- df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)] #3068 records
 median(hb.mass) #1.97
+median(df$avg.mass[df$n.cont == "1" & !is.na(df$avg.mass)]) #93.91
 ks.test(hb.mass, global.mass)
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
@@ -1983,13 +1988,14 @@ ks.test(hb.mass, global.mass)
 ##### 2 compared to global -----
 ld.mass <- df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)] #237
 median(ld.mass) #1.49
+median(df$avg.mass[df$n.cont == "2" & !is.na(df$avg.mass)]) #30.848
 ks.test(ld.mass, global.mass)
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  ld.mass and global.mass
 # D = 0.20685, p-value = 1.206e-08
 # alternative hypothesis: two-sided
-ks.test(ld.mass, global.mass, alternative = "greater") #ld greater than global
+ks.test(ld.mass, global.mass, alternative = "greater") #ld smaller than global
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  ld.mass and global.mass
@@ -2005,6 +2011,7 @@ ks.test(ld.mass, global.mass, alternative = "less")
 ##### 3+ compared to global -----
 gt.mass <- df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)] #5
 median(gt.mass) #3.73
+median(df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) #5318.232
 ks.test(gt.mass, global.mass)
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
@@ -2178,8 +2185,216 @@ write.csv(df.breadth,
           "./Results/diet.breadth.results.csv",
           row.names = FALSE)
 
-## create a chi squared
 #include trot.N, null prop, expected, observed-expected, (O-E)^2, (O-E)^2/exp, X crit, p
+
+df.diet.stats <- df %>%
+  summarise(n.two = nrow(df[df$n.cont == "2",]),
+            carn.pisc = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.piscivore.tot == TRUE & df$n.cont == "2"]),
+            carn.invt = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "2"]),
+            pisc.invt = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "2"]),
+            carn.brow = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2"]),
+            carn.graz = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2"]),
+            carn.frug = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"]),
+            pisc.brow = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2"]),
+            pisc.graz = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2"]),
+            pisc.frug = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"]),
+            invt.brow = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2"]),
+            invt.graz = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2"]),
+            invt.frug = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"]),
+            brow.graz = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2"]),
+            brow.frug = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"]),
+            graz.frug = length(df$binomial[df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"])) %>%
+  as.data.frame()
+
+write.csv(df.diet.stats,
+          "./Results/diet.summary.csv",
+          row.names = FALSE)
+
+##deeper look into dietary breadth of 3
+df.3 <- df[df$diet.breadth ==3,]
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                     df.3$diet.invertivore.tot == TRUE &
+                     df.3$diet.frugivore.tot == TRUE]) #152
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                       df.3$diet.carnivore.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #2
+
+length(df.3$binomial[df.3$diet.invertivore.tot == TRUE &
+                       df.3$diet.carnivore.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #16
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                       df.3$diet.grazer.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #12
+
+table(df.3$n.cont) #179 on 1 continent, 5 on 2 continents
+
+##deeper look into those with dietary breadth of 2
+#only for diet.breadth == 2
+## total
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.carnivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.invertivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.piscivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.grazer.tot == TRUE & 
+                   df$diet.carnivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.frugivore.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.piscivore.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.invertivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.piscivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                   df$diet.piscivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+length(df$binomial[df$diet.piscivore.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2])
+
+##n.cont = 1
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.invertivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.grazer.tot == TRUE & 
+                   df$diet.carnivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.frugivore.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.invertivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.piscivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                   df$diet.piscivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 1])
+
+##n.cont = 2
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 2])
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 2])
+length(df$binomial[df$diet.grazer.tot == TRUE & 
+                   df$diet.carnivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 2])
+length(df$binomial[df$diet.frugivore.tot == TRUE & 
+                   df$diet.grazer.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 2])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.invertivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 2])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 2])
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 2])
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                   df$diet.piscivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == 2])
+
+##n.cont = 3+
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.invertivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == "3+"])
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.frugivore.tot == TRUE & 
+                   df$diet.breadth == 2 &
+                   df$n.cont == "3+"])
+
+
+length(df$binomial[df$order == "Chiroptera" &
+                   df$n.cont == 2])
+length(df$binomial[df$order == "Chiroptera" &
+                   df$n.cont == 2 &
+                   df$diet.frugivore.tot == TRUE])
+length(df$binomial[df$order == "Chiroptera" &
+                   df$n.cont == 2 &
+                   df$diet.invertivore.tot == TRUE])
+length(df$binomial[df$order == "Chiroptera" &
+                   df$n.cont == 2 &
+                   df$diet.carnivore.tot == TRUE])
+length(df$binomial[df$order == "Chiroptera" &
+                   df$n.cont == 2 &
+                   df$diet.piscivore.tot== TRUE])
+
+length(df$binomial[df$family.origin == "South.America"])
+length(df$binomial[df$family.origin == "South.America" &
+                   df$n.cont == 2])
+length(df$binomial[df$family.origin == "North.America"])
+length(df$binomial[df$family.origin == "North.America" &
+                   df$n.cont == 2])
+length(df$binomial[df$family.origin == "Eurasia"]) 
+length(df$binomial[df$family.origin == "Eurasia" &
+                   df$n.cont == 2]) 
 
 ##### DIET TYPE -----
 #are there diet types differences between homiess, limited dispersers, and globe trotters?
@@ -2237,15 +2452,37 @@ df.diet <- arrange(df.diet, p.trot) %>%
                 signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
 
 write.csv(df.diet, 
-          "../Results/diet.results.csv",
+          "./Results/diet.results.csv",
           row.names = FALSE)
 
 #test if carnivorans of n=2 and n=3+ are larger than expected
 ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]))
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == 2])
+# D = 0.47838, p-value = 2.328e-08
+# alternative hypothesis: two-sided
+
 ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]), alternative = "greater")
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == 2])
+# D^+ = 0.021097, p-value = 0.9651
+# alternative hypothesis: the CDF of x lies above that of y
+
 ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]), alternative = "less") #sig; y less than x
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == 2])
+# D^- = 0.47838, p-value = 1.164e-08
+# alternative hypothesis: the CDF of x lies below that of y
 
 ks.test(log10(df$avg.mass[df$n.cont == "3+" & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == "3+"])) #not sig
+# Exact two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df$avg.mass[df$n.cont == "3+" & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == "3+"])
+# D = 0.2, p-value = 1
+# alternative hypothesis: two-sided
 
 ###### DIET FIGURES -----
 #UNstacked bar graph
