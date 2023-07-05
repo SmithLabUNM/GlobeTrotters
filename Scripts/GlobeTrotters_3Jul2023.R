@@ -187,10 +187,18 @@ table(mm.df$diet.src, useNA = "always")
 # mean.family   mean.genus   species.diet  <NA> 
 # 460           1557         4488          190 
 
+length(unique(mm.df$binomial[is.na(mm.df$diet.src)]))
+
 mm.df$diet.breadth <- select(mm.df, diet.invertivore:diet.piscivore) %>% rowSums()
 table(mm.df$diet.breadth[!duplicated(mm.df$binomial)])
 # 0    1    2    3 
 # 214 3266 1995  261 
+
+length(unique(mm.df$binomial[mm.df$diet.breadth == 0]))
+
+setdiff(unique(mm.df$binomial[mm.df$diet.breadth == 0]), 
+        unique(mm.df$binomial[is.na(mm.df$diet.src)]))
+View(mm.df[mm.df$diet.breadth == 0 &!(is.na(mm.df$diet.src)),]) #all diets are FALSE
 
 ##### ABOUT FULL DATASET -----
 
@@ -358,7 +366,7 @@ df.sums <- mm.df %>%
                    diet.grazer.tot = isTRUE(sum(diet.grazer) > 0),
                    diet.piscivore.tot = isTRUE(sum(diet.piscivore) > 0),
                    diet.frugivore.tot = isTRUE(sum(diet.frugivore) > 0),
-                   avg.mass = mean(mass),
+                   avg.mass = mean(mass, na.rm = TRUE),
                    n.cont = length(unique(continent)),
                    iucn = iucn.status[1])
 
@@ -562,7 +570,7 @@ ggsave(bs.cont, file = paste0("./Figures/bodyMassDensityByContinent",".png"),
 #qualitatively similar
 
 ## COUNT OF MISSING BODY MASS
-nrow(df[is.na(df$log.mass),]) #1076
+nrow(df[is.na(df$log.mass),]) #1069
 
 ## BY CLADE
 
@@ -587,10 +595,10 @@ write.csv(df.clade.mass,
 
 ## BY CONTINENT
 ## are certain continents more affected by this missing data?
-nrow(df[df$continent.Africa == TRUE & is.na(df$log.mass),]) #361 (out of 1150; 31%)
-nrow(df[df$continent.North.America == TRUE & is.na(df$log.mass),]) #96 (out of 808; 12%)
-nrow(df[df$continent.South.America == TRUE & is.na(df$log.mass),]) #279 (out of 1200; 23%)
-nrow(df[df$continent.Eurasia == TRUE & is.na(df$log.mass),]) #330 (out of 1165; 28%
+nrow(df[df$continent.Africa == TRUE & is.na(df$log.mass),]) #357 (out of 1150; 31%)
+nrow(df[df$continent.North.America == TRUE & is.na(df$log.mass),]) #92 (out of 808; 11.3%)
+nrow(df[df$continent.South.America == TRUE & is.na(df$log.mass),]) #277 (out of 1200; 14.8%)
+nrow(df[df$continent.Eurasia == TRUE & is.na(df$log.mass),]) #325 (out of 1165; 28%
 nrow(df[df$continent.Australia == TRUE & is.na(df$log.mass),]) #35 (out of 336; 10%)
 
 ##### FOSSIL AGES ----
@@ -686,7 +694,7 @@ foss.age.lm <- ggplot() +
 ggsave(foss.age.lm , file = paste0("./Figures/lm.fossil.age",".png"), 
        width = 14, height = 10, units = "cm")
 
-summary(lm(df$foss.age ~ df$avg.mass)) #p-value: 4.297e-07; Adjusted R-squared:  0.03791
+summary(lm(df$foss.age ~ df$avg.mass)) #p-value: 3.173e-07; Adjusted R-squared: 0.03849
 
 phyl.age.lm <- ggplot() +
   geom_point(aes(x = df$log.mass[!is.na(df$log.mass) & !is.na(df$age.median)], 
@@ -700,7 +708,7 @@ phyl.age.lm <- ggplot() +
 ggsave(phyl.age.lm , file = paste0("./Figures/lm.phylo.age",".png"), 
        width = 14, height = 10, units = "cm")
 
-summary(lm(df$age.median ~ df$avg.mass)) #p-value: 0.001341; Adjusted R-squared:  0.003027
+summary(lm(df$age.median ~ df$avg.mass)) #p-value: 0.001473; Adjusted R-squared: 0.002964
 
 ## BY CLADE
 #from which groups are we missing things from?
@@ -809,6 +817,9 @@ df %>%
 # North.America   636 (17.8%)
 # South.America   658 (18.4%)
 
+## SIZE
+nrow(df[!is.na(df$family.origin) & is.na(df$log.mass),]) #1069
+
 ##### CONTINENT -----
 
 ## counts
@@ -854,7 +865,7 @@ df.cont.mass <- cbind(mass.Africa, mass.Africa.na, per.Africa.missing.mass,
                       mass.South.America, mass.South.America.na, per.South.America.missing.mass)
 
 write.csv(df.cont.mass,
-          "./Results/DataExploration/cont.missing.mass.csv",
+          "./Results/cont.missing.mass.csv",
           row.names = FALSE)
 
 ##### DIET TYPE ----
@@ -890,12 +901,13 @@ df.diet %>%
 # diet.piscivore.tot       28     1
 # diet.frugivore.tot     1460   469
 
+nrow(df[!is.na(df$diet.breadth) & is.na(df$log.mass),]) #1069
 
-ggplot(data = df.melt.true) + 
+ggplot(data = df.diet) + 
   geom_bar(aes(fill = mass.TF, x = diet.type),
            position = 'stack', stat = 'count') 
 
-df.diet.mass <- df.melt.true %>%
+df.diet.mass <- df.diet %>%
   group_by(diet.type) %>%
   summarise(n.mass = sum(!is.na(avg.mass)),
             n.na = sum(is.na(avg.mass)),
@@ -921,8 +933,8 @@ nrow(dd) #434 records
 
 ## What size range are these records?
 table(dd$log.size.bin)
-# 0  1   2   3   4 
-# 1  63  85  29  7 
+# 0   1   2   3   4 
+# 25  84  59  14  3 
 
 ## Which continent are most of these records on?
 table(dd$continent.Africa) #137 TRUE; 295 FALSE (32%)
@@ -947,14 +959,14 @@ table(dd$order)
 ##what is overlap between DD and other missing information?
 
 #missing size
-nrow(dd[is.na(dd$avg.mass),]) #249 (out of 434; 57%)
+View(dd[is.na(dd$avg.mass),]) #249 (out of 434; 57%); 2 rows NA
 
 #missing diet
-nrow(dd[is.na(dd$diet.breadth),]) #2
+View(dd[is.na(dd$diet.breadth),]) #0 (all NA)
 
 #missing continent
-nrow(dd[is.na(dd$n.cont),]) #2
-nrow(dd[is.na(dd$family.origin),]) #2
+View(dd[is.na(dd$n.cont),]) #0
+View(dd[is.na(dd$family.origin),]) #0
 
 #missing age
 nrow(dd[is.na(dd$foss.age),]) #430
@@ -1030,7 +1042,7 @@ nrow(df[df$family.origin == "North.America" &
           df$diet.carnivore.tot == TRUE & 
           df$diet.frugivore.tot == TRUE &
           df$diet.breadth == 2,])
-#3 (including Ursus arctos)
+#2 (including Ursus arctos)
 #other one is cave bear and Ursus americanus; both on 1
 
 xx <- df[df$family.origin == "North.America" & 
@@ -1072,10 +1084,12 @@ yy <- df[df$family.origin == "North.America" &
 yy <- yy %>% drop_na(binomial)
 nrow(yy) #68 incl. bat
 table(yy$n.cont)
-nrow(yy[yy$continent.Africa == TRUE,]) #17
+# 1  2   3+ 
+# 58 11  1 
+nrow(yy[yy$continent.Africa == TRUE,]) #18
 nrow(yy[yy$continent.North.America == TRUE,]) #16
 nrow(yy[yy$continent.South.America == TRUE,]) #9
-nrow(yy[yy$continent.Eurasia == TRUE,]) #31
+nrow(yy[yy$continent.Eurasia == TRUE,]) #32
 nrow(yy[yy$continent.Australia == TRUE,]) #8
 
 #### H1: CONNECTIVITY ----
@@ -1580,11 +1594,11 @@ df.dispersal$dispersal.phylo =  ((df.dispersal$age * 365)/(df.dispersal$gen.leng
 ggplot() +
   geom_density(aes(df.dispersal$dispersal.foss[!is.na(df.dispersal$dispersal.foss)]))
 
-length(df.dispersal$dispersal.foss[!is.na(df.dispersal$dispersal.foss)]) #68
+length(df.dispersal$dispersal.foss[!is.na(df.dispersal$dispersal.foss)]) #69
 
 ggplot() +
   geom_density(aes(df.dispersal$dispersal.phylo[!is.na(df.dispersal$dispersal.phylo)]))
-length(df.dispersal$dispersal.phylo[!is.na(df.dispersal$dispersal.phylo)]) #84
+length(df.dispersal$dispersal.phylo[!is.na(df.dispersal$dispersal.phylo)]) #85
 
 nrow(df.dispersal[is.na(df.dispersal$dispersal.foss),]) #541
 nrow(df.dispersal[is.na(df.dispersal$dispersal.phylo),]) #526
@@ -1657,7 +1671,7 @@ South.America.NS = 7429
 Australia.EW = 3624
 Australia.NS = 2993
 
-length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.foss)]) #68
+length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.foss)]) #69
 
 length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Australia.EW & !is.na(df.dispersal$dispersal.foss)]) 
 length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Australia.NS & !is.na(df.dispersal$dispersal.foss)]) 
@@ -1670,7 +1684,7 @@ length(df.dispersal$binomial[df.dispersal$dispersal.foss >= North.America.NS & !
 length(df.dispersal$binomial[df.dispersal$dispersal.foss >= South.America.EW & !is.na(df.dispersal$dispersal.foss)]) 
 length(df.dispersal$binomial[df.dispersal$dispersal.foss >= South.America.NS & !is.na(df.dispersal$dispersal.foss)]) 
 
-length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.phylo)]) #84
+length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.phylo)]) #85
 
 length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= Australia.EW & !is.na(df.dispersal$dispersal.phylo)]) 
 length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= Australia.NS & !is.na(df.dispersal$dispersal.phylo)]) 
@@ -1705,7 +1719,7 @@ ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]),
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)])
-# D^+ = 0.0018484, p-value = 0.9996
+# D^+ = 0.0018416, p-value = 0.9996
 # alternative hypothesis: the CDF of x lies above that of y
 
 ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), 
@@ -1713,7 +1727,7 @@ ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]),
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)])
-# D^- = 0.35218, p-value = 3.106e-07
+# D^- = 0.35463, p-value = 2.053e-07
 # alternative hypothesis: the CDF of x lies below that of y
 
 min(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) #same as above
@@ -1727,7 +1741,7 @@ ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]),
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
-# D = 0.36952, p-value = 5.158e-09
+# D = 0.37078, p-value = 3.638e-09
 # alternative hypothesis: two-sided
 
 ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), 
@@ -1743,7 +1757,7 @@ ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]),
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
-# D^- = 0.36952, p-value = 2.579e-09
+# D^- = 0.37078, p-value = 1.819e-09
 # alternative hypothesis: the CDF of x lies below that of y
 
 table(df.dispersal$n.cont)
@@ -1752,11 +1766,11 @@ table(df.dispersal$n.cont)
 
 table(df.dispersal$n.cont[!is.na(df.dispersal$dispersal.foss)])
 # 1  2 3+ 
-# 45 20  3 
+# 45 20  4
 
 table(df.dispersal$n.cont[!is.na(df.dispersal$dispersal.phylo)])
 # 1  2 3+ 
-# 60 21  3 
+# 60 21  4
 
 #unimpeded animals can get across continents; clearly some filtering
 #is the filtering clade or ecological type specific? answer than by looking at families or something
@@ -1918,9 +1932,9 @@ insect.stat <- df %>%
   group_by(order, n.cont) %>%
   filter(diet.invertivore.tot == TRUE) %>%
   dplyr::summarise(count = n())
-sum(insect.stat$count) #1967 total
-sum(insect.stat$count[insect.stat$n.cont == 2]) #140
-#105 out of 140 are chiroptera
+sum(insect.stat$count) #1973 total
+sum(insect.stat$count[insect.stat$n.cont == 2]) #141
+#106 out of 141 are chiroptera
 
 bats <- df[df$order == "Chiroptera",]
 bats.2 <- bats[bats$n.cont == 2,]
@@ -1981,41 +1995,41 @@ ks.test(hb.mass, global.mass)
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  hb.mass and global.mass
-# D = 0.015762, p-value = 0.8238
+# D = 0.015662, p-value = 0.8292
 # alternative hypothesis: two-sided
  
 ##### 2 compared to global -----
-ld.mass <- df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)] #237
-median(ld.mass) #1.49
-median(df$avg.mass[df$n.cont == "2" & !is.na(df$avg.mass)]) #30.848
+ld.mass <- df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)] #243
+median(ld.mass) #1.5
+median(df$avg.mass[df$n.cont == "2" & !is.na(df$avg.mass)]) #31.6585
 ks.test(ld.mass, global.mass)
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  ld.mass and global.mass
-# D = 0.20685, p-value = 1.206e-08
+# D = 0.20185, p-value = 1.944e-08
 # alternative hypothesis: two-sided
 ks.test(ld.mass, global.mass, alternative = "greater") #ld smaller than global
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  ld.mass and global.mass
-# D^+ = 0.20685, p-value = 6.032e-09
+# D^+ = 0.20185, p-value = 9.719e-09
 # alternative hypothesis: the CDF of x lies above that of y
 ks.test(ld.mass, global.mass, alternative = "less")
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  ld.mass and global.mass
-# D^- = 0.02961, p-value = 0.6785
+# D^- = 0.035066, p-value = 0.573
 # alternative hypothesis: the CDF of x lies below that of y
 
 ##### 3+ compared to global -----
-gt.mass <- df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)] #5
-median(gt.mass) #3.73
-median(df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) #5318.232
+gt.mass <- df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)] #6
+median(gt.mass) #4.49
+median(df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) #92753.02
 ks.test(gt.mass, global.mass)
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  gt.mass and global.mass
-# D = 0.42749, p-value = 0.3212
+# D = 0.49332, p-value = 0.1084
 # alternative hypothesis: two-sided
 
 ##### DELVING DEEPER -----
@@ -2059,13 +2073,13 @@ ggplot() + #do histogram; .25 log
 length(df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)]) #3068
 length(df$avg.mass[df$n.cont == 2 | df$n.cont == "3+" & !is.na(df$avg.mass)]) #266
 median(df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)]) #93.91
-median(df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)]) #32.43
+median(df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)]) #33.3
 ks.test(df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass) ], 
-        df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)]) #p-value < 2.2e-16
+        df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)]) #p-value = 3.922e-09
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)] and df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)]
-# D = 0.21559, p-value = 1.761e-09
+# D = 0.20863, p-value = 3.922e-09
 # alternative hypothesis: two-sided
 
 ks.test(df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)], 
@@ -2074,30 +2088,29 @@ ks.test(df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)],
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)] and df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)]
-# D^+ = 0.039771, p-value = 0.4919
+# D^+ = 0.048633, p-value = 0.3364
 # alternative hypothesis: the CDF of x lies above that of y
 
 ks.test(df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)], 
         df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)],
-        alternative = "less") #p-value < 2.2e-16 (i.e., 1 cont is not "less" than 2+ cont)
-
+        alternative = "less") #p-value = 1.961e-09 (i.e., 1 cont is not "less" than 2+ cont)
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)] and df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)]
-# D^- = 0.21559, p-value = 8.804e-10
+# D^- = 0.20863, p-value = 1.961e-09
 # alternative hypothesis: the CDF of x lies below that of y
 
 ##### 1+2 v 3+ -----
-length(df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)]) #3305
-length(df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) #5
+length(df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)]) #3311
+length(df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) #6
 median(df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)]) #90.00
-median(df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) #5318.232
+median(df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) #92753.02
 ks.test(df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)], 
         df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) 
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)] and df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]
-# D = 0.42814, p-value = 0.3194
+# D = 0.49421, p-value = 0.1072
 # alternative hypothesis: two-sided
 
 ks.test(df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)], 
@@ -2106,7 +2119,7 @@ ks.test(df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)],
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)] and df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]
-# D^+ = 0.42814, p-value = 0.1604
+# D^+ = 0.49421, p-value = 0.05363
 # alternative hypothesis: the CDF of x lies above that of y
 
 #### H5: DIET ----
@@ -2243,26 +2256,26 @@ length(df.3$binomial[df.3$diet.browser.tot == TRUE &
                        df.3$diet.grazer.tot == TRUE &
                        df.3$diet.frugivore.tot == TRUE]) #12
 
-table(df.3$n.cont) #179 on 1 continent, 5 on 2 continents
+table(df.3$n.cont) #180 on 1 continent, 6 on 2 continents
 
 ##deeper look into those with dietary breadth of 2
 #only for diet.breadth == 2
 ## total
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #308
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.carnivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #0
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #702
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.invertivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #20
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.piscivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #0
 length(df$binomial[df$diet.grazer.tot == TRUE & 
                    df$diet.carnivore.tot == TRUE & 
                    df$diet.breadth == 2])
@@ -2474,21 +2487,21 @@ ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log1
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == 2])
-# D = 0.47838, p-value = 2.328e-08
+# D = 0.47582, p-value = 2.622e-08
 # alternative hypothesis: two-sided
 
 ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]), alternative = "greater")
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == 2])
-# D^+ = 0.021097, p-value = 0.9651
+# D^+ = 0.024691, p-value = 0.9523
 # alternative hypothesis: the CDF of x lies above that of y
 
 ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]), alternative = "less") #sig; y less than x
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == 2])
-# D^- = 0.47838, p-value = 1.164e-08
+# D^- = 0.47582, p-value = 1.311e-08
 # alternative hypothesis: the CDF of x lies below that of y
 
 ks.test(log10(df$avg.mass[df$n.cont == "3+" & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == "3+"])) #not sig
