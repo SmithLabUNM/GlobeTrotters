@@ -40,24 +40,31 @@ plot_theme <- theme(panel.grid = element_blank(),
 
 options(stringsAsFactors = FALSE)
 
+## MOM database
 mm.df <- read.csv("./Data/MOMv11.csv", 
                   header = TRUE)
 
+## Pacifici et al. 2013 data for dispersal
 pacifici <- read.csv("./Data/Generation Length for Mammals.csv", 
                      header = TRUE)
 
+## Family origin data collected for this paper
 origin <- read.csv("./Data/familyOrigin.csv", 
                    header = TRUE)
 
+## PBDB first fossil occurrence data
 pbdb <- read.csv("./Data/pbdb.data.csv", 
                  as.is = T)
 
+## Faurby et al. Phylocene tree data for ages
 faurby.ages <- read.csv("./Data/species.age_Faurby.csv", 
                         header = TRUE, row.names = 1)
 
+## Faurby et al. present natural ranges
 ranges <- read.csv("./Data/ranges.csv", 
                    header = TRUE)
 
+## Jones et al. PanTHERIA dataset
 pantheria <- read.csv("./Data/pantheria.csv", 
                       header = TRUE)
 
@@ -325,6 +332,12 @@ mm.df[(duplicated(mm.df[c("binomial", "continent")])),]
 
 #write.csv(mm.df, "data.trimmed.csv")
 
+##### WHICH LEVEL IS DIET DATA CREATED? ----
+unique(mm.df$diet.src)
+nrow(mm.df[mm.df$diet.src == "species.diet",]) #3737
+nrow(mm.df[mm.df$diet.src == "mean.genus",]) #849
+nrow(mm.df[mm.df$diet.src == "mean.family",]) #73
+
 ##### CREATE LONG CONTINENT VERSION -----
 
 mm.df <- mm.df %>% 
@@ -441,6 +454,7 @@ phyl.ages <- phyl.ages %>%
 
 ##### COMBINE DATA -----
 
+###### TRIM DATASETS ------
 ##trim data
 colnames(pacifici)
 pacifici.trim <- pacifici %>%
@@ -473,7 +487,7 @@ pantheria.trim <- pantheria %>%
                 indiv.home.range.km2 = X22.2_HomeRange_Indiv_km2,
                 dispersal.age.d = X7.1_DispersalAge_d)
 
-##Combine data
+###### MERGE TRIMMED DATASETS ------
   
 df.origin <- left_join(df.contTaxaSums, origin.trim,
                        by = "family")
@@ -506,7 +520,7 @@ df$log.mass <- log10(df$avg.mass)
 df[c('log.mass')][sapply(df[c('log.mass')], is.infinite)] <- NA
 
 ## SIZE BINS
-df$log.size.bin <- round(df$log.mass, digits =  0) #log10 size bins
+df$log.size.bin <- trunc(df$log.mass) #log10 size bins
 
 ##### WRITE DATA FOR ANALYSES -----
 write.csv(df, 
@@ -522,6 +536,7 @@ length(unique(df$family)) #135
 length(unique(df$genus)) #1072
 length(unique(df$binomial)) #4386
 
+## TABLE FOR COUNTS PER ORDER
 df %>%
   group_by(order) %>%
   summarise(n = length(unique(binomial))) %>%
@@ -529,6 +544,7 @@ df %>%
 
 ##### SIZE -----
 
+## GRAPH OF BODY SIZE DISTRIBUTION BY CONTINENT
 bs.cont <- ggplot() +
   geom_density(aes(df$log.mass[!is.na(df$log.mass)]), colour = "black") +
   geom_density(aes(df$log.mass[df$continent.North.America == TRUE & !is.na(df$log.mass)]), colour = "#B4D9C8") +
@@ -545,10 +561,14 @@ ggsave(bs.cont, file = paste0("./Figures/bodyMassDensityByContinent",".png"),
 
 #qualitatively similar
 
+## COUNT OF MISSING BODY MASS
+nrow(df[is.na(df$log.mass),]) #1076
+
 ## BY CLADE
 
 #from which groups are we missing things from?
 
+## FAMILY LEVEL COUNTS OF MISSING MASS DATA
 df.clade.mass <- df %>% 
   group_by(family) %>% 
   summarise(order = order[1],
@@ -558,39 +578,40 @@ df.clade.mass <- df %>%
             avg.size = mean(avg.mass, na.rm = TRUE)) %>% 
   as.data.frame()
 
+## HOW MANY ORDERS?
+unique(df.clade.mass$order) #29
+
 write.csv(df.clade.mass,
           "./Results/clade.missing.mass.csv",
           row.names = FALSE)
 
 ## BY CONTINENT
-
-df.cont.mass <- df %>% 
-  group_by(continent) %>% 
-  summarise(n.mass = sum(!is.na(avg.mass)),
-            n.na = sum(is.na(avg.mass)),
-            percent = n.na/(n.na + n.mass),
-            avg.size = mean(avg.mass, na.rm = TRUE)) %>% 
-  as.data.frame()
-
-write.csv(df.cont.mass,
-          "./Results/cont.missing.mass.csv",
-          row.names = FALSE)
+## are certain continents more affected by this missing data?
+nrow(df[df$continent.Africa == TRUE & is.na(df$log.mass),]) #361 (out of 1150; 31%)
+nrow(df[df$continent.North.America == TRUE & is.na(df$log.mass),]) #96 (out of 808; 12%)
+nrow(df[df$continent.South.America == TRUE & is.na(df$log.mass),]) #279 (out of 1200; 23%)
+nrow(df[df$continent.Eurasia == TRUE & is.na(df$log.mass),]) #330 (out of 1165; 28%
+nrow(df[df$continent.Australia == TRUE & is.na(df$log.mass),]) #35 (out of 336; 10%)
 
 ##### FOSSIL AGES ----
-## PBDB
+## PBDB COUNTS
 length(unique(df$order[df$foss.age >= 0]))  #21
 length(unique(df$family[df$foss.age >= 0])) #93
 length(unique(df$genus[df$foss.age >= 0])) #391
 length(unique(df$binomial[df$foss.age >= 0])) #662
+nrow(df[is.na(df$foss.age),]) #3725
 
-## FAURBY
+## FAURBY COUNTS
 length(unique(df$order[df$age.median >= 0]))  #30
 length(unique(df$family[df$age.median >= 0])) #136
 length(unique(df$genus[df$age.median >= 0])) #1028
 length(unique(df$binomial[df$age.median >= 0])) #3969
+nrow(df[is.na(df$age.median),]) #418
 
 ## BY SIZE
 
+## WHICH BODY SIZES ARE WE MISSING FOSSIL AGES FOR?
+# PBDB
 foss.na <- ggplot() +
   geom_histogram(aes(x = df$foss.age[is.na(df$log.mass) & !is.na(df$foss.age)])) + 
   plot_theme +
@@ -601,6 +622,7 @@ foss.na <- ggplot() +
 ggsave(foss.na, file = paste0("./Figures/PBDBfossilAgeMissing",".png"), 
        width = 14, height = 10, units = "cm")
 
+# FAURBY
 phyl.na <- ggplot() +
   geom_histogram(aes(x = df$age.median[!is.na(df$age.median) & is.na(df$log.mass)])) + 
   plot_theme +
@@ -611,6 +633,8 @@ phyl.na <- ggplot() +
 ggsave(phyl.na, file = paste0("./Figures/PhyloAgeMissing",".png"), 
        width = 14, height = 10, units = "cm")
 
+## WHICH SIZES DO WE HAVE FOSSIL AGES FOR?
+# PBDB
 size.fossil.na <- ggplot() +
   geom_histogram(aes(x = df$log.mass[is.na(df$foss.age) & !is.na(df$log.mass)])) + 
   plot_theme +
@@ -621,6 +645,7 @@ size.fossil.na <- ggplot() +
 ggsave(size.fossil.na, file = paste0("./Figures/FossilSizeMissing",".png"), 
        width = 14, height = 10, units = "cm")
 
+# FAURBY
 size.phylo.na <- ggplot() +
   geom_histogram(aes(x = df$log.mass[is.na(df$age.median) & !is.na(df$log.mass)])) + 
   plot_theme +
@@ -631,7 +656,7 @@ size.phylo.na <- ggplot() +
 ggsave(size.phylo.na, file = paste0("./Figures/PhyloSizeMissing",".png"), 
        width = 14, height = 10, units = "cm")
 
-
+## COUNTS BY LOG SIZE BIN
 df.mass.age <- df %>% 
   group_by(log.size.bin) %>% 
   summarise(n.foss.age = sum(!is.na(foss.age)),
@@ -646,6 +671,7 @@ write.csv(df.mass.age,
           "./Results/age.missing.mass.csv",
           row.names = FALSE)
 
+## CORRELATION OF BODY MASS AND AGE?
 #want to look for coverage in species (genus) age
 #species (genus) age by body size
 foss.age.lm <- ggplot() +
@@ -676,26 +702,7 @@ ggsave(phyl.age.lm , file = paste0("./Figures/lm.phylo.age",".png"),
 
 summary(lm(df$age.median ~ df$avg.mass)) #p-value: 0.001341; Adjusted R-squared:  0.003027
 
-#species (genus) age by taxnomic coverage
-tax.foss.count <- df %>%
-  dplyr::group_by(family) %>%
-  dplyr::summarise(n.foss = length(!is.na(foss.age)),
-                   n.age = length(!is.na(age.median)))
-
-#species (genus) age by geographic coverage
-df.short <- df %>%
-  pivot_longer(cols = starts_with("continent."),
-               names_to = "continent",
-               values_to = "TorF") %>%
-  filter(TorF == TRUE)
-
-df.cont.short <- df.short %>%
-  group_by(continent) %>%
-  dplyr::summarise(N.foss = length(!is.na(foss.age)),
-                   N.age = length(!is.na(age.median)))
-
 ## BY CLADE
-
 #from which groups are we missing things from?
 
 df.clade.foss <- df %>% 
@@ -771,50 +778,45 @@ write.csv(df.cont.foss,
           "./Results/DataExploration/foss.missing.cont.csv",
           row.names = FALSE)
 
-#species (genus) age by taxnomic coverage
-tax.foss.count <- df %>%
-  dplyr::group_by(family) %>%
-  dplyr::summarise(n.foss = length(!is.na(foss.age)),
-                   n.age = length(!is.na(age.median)))
-
-##### CONTINENTS ----
-
-length(unique(df$binomial[df$continent.North.America == TRUE])) #808
-length(unique(df$binomial[df$continent.South.America == TRUE])) #1200
-length(unique(df$binomial[df$continent.Eurasia == TRUE])) #1165
-length(unique(df$binomial[df$continent.Africa == TRUE])) #1150
-length(unique(df$binomial[df$continent.Australia == TRUE])) #336
-
-##biases in family of origin data
-ggplot() +
-  geom_density(aes(x = df$log.mass[!is.na(df$family.origin) & !is.na(df$log.mass)])) + 
-  plot_theme + 
-  scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+##### CONTINENT OF ORIGIN ------
+## FAMILY ORIGIN
 
 length(unique(df$family[df$family.origin != ""])) #128
 length(unique(df$family[df$family.origin == ""])) #7
 length(df$binomial[df$family.origin == ""]) #814
 table(df$order[df$family.origin == ""])
 # "Chiroptera"  "Rodentia" "Paucituberculata" "Carnivora"  "Artiodactyla"  
-# 87            713         6                 1             7
+#  87            713        6                  1            7
 
-length(df$binomial[df$family.origin == "" & df$order == "Chiroptera"]) #87 
 length(unique(df$family[df$family.origin == "" & df$order == "Chiroptera"])) #2
+unique(df$family[df$family.origin == "" & df$order == "Chiroptera"]) 
+#Molossidae and Nycteridae
 
-length(df$binomial[df$family.origin == "" & df$order == "Rodentia"]) #713
 length(unique(df$family[df$family.origin == "" & df$order == "Rodentia"])) #2
+unique(df$family[df$family.origin == "" & df$order == "Rodentia"]) 
+#Muridae and Sciuridae
 
-#geographic bias
+## COUNTS BY CONTINENT
+nrow(df[df$family.origin != "",]) #3572
 df %>%
   filter(family.origin != "") %>%
   group_by(family.origin) %>%
   summarise(N = n())
 # family.origin     N
-# Africa          319
-# Australia       205
-# Eurasia        1754
-# North.America   636
-# South.America   658
+# Africa          319 (9%)
+# Australia       205 (5.7%)
+# Eurasia        1754 (49%)
+# North.America   636 (17.8%)
+# South.America   658 (18.4%)
+
+##### CONTINENT -----
+
+## counts
+length(unique(df$binomial[df$continent.North.America == TRUE])) #808
+length(unique(df$binomial[df$continent.South.America == TRUE])) #1200
+length(unique(df$binomial[df$continent.Eurasia == TRUE])) #1165
+length(unique(df$binomial[df$continent.Africa == TRUE])) #1150
+length(unique(df$binomial[df$continent.Australia == TRUE])) #336
 
 #want to check for taxonomic and geographic coverage
 cont.counts <- df %>%
@@ -823,11 +825,8 @@ cont.counts <- df %>%
 #  Africa   North.America   South.America   Eurasia   Australia
 #  1150     808             1200            1165      336
 
-table(df$family)
-
 ## BY SIZE
 # which continents are missing the most mass data?
-
 mass.Africa <- sum(!is.na(df$avg.mass[df$continent.Africa == TRUE]))
 mass.Africa.na  <- sum(is.na(df$avg.mass[df$continent.Africa == TRUE]))
 per.Africa.missing.mass <- mass.Africa.na/(mass.Africa.na+mass.Africa)
@@ -858,24 +857,39 @@ write.csv(df.cont.mass,
           "./Results/DataExploration/cont.missing.mass.csv",
           row.names = FALSE)
 
-##### DIET ----
+##### DIET TYPE ----
 
-length(unique(df$binomial[df$diet.browser == TRUE])) #1620
-length(unique(df$binomial[df$diet.grazer == TRUE])) #614
-length(unique(df$binomial[df$diet.frugivore == TRUE])) #1929
-length(unique(df$binomial[df$diet.carnivore == TRUE])) #330
-length(unique(df$binomial[df$diet.piscivore == TRUE])) #29
-length(unique(df$binomial[df$diet.invertivore == TRUE])) #1973
+## missing diet for?
+diet.counts <- df %>%
+  dplyr::select(starts_with("diet.")) %>%
+  dplyr::summarise_all(sum)
+
+unique(df$diet.breadth)
 
 ## BY SIZE
 # which diet types are missing the most mass data?
+nrow(df[is.na(df$log.mass),])
+
 
 df$mass.TF <- !is.na(df$avg.mass) #TRUE = mass, FALSE = no mass
 
 df.melt <- melt(df, measure.vars = c(6:11),
                 variable.name = "diet.type",
                 value.name = "has.diet")
-df.melt.true <- df.melt[df.melt$has.diet == TRUE,]
+df.diet <- df.melt[df.melt$has.diet == TRUE,]
+
+df.diet %>%
+  group_by(diet.type) %>%
+  summarise(n.mass = sum(mass.TF == TRUE),
+            n.na = sum(mass.TF == FALSE))
+#diet.type              n.mass  n.na
+# diet.invertivore.tot   1419   553
+# diet.carnivore.tot      281    49
+# diet.browser.tot       1239   381
+# diet.grazer.tot         493   121
+# diet.piscivore.tot       28     1
+# diet.frugivore.tot     1460   469
+
 
 ggplot(data = df.melt.true) + 
   geom_bar(aes(fill = mass.TF, x = diet.type),
@@ -946,6 +960,40 @@ nrow(dd[is.na(dd$family.origin),]) #2
 nrow(dd[is.na(dd$foss.age),]) #430
 nrow(dd[is.na(dd$age.median),]) #32
 
+##### DISPERSAL DATA -----
+
+## make dataset of what need to calculate dispersal
+
+df$AFR_d <- as.numeric(df$AFR_d)
+
+df.dispersal <- df %>%
+  dplyr::group_by(binomial) %>%
+  dplyr::summarise(n = n(),
+                   foss.avg.age = foss.age*1000000, #in yrs
+                   age = age.median*1000000, #in yrs
+                   avg.mass = avg.mass,
+                   hmrg = home.range.km2,
+                   disp.age = dispersal.age.d,
+                   gen.length = GenerationLength_d,
+                   repro.age = AFR_d, 
+                   n.cont = n.cont,
+                   family = family,
+                   order = order,
+                   family.origin = family.origin,
+                   carn = isTRUE(sum(diet.piscivore.tot + diet.invertivore.tot + diet.carnivore.tot) >= 1 & sum(diet.browser.tot + diet.grazer.tot + diet.frugivore.tot) == 0)) %>%
+  as.data.frame()
+
+## missing dispersal
+df.dispersal %>% 
+  drop_na() %>%
+  summarise(n = n()) #65 records that have everything
+
+df.dispersal %>%
+  select(-foss.avg.age) %>%
+  drop_na() %>%
+  summarise(n = n()) #80 for phylo age
+
+
 #### Q1: NUM SP PER CONTINENT ----
 #Tally number of species on 1, 2, or 3+ continents
 
@@ -961,8 +1009,74 @@ unique(df[which(df$n.cont == "3+"), c("order", "family", "binomial")])
 # "Miniopterus schreibersii" "Mustela nivalis"          "Vulpes vulpes"           
 # "Ursus arctos"             "Cervus elaphus"           "Panthera leo" 
 
-## ARTIODACTYLA
-length(unique(df$binomial[df$order == "Artiodactyla"]))/tot #compared to total dataset (5.81%)
+##### WHAT IS SPECIAL ABOUT THESE 6? -----
+##what is so special about these six?
+## WHAT ELSE HAS SAME METADATA (diet, family origin, but NOT family or order; discount dispersal because everything can get everywhere)
+## see what is similar to red fox or ursus; include log.size.bin
+
+## Vulpes vulpes
+nrow(df[df$family.origin == "North.America" & 
+          df$log.size.bin == 3 & 
+          df$diet.carnivore.tot == TRUE & 
+          df$diet.invertivore.tot == TRUE &
+          df$diet.breadth == 2,])
+#8 species similar to fox (including fox)
+# only 1, the golden jackal, on 2 continents; the rest on 1
+# maybe low speciation for foxes or high enough pop density to maintain and not separate
+
+## Ursus arctos
+nrow(df[df$family.origin == "North.America" & 
+          df$log.size.bin == 5 & 
+          df$diet.carnivore.tot == TRUE & 
+          df$diet.frugivore.tot == TRUE &
+          df$diet.breadth == 2,])
+#3 (including Ursus arctos)
+#other one is cave bear and Ursus americanus; both on 1
+
+xx <- df[df$family.origin == "North.America" & 
+           df$log.size.bin == 5 & 
+           df$diet.breadth >= 2,]
+xx[xx$diet.carnivore.tot == TRUE | 
+     xx$diet.frugivore.tot == TRUE |
+     xx$diet.piscivore.tot == TRUE,] #if allow for fish too
+#JUST BEARS
+
+## Mustela nivalis
+nrow(df[df$family.origin == "Eurasia" & 
+          df$log.size.bin == 2 & 
+          df$diet.carnivore.tot == TRUE & 
+          df$diet.invertivore.tot == TRUE &
+          df$diet.breadth == 2,])
+# 13 species (including Mustela are similar)
+# 1 on two; the rest on 1
+
+## Cervus elaphus
+nrow(df[df$family.origin == "Eurasia" & 
+          df$log.size.bin == 5 & 
+          df$diet.browser.tot == TRUE & 
+          df$diet.breadth == 1,])
+# 16 things similar (including Cervus elephas)
+
+## Panthera leo
+df[df$family.origin == "Eurasia" & 
+   df$log.size.bin == 5 & 
+   df$diet.carnivore.tot == TRUE & 
+   df$diet.breadth == 1,]
+#6 things including P. leo similar; all Felids
+
+## Miniopterus schreibersii
+yy <- df[df$family.origin == "North.America" & 
+         df$log.size.bin == 1 & 
+         df$diet.invertivore.tot == TRUE & 
+         df$diet.breadth == 1,]
+yy <- yy %>% drop_na(binomial)
+nrow(yy) #68 incl. bat
+table(yy$n.cont)
+nrow(yy[yy$continent.Africa == TRUE,]) #17
+nrow(yy[yy$continent.North.America == TRUE,]) #16
+nrow(yy[yy$continent.South.America == TRUE,]) #9
+nrow(yy[yy$continent.Eurasia == TRUE,]) #31
+nrow(yy[yy$continent.Australia == TRUE,]) #8
 
 #### H1: CONNECTIVITY ----
 
@@ -998,6 +1112,53 @@ indeces[4,5] <- sorensen(x = df$binomial[df$continent.Africa == TRUE],
 write.csv(indeces, 
           "./Results/sorensen.index.csv",
           row.names = FALSE)
+
+##which two continents are limited dispersers on?
+df[df$n.cont == 2,] %>%
+  summarise(n.AF = sum(continent.Africa == TRUE),
+            n.EA = sum(continent.Eurasia == TRUE),
+            n.NA = sum(continent.North.America == TRUE),
+            n.SA = sum(continent.South.America == TRUE),
+            n.AU = sum(continent.Australia == TRUE))
+#most on NA and SA; followed by AF and EA
+# n.AF n.EA n.NA n.SA n.AU
+# 79   98   177  162    4
+
+##which groups of limited dispersers are groups on?
+lim.disp <- df[df$n.cont == 2,]
+lim.cont <- lim.disp %>%
+  group_by(order) %>%
+  dplyr::summarise(N = n(),
+                   N.Africa.Eurasia = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE]),
+                   N.Africa.Australia = length(continent.Africa[continent.Africa == TRUE & continent.Australia == TRUE]),
+                   N.Africa.North.America = length(continent.Africa[continent.Africa == TRUE & continent.North.America == TRUE]),
+                   N.Africa.South.America = length(continent.Africa[continent.Africa == TRUE & continent.South.America == TRUE]),
+                   N.Australia.Eurasia = length(continent.Australia[continent.Australia == TRUE & continent.Eurasia == TRUE]),
+                   N.Australia.South.America = length(continent.Australia[continent.Australia == TRUE & continent.South.America == TRUE]),
+                   N.Australia.North.America = length(continent.Australia[continent.Australia == TRUE & continent.North.America == TRUE]),
+                   N.Eurasia.North.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE]),
+                   N.Eurasia.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.South.America == TRUE]),
+                   N.South.America.North.America = length(continent.South.America[continent.South.America == TRUE & continent.North.America == TRUE])) %>%
+  as.data.frame() 
+lim.cont <- lim.cont[lim.cont$family.origin != "",]
+
+##### CLOSER LOOK AT LIMITED DISPERSERS -----
+#eutherians v marsupial limited dispersals
+lim.cont <- lim.disp %>%
+  group_by(order, n.cont) %>%
+  dplyr::summarise(count = n()) %>%
+  as.data.frame()
+marsup <- c("Didelphimorphia", "Paucituberculata", "Microbiotheria",
+            "Dasyuromorphia", "Peramelemorphia", "Notoryctemorphia",
+            "Diprotodontia")
+lim.cont[lim.cont$order %in% marsup,] #only didelmorphia
+length(unique(df$binomial[df$order == "Didelphimorphia"])) #87 total
+length(unique(lim.disp$binomial[lim.disp$order == "Didelphimorphia"])) #5 (5.755 of total Didelmorphia diversity (5/87))
+length(unique(df$binomial[df$order == "Didelphimorphia" &
+                            df$continent.South.America == TRUE])) #83 (represent 6%; 83/1200)
+length(unique(df$binomial[df$continent.South.America == TRUE])) #1200
+length(unique(df$binomial[df$continent.South.America == TRUE &
+                            df$n.cont == 2])) #162
 
 #### H2: FAMILY ORIGIN ----
 
@@ -1040,41 +1201,6 @@ unique(df$family[df$family.origin == ""]) #only 7 families; most small groups bu
 # Molossidae, Muridae, and Sciuridae are super diverse
 length(df$binomial[df$family == "Muridae"]) #486
 length(df$binomial[df$family == "Sciuridae"]) #227
-
-xx <- df[df$family == "Muridae",]
-
-##what is so special about these six?
-## WHAT ELSE HAS SAME METADATA (diet, family origin, but NOT family or order; discount dispersal because everything can get everywhere)
-## see what is similar to red fox or ursus; include log.size.bin
-
-## Vulpes vulpes
-nrow(df[df$family.origin == "North.America" & 
-        df$log.size.bin == 4 & 
-        df$diet.carnivore.tot == TRUE & 
-        df$diet.invertivore.tot == TRUE &
-        df$diet.breadth == 2,])
-#10 species similar to fox (including fox)
-# only 1, the golden jackal, on 2 continents; the rest on 1
-# maybe low speciation for foxes or high enough pop density to maintain and not separate
-
-## Ursus arctos
-nrow(df[df$family.origin == "North.America" & 
-          df$log.size.bin == 5 & 
-          df$diet.carnivore.tot == TRUE & 
-          df$diet.frugivore.tot == TRUE &
-          df$diet.breadth == 2,])
-#3 (including Ursus arctos)
-#other one is cave bear and Ursus americanus; both on 1
-  
-xx <- df[df$family.origin == "North.America" & 
-          df$log.size.bin == 5 & 
-          df$diet.breadth >= 2,]
-xx[xx$diet.carnivore.tot == TRUE | 
-  xx$diet.frugivore.tot == TRUE |
-    xx$diet.piscivore.tot == TRUE,] #if allow for fish too
-#JUST BEARS
-
-
 
 homies <- df[df$n.cont == 1,]
 limited <- df[df$n.cont == 2,]
@@ -1261,9 +1387,9 @@ limited.cont$prop.stay[limited.cont$family.origin == "Eurasia"] <- sum(limited.c
                                                                          limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
                                                                          limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"])/sum(limited.cont$N)
 limited.cont$prop.leave[limited.cont$family.origin == "Eurasia"] <- (limited.cont$N[limited.cont$family.origin == "Eurasia"] - sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Eurasia"] + 
-                                                                                                                                     limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
-                                                                                                                                     limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
-                                                                                                                                     limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"]))/as.numeric(sum(limited.cont$N))
+                                                                                                                                   limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
+                                                                                                                                   limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
+                                                                                                                                   limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"]))/as.numeric(sum(limited.cont$N))
 
 
 
@@ -1393,228 +1519,6 @@ write.csv(trotter.cont,
           "./Results/trotter.family.origin.csv",
           row.names = FALSE)
 
-
-#####DELVING DEEPER-----
-
-min(df$avg.mass[df$order == "Carnivora"], na.rm = TRUE) #103.883
-max(df$avg.mass[df$order == "Carnivora"], na.rm = TRUE) #720000
-
-min(df$avg.mass[df$order == "Carnivora" &
-                  df$n.cont == "3+"], na.rm = TRUE) #103.883
-max(df$avg.mass[df$order == "Carnivora" &
-                  df$n.cont == "3+"], na.rm = TRUE) #297349.5
-
-##which two continents are limited dispersers on?
-lim.disp <- df[df$n.cont == 2,]
-lim.cont <- lim.disp %>%
-  group_by(order) %>%
-  dplyr::summarise(N = n(),
-                   N.Africa.Eurasia = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE]),
-                   N.Africa.Australia = length(continent.Africa[continent.Africa == TRUE & continent.Australia == TRUE]),
-                   N.Africa.North.America = length(continent.Africa[continent.Africa == TRUE & continent.North.America == TRUE]),
-                   N.Africa.South.America = length(continent.Africa[continent.Africa == TRUE & continent.South.America == TRUE]),
-                   N.Australia.Eurasia = length(continent.Australia[continent.Australia == TRUE & continent.Eurasia == TRUE]),
-                   N.Australia.South.America = length(continent.Australia[continent.Australia == TRUE & continent.South.America == TRUE]),
-                   N.Australia.North.America = length(continent.Australia[continent.Australia == TRUE & continent.North.America == TRUE]),
-                   N.Eurasia.North.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE]),
-                   N.Eurasia.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.South.America == TRUE]),
-                   N.South.America.North.America = length(continent.South.America[continent.South.America == TRUE & continent.North.America == TRUE])) %>%
-  as.data.frame() 
-limited.cont <- limited.cont[limited.cont$family.origin != "",]
-
-#eutherians v marsupial limited dispersals
-lim.cont <- lim.disp %>%
-  group_by(order, n.cont) %>%
-  dplyr::summarise(count = n()) %>%
-  as.data.frame()
-marsup <- c("Didelphimorphia", "Paucituberculata", "Microbiotheria",
-            "Dasyuromorphia", "Peramelemorphia", "Notoryctemorphia",
-            "Diprotodontia")
-lim.cont[lim.cont$order %in% marsup,]
-length(unique(df$binomial[df$order == "Didelphimorphia"])) #87 total
-length(unique(lim.disp$binomial[lim.disp$order == "Didelphimorphia"])) #5 (5.755 of total Didelmorphia diversity (5/87))
-length(unique(df$binomial[df$order == "Didelphimorphia" &
-                            df$continent.South.America == TRUE])) #83 (represent 6%; 83/1200)
-length(unique(df$binomial[df$continent.South.America == TRUE])) #1200
-length(unique(df$binomial[df$continent.South.America == TRUE &
-                            df$n.cont == 2])) #162
-
-##deeper look into dietary breadth of 3
-df.3 <- df[df$diet.breadth ==3,]
-
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
-                       df.3$diet.invertivore.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #152
-
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
-                       df.3$diet.carnivore.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #2
-
-length(df.3$binomial[df.3$diet.invertivore.tot == TRUE &
-                       df.3$diet.carnivore.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #18
-
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
-                       df.3$diet.grazer.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #12
-
-table(df.3$n.cont) #180 on 1 continent, 6 on 2 continents
-
-##deeper look into those with dietary breadth of 2
-#only for diet.breadth == 2
-## total
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2]) #308
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.carnivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #0
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #702
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #20
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #0
-length(df$binomial[df$diet.grazer.tot == TRUE & 
-                     df$diet.carnivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #1
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2]) #2
-length(df$binomial[df$diet.frugivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2]) #58
-length(df$binomial[df$diet.piscivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2]) #0
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #127
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #46
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #4
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #452
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #17
-length(df$binomial[df$diet.piscivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #0
-
-##n.cont = 1
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #297
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #682
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #20
-length(df$binomial[df$diet.grazer.tot == TRUE & 
-                     df$diet.carnivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #0
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #2
-length(df$binomial[df$diet.frugivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #54
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #113
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #44
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #4
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #424
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #13
-
-##n.cont = 2
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #11
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #20
-length(df$binomial[df$diet.grazer.tot == TRUE & 
-                     df$diet.carnivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #1
-length(df$binomial[df$diet.frugivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #4
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #12
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #1
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #28
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #4
-
-##n.cont = 3+
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == "3+"]) #2
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == "3+"]) #1
-
-
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2]) #142
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2 &
-                     df$diet.frugivore.tot == TRUE]) #52
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2 &
-                     df$diet.invertivore.tot == TRUE]) #106
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2 &
-                     df$diet.carnivore.tot == TRUE]) #9
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2 &
-                     df$diet.piscivore.tot== TRUE]) #2
-
 length(df$binomial[df$family.origin == "South.America"]) #658
 length(df$binomial[df$family.origin == "South.America" &
                      df$n.cont == 2]) #83
@@ -1655,27 +1559,7 @@ colnames(trotter.family)[colnames(trotter.family) == "N"] <- "trotter.N"
 trotter.family <- trotter.family %>%
   dplyr::select(-n.cont)
 
-
 ##### DISPERSAL -----
-
-df$AFR_d <- as.numeric(df$AFR_d)
-
-df.dispersal <- df %>%
-  dplyr::group_by(binomial) %>%
-  dplyr::summarise(n = n(),
-                   foss.avg.age = foss.age*1000000, #in yrs
-                   age = age.median*1000000, #in yrs
-                   avg.mass = avg.mass,
-                   hmrg = home.range.km2,
-                   disp.age = dispersal.age.d,
-                   gen.length = GenerationLength_d,
-                   repro.age = AFR_d, 
-                   n.cont = n.cont,
-                   family = family,
-                   order = order,
-                   family.origin = family.origin,
-                   carn = isTRUE(sum(diet.piscivore.tot + diet.invertivore.tot + diet.carnivore.tot) >= 1 & sum(diet.browser.tot + diet.grazer.tot + diet.frugivore.tot) == 0)) %>%
-  as.data.frame()
 
 df.dispersal <- df.dispersal %>%
   drop_na(hmrg, avg.mass)
@@ -1716,8 +1600,6 @@ nrow(df.dispersal[!is.na(df.dispersal$dispersal.foss) &
                     df.dispersal$order == "Primates",]) #0
 
 table(df.dispersal$family.origin[is.na(df.dispersal$dispersal.foss) &
-                                   df.dispersal$order == "Primates"])
-table(df.dispersal$family.origin[is.na(df.dispersal$dispersal.phylo) &
                                    df.dispersal$order == "Primates"])
 
 ks.test(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss) &
@@ -2136,17 +2018,31 @@ ks.test(gt.mass, global.mass)
 # D = 0.42749, p-value = 0.3212
 # alternative hypothesis: two-sided
 
+##### DELVING DEEPER -----
+
+min(df$avg.mass[df$order == "Carnivora"], na.rm = TRUE) #103.883
+max(df$avg.mass[df$order == "Carnivora"], na.rm = TRUE) #720000
+
+min(df$avg.mass[df$order == "Carnivora" &
+                  df$n.cont == "3+"], na.rm = TRUE) #103.883
+max(df$avg.mass[df$order == "Carnivora" &
+                  df$n.cont == "3+"], na.rm = TRUE) #297349.5
+
+
 ##### FIGURE ----
 
 #col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
 
 ggplot() + #do histogram; .25 log 
-  geom_density(aes(df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)]), 
-               colour = "#2ca25f", fill = "#2ca25f") +
-  geom_density(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
-               colour = "#99d8c9", fill = "#99d8c9") +
-  geom_density(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
-               colour = "#e5f5f9", fill = "#e5f5f9") +
+  geom_histogram(aes(df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)]), 
+               colour = "#2ca25f", fill = "#2ca25f",
+               binwidth = .25) +
+  geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
+               colour = "#99d8c9", fill = "#99d8c9",
+               binwidth = .25) +
+  geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
+               colour = "#e5f5f9", fill = "#e5f5f9",
+               binwidth = .25) +
   plot_theme +
   theme(legend.position = c(0.85, 0.82)) +
   scale_fill_manual(values = col, 
@@ -2156,6 +2052,7 @@ ggplot() + #do histogram; .25 log
                                "globetrotters")) +
   scale_y_continuous(name = "Density") +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+
 
 ##### 1 v 2+ -----
 
@@ -2600,6 +2497,183 @@ ks.test(log10(df$avg.mass[df$n.cont == "3+" & df$diet.carnivore.tot == TRUE]), l
 # data:  log10(df$avg.mass[df$n.cont == "3+" & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == "3+"])
 # D = 0.2, p-value = 1
 # alternative hypothesis: two-sided
+
+###### DELVING DEEPER ------
+##deeper look into dietary breadth of 3
+df.3 <- df[df$diet.breadth ==3,]
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                       df.3$diet.invertivore.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #152
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                       df.3$diet.carnivore.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #2
+
+length(df.3$binomial[df.3$diet.invertivore.tot == TRUE &
+                       df.3$diet.carnivore.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #18
+
+length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+                       df.3$diet.grazer.tot == TRUE &
+                       df.3$diet.frugivore.tot == TRUE]) #12
+
+table(df.3$n.cont) #180 on 1 continent, 6 on 2 continents
+
+##deeper look into those with dietary breadth of 2
+#only for diet.breadth == 2
+## total
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2]) #308
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.carnivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #0
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #702
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.invertivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #20
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.piscivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #0
+length(df$binomial[df$diet.grazer.tot == TRUE & 
+                     df$diet.carnivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #1
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2]) #2
+length(df$binomial[df$diet.frugivore.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2]) #58
+length(df$binomial[df$diet.piscivore.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2]) #0
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.invertivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #127
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #46
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.piscivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #4
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #452
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                     df$diet.piscivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #17
+length(df$binomial[df$diet.piscivore.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2]) #0
+
+##n.cont = 1
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #297
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #682
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.invertivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #20
+length(df$binomial[df$diet.grazer.tot == TRUE & 
+                     df$diet.carnivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #0
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #2
+length(df$binomial[df$diet.frugivore.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #54
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.invertivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #113
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #44
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.piscivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #4
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #424
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                     df$diet.piscivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 1]) #13
+
+##n.cont = 2
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 2]) #11
+length(df$binomial[df$diet.browser.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 2]) #20
+length(df$binomial[df$diet.grazer.tot == TRUE & 
+                     df$diet.carnivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 2]) #1
+length(df$binomial[df$diet.frugivore.tot == TRUE & 
+                     df$diet.grazer.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 2]) #4
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.invertivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 2]) #12
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 2]) #1
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 2]) #28
+length(df$binomial[df$diet.invertivore.tot == TRUE & 
+                     df$diet.piscivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == 2]) #4
+
+##n.cont = 3+
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.invertivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == "3+"]) #2
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                     df$diet.frugivore.tot == TRUE & 
+                     df$diet.breadth == 2 &
+                     df$n.cont == "3+"]) #1
+
+
+length(df$binomial[df$order == "Chiroptera" &
+                     df$n.cont == 2]) #142
+length(df$binomial[df$order == "Chiroptera" &
+                     df$n.cont == 2 &
+                     df$diet.frugivore.tot == TRUE]) #52
+length(df$binomial[df$order == "Chiroptera" &
+                     df$n.cont == 2 &
+                     df$diet.invertivore.tot == TRUE]) #106
+length(df$binomial[df$order == "Chiroptera" &
+                     df$n.cont == 2 &
+                     df$diet.carnivore.tot == TRUE]) #9
+length(df$binomial[df$order == "Chiroptera" &
+                     df$n.cont == 2 &
+                     df$diet.piscivore.tot== TRUE]) #2
 
 ###### DIET FIGURES -----
 #UNstacked bar graph
