@@ -231,7 +231,7 @@ mm.df %>%
             n.genus = length(unique(genus)),
             n.sp = length(unique(binomial)))
 
-#continent     n.order n.family n.genus  n.sp
+k#continent     n.order n.family n.genus  n.sp
 # Africa             16       56     303  1168
 # Australia          13       43     140   374
 # Eurasia            14       60     360  1201
@@ -531,9 +531,32 @@ df[c('log.mass')][sapply(df[c('log.mass')], is.infinite)] <- NA
 df$log.size.bin <- trunc(df$log.mass) #log10 size bins
 
 ##### WRITE DATA FOR ANALYSES -----
-write.csv(df, 
-          "./Data/data.for.analyses.csv",
-          row.names = FALSE)
+#write.csv(df, 
+#          "./Data/data.for.analyses.csv",
+#          row.names = FALSE)
+
+#### ABOUT DATA ----
+
+## continent of origin
+nrow(origin) #168
+nrow(origin[origin$continent != "",]) #159
+
+length(unique(df$family)) #135
+length(unique(df$family[df$family.origin != ""])) #128
+
+## dispersal information
+# dispersal age from PanTHERIA
+length(unique(df$binomial[!is.na(df$dispersal.age.d)])) #109
+# generation length from Pacifici
+length(unique(df$binomial[!is.na(df$GenerationLength_d)])) #3851
+
+## fossil ages
+# pbdb
+length(unique(df$genus[!is.na(df$foss.age)])) #390
+length(unique(df$binomial[df$foss.age > 0])) #662
+# faurby
+length(unique(df$genus[!is.na(df$age.median)])) #1027
+length(unique(df$binomial[!is.na(df$age.median)])) #3968
 
 #### BIASES IN DATA FOR ANALYSES ----
 
@@ -569,7 +592,8 @@ ggsave(bs.cont, file = paste0("./Figures/bodyMassDensityByContinent",".png"),
 
 #qualitatively similar
 
-## COUNT OF MISSING BODY MASS
+## COUNT OF BODY MASS
+nrow(df[!is.na(df$log.mass),]) #3317
 nrow(df[is.na(df$log.mass),]) #1069
 
 ## BY CLADE
@@ -578,8 +602,8 @@ nrow(df[is.na(df$log.mass),]) #1069
 
 ## FAMILY LEVEL COUNTS OF MISSING MASS DATA
 df.clade.mass <- df %>% 
-  group_by(family) %>% 
-  summarise(order = order[1],
+  group_by(order) %>% 
+  summarise(#order = order[1],
             n.mass = sum(!is.na(avg.mass)),
             n.na = sum(is.na(avg.mass)),
             percent = n.na/(n.na + n.mass),
@@ -786,6 +810,14 @@ write.csv(df.cont.foss,
           "./Results/DataExploration/foss.missing.cont.csv",
           row.names = FALSE)
 
+##### DISPERSAL ------
+table(df$log.size.bin[!is.na(df$dispersal.age.d)])
+# 1  2  3  4  5  6 
+# 3 24 44 24 12  2 
+table(df$log.size.bin[is.na(df$dispersal.age.d)])
+# 0    1    2    3    4    5    6    7 
+# 385 1312  696  392  229  148   44    2 
+
 ##### CONTINENT OF ORIGIN ------
 ## FAMILY ORIGIN
 
@@ -876,6 +908,7 @@ diet.counts <- df %>%
   dplyr::summarise_all(sum)
 
 unique(df$diet.breadth)
+table(df$diet.breadth)
 
 ## BY SIZE
 # which diet types are missing the most mass data?
@@ -1153,8 +1186,7 @@ lim.cont <- lim.disp %>%
                    N.Eurasia.North.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE]),
                    N.Eurasia.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.South.America == TRUE]),
                    N.South.America.North.America = length(continent.South.America[continent.South.America == TRUE & continent.North.America == TRUE])) %>%
-  as.data.frame() 
-lim.cont <- lim.cont[lim.cont$family.origin != "",]
+  as.data.frame()
 
 ##### CLOSER LOOK AT LIMITED DISPERSERS -----
 #eutherians v marsupial limited dispersals
@@ -1205,16 +1237,20 @@ df %>%
 nrow(df[df$family.origin == "Eurasia",])
 df %>% 
   group_by(n.cont) %>%
-  summarise(n.sp.af = sum(family.origin == "Africa")/319,
-            n.sp.na = sum(family.origin == "North.America")/636,
-            n.sp.aus = sum(family.origin == "Australia")/205,
-            n.sp.sa = sum(family.origin == "South.America")/658,
-            n.sp.ea = sum(family.origin == "Eurasia")/1754)
+  summarise(n.sp.af = sum(family.origin == "Africa"), #316 have Africa as origin
+            n.sp.na = sum(family.origin == "North.America"), #636 have as origin
+            n.sp.aus = sum(family.origin == "Australia"), #205 have as origin
+            n.sp.sa = sum(family.origin == "South.America"), #658 have as origin
+            n.sp.ea = sum(family.origin == "Eurasia")) #1754
 
 unique(df$family[df$family.origin == ""]) #only 7 families; most small groups but really diverse
 # Molossidae, Muridae, and Sciuridae are super diverse
 length(df$binomial[df$family == "Muridae"]) #486
 length(df$binomial[df$family == "Sciuridae"]) #227
+
+nrow(df[df$n.cont == 2 & df$family == "Molossidae",]) #19
+nrow(df[df$n.cont == 2 & df$family == "Sciuridae",]) #2
+nrow(df[df$n.cont == 2 & df$family == "Muridae",]) #14
 
 homies <- df[df$n.cont == 1,]
 limited <- df[df$n.cont == 2,]
