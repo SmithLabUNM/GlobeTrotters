@@ -20,7 +20,8 @@ require(stringr)
 #Eurasia = #F2CDA0; dark #A68C6D
 #Australia = #D9967E; dark #8C6151
 
-col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+cont_col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+cont_bw <- c("gray72", "gray47", "black")
 
 plot_theme <- theme(panel.grid = element_blank(), 
                     aspect.ratio = .75, #adjust as needed
@@ -231,7 +232,7 @@ mm.df %>%
             n.genus = length(unique(genus)),
             n.sp = length(unique(binomial)))
 
-k#continent     n.order n.family n.genus  n.sp
+#continent     n.order n.family n.genus  n.sp
 # Africa             16       56     303  1168
 # Australia          13       43     140   374
 # Eurasia            14       60     360  1201
@@ -633,12 +634,27 @@ length(unique(df$genus[df$foss.age >= 0])) #391
 length(unique(df$binomial[df$foss.age >= 0])) #662
 nrow(df[is.na(df$foss.age),]) #3725
 
+length(unique(df$binomial[df$foss.age >= 0 &
+                          df$n.cont == 1])) #574
+length(unique(df$binomial[df$foss.age >= 0 &
+                            df$n.cont == 2])) #84
+length(unique(df$binomial[df$foss.age >= 0 &
+                            df$n.cont == "3+"])) #6
+
 ## FAURBY COUNTS
 length(unique(df$order[df$age.median >= 0]))  #30
 length(unique(df$family[df$age.median >= 0])) #136
 length(unique(df$genus[df$age.median >= 0])) #1028
 length(unique(df$binomial[df$age.median >= 0])) #3969
 nrow(df[is.na(df$age.median),]) #418
+
+length(unique(df$binomial[df$age.median >= 0 &
+                            df$n.cont == 1])) #3712
+length(unique(df$binomial[df$age.median >= 0 &
+                            df$n.cont == 2])) #252
+length(unique(df$binomial[df$age.median >= 0 &
+                            df$n.cont == "3+"])) #6
+
 
 ## BY SIZE
 
@@ -811,6 +827,8 @@ write.csv(df.cont.foss,
           row.names = FALSE)
 
 ##### DISPERSAL ------
+nrow(df[!is.na(df$dispersal.age.d),])
+
 table(df$log.size.bin[!is.na(df$dispersal.age.d)])
 # 1  2  3  4  5  6 
 # 3 24 44 24 12  2 
@@ -818,10 +836,15 @@ table(df$log.size.bin[is.na(df$dispersal.age.d)])
 # 0    1    2    3    4    5    6    7 
 # 385 1312  696  392  229  148   44    2 
 
+nrow(df[!is.na(df$dispersal.age.d),]) #109
+nrow(df[!is.na(df$GenerationLength_d),]) #3851
+
 ##### CONTINENT OF ORIGIN ------
 ## FAMILY ORIGIN
 
 length(unique(df$family[df$family.origin != ""])) #128
+nrow(df[df$family.origin != "",]) #3572
+
 length(unique(df$family[df$family.origin == ""])) #7
 length(df$binomial[df$family.origin == ""]) #814
 table(df$order[df$family.origin == ""])
@@ -831,10 +854,23 @@ table(df$order[df$family.origin == ""])
 length(unique(df$family[df$family.origin == "" & df$order == "Chiroptera"])) #2
 unique(df$family[df$family.origin == "" & df$order == "Chiroptera"]) 
 #Molossidae and Nycteridae
+nrow(df[df$family.origin == "" &
+          df$family == "Molossidae",])
+
+nrow(df[df$family.origin == "" &
+          df$family == "Nycteridae",])
 
 length(unique(df$family[df$family.origin == "" & df$order == "Rodentia"])) #2
 unique(df$family[df$family.origin == "" & df$order == "Rodentia"]) 
 #Muridae and Sciuridae
+nrow(df[df$family.origin == "" &
+          df$family == "Muridae",])
+nrow(df[df$family.origin == "" &
+          df$family == "Sciuridae",])
+
+table(df$n.cont[df$family == "Muridae"])
+table(df$n.cont[df$family == "Sciuridae"])
+
 
 ## COUNTS BY CONTINENT
 nrow(df[df$family.origin != "",]) #3572
@@ -1249,8 +1285,11 @@ length(df$binomial[df$family == "Muridae"]) #486
 length(df$binomial[df$family == "Sciuridae"]) #227
 
 nrow(df[df$n.cont == 2 & df$family == "Molossidae",]) #19
+#3 Molossidae on Africa and Eurasia, the rest are on N & S america
 nrow(df[df$n.cont == 2 & df$family == "Sciuridae",]) #2
 nrow(df[df$n.cont == 2 & df$family == "Muridae",]) #14
+#all Muridae on Africa and Eurasia
+
 
 homies <- df[df$n.cont == 1,]
 limited <- df[df$n.cont == 2,]
@@ -2094,15 +2133,66 @@ ggplot() + #do histogram; .25 log
                colour = "#e5f5f9", fill = "#e5f5f9",
                binwidth = .25) +
   plot_theme +
-  theme(legend.position = c(0.85, 0.82)) +
-  scale_fill_manual(values = col, 
+  theme(legend.position = c(0.6, 0.82)) +
+  scale_fill_manual(values = cont_col, 
                     name="Number of Continents",
-                    labels = c("homebodies",
-                               "limited dispersers",
-                               "globetrotters")) +
-  scale_y_continuous(name = "Density") +
+                    labels = c("1",
+                               "2",
+                               "3+")) +
+  scale_y_continuous(name = "Count") +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
 
+ggplot(df) + #do histogram; .25 log 
+  geom_histogram(aes(log.mass, 
+                 group = n.cont,
+                 colour = n.cont, fill = n.cont),
+                 binwidth = .25) +
+  #geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
+  #               colour = "#99d8c9", fill = "#99d8c9",
+  #               binwidth = .25) +
+  #geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
+  #               colour = "#e5f5f9", fill = "#e5f5f9",
+  #               binwidth = .25) +
+  plot_theme +
+  theme(legend.position = c(0.8, 0.6)) +
+  scale_fill_manual(values = cont_col, 
+                    name="Number of Continents",
+                    labels = c("1",
+                               "2",
+                               "3+")) +
+  scale_color_manual(values = cont_col, 
+                    name="Number of Continents",
+                    labels = c("1",
+                               "2",
+                               "3+")) +
+  scale_y_continuous(name = "Count") +
+  scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+
+ggplot(df) + #do histogram; .25 log 
+  geom_histogram(aes(log.mass, 
+                     group = n.cont,
+                     colour = n.cont, fill = n.cont),
+                 binwidth = .25) +
+  #geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
+  #               colour = "#99d8c9", fill = "#99d8c9",
+  #               binwidth = .25) +
+  #geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
+  #               colour = "#e5f5f9", fill = "#e5f5f9",
+  #               binwidth = .25) +
+  plot_theme +
+  theme(legend.position = c(0.8, 0.6)) +
+  scale_fill_manual(values = cont_bw, 
+                    name="Number of Continents",
+                    labels = c("1",
+                               "2",
+                               "3+")) +
+  scale_color_manual(values = cont_bw, 
+                     name="Number of Continents",
+                     labels = c("1",
+                                "2",
+                                "3+")) +
+  scale_y_continuous(name = "Count") +
+  scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
 
 ##### 1 v 2+ -----
 
@@ -2729,8 +2819,6 @@ length(df$binomial[df$order == "Chiroptera" &
 
 #Continent as x axis for continent and y for diet
 
-col <- c("gray72", "gray47", "black")
-
 ##DIET BREADTH
 dietbreadth_bargraph <- plyr::ddply(df, c("n.cont", "diet.breadth"), function(x){
   nrow(x)
@@ -2753,13 +2841,11 @@ dietbreadth_bargraph_full$n.cont <- factor(dietbreadth_bargraph_full$n.cont,    
 ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth, 
                                       y = prop, 
                                       fill = n.cont)) + 
-  scale_fill_manual(values = c("1" = "black",
-                               "2" = "gray47",
-                               "3+" = "gray72"),
+  scale_fill_manual(values = cont_bw,
                     name = "Number of Continents",
-                    labels = c("Homebodies",
-                               "Limited dispersers",
-                               "Globetrotters")) +
+                    labels = c("1",
+                               "2",
+                               "3+")) +
   geom_bar(stat = "identity") +
   xlab("Dietary Breadth") + 
   ylab("Proportion") + 
@@ -2767,29 +2853,33 @@ ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth,
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) + 
   plot_theme + theme(panel.border = element_rect(fill = NA),
                     strip.background = element_rect(fill = NA),
-                    legend.position = c(1.15, 0.5)) +
+                    legend.position = c(0.82, 0.8)) +
   theme(axis.title.y = element_text(margin = margin(r = 5)))
 
-ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth, y = prop, fill = as.factor(n.cont))) + 
+ggplot(dietbreadth_bargraph_full, 
+       aes(x = diet.breadth, y = prop, 
+           fill = as.factor(n.cont))) + 
   geom_bar(stat = "identity", position = "dodge", color="black") +
   scale_fill_manual(name = "Number of Continents", 
-                    labels = c("Homebodies",
-                               "Limited dispersers",
-                               "Globetrotters"),
-                    values = col) +
+                    labels = c("1",
+                               "2",
+                               "3+"),
+                    values = cont_col) +
   xlab("\n\nDietary Breadth") + 
   ylab("Proportion") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) + 
   plot_theme + theme(panel.border = element_rect(fill = NA),
                      strip.background = element_rect(fill = NA),
-                     legend.position = c(1.15, 0.5)) +
+                     legend.position = c(.85, 0.8)) +
   theme(axis.title.y = element_text(margin = margin(r = 5)))
 
 ## x axis = continent, y axis = diet
 
-ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth, y = prop, fill = as.factor(n.cont))) + 
+ggplot(dietbreadth_bargraph_full, 
+       aes(x = diet.breadth, y = prop, 
+           fill = as.factor(n.cont))) + 
   geom_bar(stat = "identity", position = "dodge", color="black") +
-  scale_fill_manual("Continents", values = col) +
+  scale_fill_manual("Continents", values = cont_col) +
   xlab("\n\nDietary Breadth") + 
   ylab("Proportion") + 
   theme(legend.position = "none") + 
@@ -2830,7 +2920,9 @@ diettype_bargraph_full$tots[diettype_bargraph_full$numconts == "3+"] <- sum(diet
 diettype_bargraph_full$prop <- diettype_bargraph_full$V1 / diettype_bargraph_full$tots
 
 #show as proportions
-ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = numconts)) + 
+ggplot(diettype_bargraph_full, 
+       aes(x = diettype, y = prop, 
+           fill = numconts)) + 
   geom_bar(stat = "identity") +
   xlab("Diet Type") + 
   ylab("Proportion") + 
@@ -2842,9 +2934,9 @@ ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = numconts)) +
                                   "2" = "gray47",
                                   "3+" = "gray72"),
                        name = "Number of Continents",
-                       labels = c("Homebodies",
-                                  "Limited dispersers",
-                                  "Globetrotters")) +
+                       labels = c("1",
+                                  "2",
+                                  "3+")) +
   geom_col(position = position_stack(reverse = TRUE)) +
   plot_theme +
   theme(panel.border = element_rect(fill = NA),
@@ -2858,13 +2950,15 @@ diettype_bargraph_full$diettype <- factor(diettype_bargraph_full$diettype,
                                           levels=c("diet.browser.tot", "diet.grazer.tot", "diet.frugivore.tot",
                                                    "diet.carnivore.tot", "diet.piscivore.tot", "diet.invertivore.tot"))
 
-ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = as.factor(numconts))) + 
+ggplot(diettype_bargraph_full, 
+       aes(x = diettype, y = prop, 
+           fill = as.factor(numconts))) + 
   geom_bar(stat = "identity", position = "dodge", color="black") +
   scale_fill_manual(name = "Number of Continents",
-                    labels = c("Homebodies",
-                               "Limited dispersers",
-                               "Globetrotters"),
-                    values = col) +
+                    labels = c("1",
+                               "2",
+                               "3+"),
+                    values = cont_col) +
   xlab("Diet Type") + 
   ylab("Proportion") + 
   scale_x_discrete(labels=c("diet.browser.tot" = "Browser", 
@@ -2877,7 +2971,7 @@ ggplot(diettype_bargraph_full, aes(x = diettype, y = prop, fill = as.factor(numc
   plot_theme + 
   theme(panel.border = element_rect(fill=NA),
                     strip.background = element_rect(fill=NA),
-                    legend.position = c(1.15, 0.5)) +
+                    legend.position = c(.3, 0.8)) +
   theme(axis.title.y = element_text(margin = margin(r = 5)))
 
 #### H6: GEOGRAPHIC RANGE SIZE ----
