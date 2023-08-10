@@ -10,6 +10,7 @@ require(tidyr)
 require(reshape2)
 require(ggplot2)
 require(stringr)
+library(gcookbook)
 
 #### PLOT THEME ----
 
@@ -588,8 +589,8 @@ bs.cont <- ggplot() +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
   scale_y_continuous(name = "Density")
 
-ggsave(bs.cont, file = paste0("./Figures/bodyMassDensityByContinent",".png"), 
-       width = 14, height = 10, units = "cm")
+#ggsave(bs.cont, file = paste0("./Figures/bodyMassDensityByContinent",".png"), 
+#       width = 14, height = 10, units = "cm")
 
 #qualitatively similar
 
@@ -614,9 +615,9 @@ df.clade.mass <- df %>%
 ## HOW MANY ORDERS?
 unique(df.clade.mass$order) #29
 
-write.csv(df.clade.mass,
-          "./Results/clade.missing.mass.csv",
-          row.names = FALSE)
+#write.csv(df.clade.mass,
+#          "./Results/clade.missing.mass.csv",
+#          row.names = FALSE)
 
 ## BY CONTINENT
 ## are certain continents more affected by this missing data?
@@ -667,8 +668,8 @@ foss.na <- ggplot() +
   scale_y_continuous(name = "Number of Missing Mass Values")
 #missing a lot of younger fossils, actually
 
-ggsave(foss.na, file = paste0("./Figures/PBDBfossilAgeMissing",".png"), 
-       width = 14, height = 10, units = "cm")
+#ggsave(foss.na, file = paste0("./Figures/PBDBfossilAgeMissing",".png"), 
+#       width = 14, height = 10, units = "cm")
 
 # FAURBY
 phyl.na <- ggplot() +
@@ -678,8 +679,8 @@ phyl.na <- ggplot() +
   scale_y_continuous(name = "Number of Missing Mass Values")
 #missing a lot of younger fossils, actually
 
-ggsave(phyl.na, file = paste0("./Figures/PhyloAgeMissing",".png"), 
-       width = 14, height = 10, units = "cm")
+#ggsave(phyl.na, file = paste0("./Figures/PhyloAgeMissing",".png"), 
+#       width = 14, height = 10, units = "cm")
 
 ## WHICH SIZES DO WE HAVE FOSSIL AGES FOR?
 # PBDB
@@ -690,8 +691,8 @@ size.fossil.na <- ggplot() +
   scale_y_continuous(name = "Number of Missing Age Values")
 #missing a lot of smaller bodied organisms, of course
 
-ggsave(size.fossil.na, file = paste0("./Figures/FossilSizeMissing",".png"), 
-       width = 14, height = 10, units = "cm")
+#ggsave(size.fossil.na, file = paste0("./Figures/FossilSizeMissing",".png"), 
+#       width = 14, height = 10, units = "cm")
 
 # FAURBY
 size.phylo.na <- ggplot() +
@@ -701,8 +702,8 @@ size.phylo.na <- ggplot() +
   scale_y_continuous(name = "Number of Missing Age Values")
 #missing a size classes from all over...looks weird
 
-ggsave(size.phylo.na, file = paste0("./Figures/PhyloSizeMissing",".png"), 
-       width = 14, height = 10, units = "cm")
+#ggsave(size.phylo.na, file = paste0("./Figures/PhyloSizeMissing",".png"), 
+#       width = 14, height = 10, units = "cm")
 
 ## COUNTS BY LOG SIZE BIN
 df.mass.age <- df %>% 
@@ -715,9 +716,9 @@ df.mass.age <- df %>%
             phyl.per = n.phyl.na/(n.phyl.na + n.phyl.age)) %>% 
   as.data.frame()
 
-write.csv(df.mass.age,
-          "./Results/age.missing.mass.csv",
-          row.names = FALSE)
+#write.csv(df.mass.age,
+#          "./Results/age.missing.mass.csv",
+#          row.names = FALSE)
 
 ## CORRELATION OF BODY MASS AND AGE?
 #want to look for coverage in species (genus) age
@@ -731,8 +732,8 @@ foss.age.lm <- ggplot() +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
   scale_y_continuous(name = "Fossil Age (Genus)")
 
-ggsave(foss.age.lm , file = paste0("./Figures/lm.fossil.age",".png"), 
-       width = 14, height = 10, units = "cm")
+#ggsave(foss.age.lm , file = paste0("./Figures/lm.fossil.age",".png"), 
+#       width = 14, height = 10, units = "cm")
 
 summary(lm(df$foss.age ~ df$avg.mass)) #p-value: 3.173e-07; Adjusted R-squared: 0.03849
 
@@ -745,8 +746,8 @@ phyl.age.lm <- ggplot() +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
   scale_y_continuous(name = "Median Phylogenetic Age (Genus)")
 
-ggsave(phyl.age.lm , file = paste0("./Figures/lm.phylo.age",".png"), 
-       width = 14, height = 10, units = "cm")
+#ggsave(phyl.age.lm , file = paste0("./Figures/lm.phylo.age",".png"), 
+#       width = 14, height = 10, units = "cm")
 
 summary(lm(df$age.median ~ df$avg.mass)) #p-value: 0.001473; Adjusted R-squared: 0.002964
 
@@ -765,9 +766,9 @@ df.clade.foss <- df %>%
             avg.size = mean(avg.mass, na.rm = TRUE)) %>% 
   as.data.frame()
 
-write.csv(df.clade.foss,
-          "./Results/foss.missing.clade.csv",
-          row.names = FALSE)
+#write.csv(df.clade.foss,
+#          "./Results/foss.missing.clade.csv",
+#          row.names = FALSE)
 
 ## BY CONTINENT
 
@@ -822,9 +823,9 @@ df.cont.foss <- cbind(foss.Africa, foss.Africa.na, per.foss.missing.Africa,
                       foss.South.America, foss.South.America.na, per.foss.missing.South.America,
                       phyl.South.America, phyl.South.America.na, per.phyl.missing.South.America)
 
-write.csv(df.cont.foss,
-          "./Results/DataExploration/foss.missing.cont.csv",
-          row.names = FALSE)
+#write.csv(df.cont.foss,
+#          "./Results/DataExploration/foss.missing.cont.csv",
+#          row.names = FALSE)
 
 ##### DISPERSAL ------
 nrow(df[!is.na(df$dispersal.age.d),])
@@ -932,9 +933,9 @@ df.cont.mass <- cbind(mass.Africa, mass.Africa.na, per.Africa.missing.mass,
                       mass.North.America, mass.North.America.na, per.North.America.missing.mass,
                       mass.South.America, mass.South.America.na, per.South.America.missing.mass)
 
-write.csv(df.cont.mass,
-          "./Results/cont.missing.mass.csv",
-          row.names = FALSE)
+#write.csv(df.cont.mass,
+#          "./Results/cont.missing.mass.csv",
+#          row.names = FALSE)
 
 ##### DIET TYPE ----
 
@@ -983,9 +984,9 @@ df.diet.mass <- df.diet %>%
             per = n.na/(n.na+n.mass)) %>% 
   as.data.frame()
 
-write.csv(df.diet.mass,
-          "./Results/diet.missing.mass.csv",
-          row.names = FALSE)
+#write.csv(df.diet.mass,
+#          "./Results/diet.missing.mass.csv",
+#          row.names = FALSE)
 
 ##### DIET BREADTH ----
 
@@ -1192,9 +1193,9 @@ indeces[3,5] <- sorensen(x = df$binomial[df$continent.Eurasia == TRUE],
                          y = df$binomial[df$continent.Australia == TRUE])
 indeces[4,5] <- sorensen(x = df$binomial[df$continent.Africa == TRUE], 
                          y = df$binomial[df$continent.Australia == TRUE])
-write.csv(indeces, 
-          "./Results/sorensen.index.csv",
-          row.names = FALSE)
+#write.csv(indeces, 
+#          "./Results/sorensen.index.csv",
+#          row.names = FALSE)
 
 ##which two continents are limited dispersers on?
 df[df$n.cont == 2,] %>%
@@ -1342,9 +1343,9 @@ homies.origin$prop.jump[homies.origin$family.origin == "Eurasia"] <- as.numeric(
 homies.origin$prop.stay[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.Eurasia[homies.origin$family.origin == "Eurasia"])/as.numeric(sum(homies.origin$N))
 homies.origin$prop.leave[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Eurasia"])/as.numeric(sum(homies.origin$N))
 
-write.csv(homies.origin, 
-          "./Results/homies.family.origin.csv",
-          row.names = FALSE)
+#write.csv(homies.origin, 
+#          "./Results/homies.family.origin.csv",
+#          row.names = FALSE)
 
 unique(homies$order[homies$family.origin == "Africa"])
 
@@ -1361,9 +1362,9 @@ homies.origin.melt$family.origin.per <- paste(homies.origin.melt$family.origin,
                                               homies.origin.melt$per,
                                               sep = ".")
 
-write.csv(homies.origin.melt,
-          "./Results/homebodies.origin.results.csv",
-          row.names = FALSE)
+#write.csv(homies.origin.melt,
+#          "./Results/homebodies.origin.results.csv",
+#          row.names = FALSE)
 
 ##pie chart
 ## COLOR SCHEME
@@ -1516,9 +1517,9 @@ limited.cont$prop.leave[limited.cont$family.origin == "South.America"] <- (limit
 
 
 sum(limited.cont$prop.leave)+sum(limited.cont$prop.stay)
-write.csv(limited.cont, 
-          "./Results/limited.family.origin.csv",
-          row.names = FALSE)
+#write.csv(limited.cont, 
+#          "./Results/limited.family.origin.csv",
+#          row.names = FALSE)
 
 ##FIGURE
 limited.cont$per.stay <- as.numeric(limited.cont$prop.stay)*100
@@ -1604,9 +1605,9 @@ trotter.cont <- trotter %>%
                    N.Africa.Eurasia.Australia = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE & continent.Australia == TRUE])) %>%
   as.data.frame() 
 trotter.cont <- trotter.cont[trotter.cont$family.origin != "",]
-write.csv(trotter.cont, 
-          "./Results/trotter.family.origin.csv",
-          row.names = FALSE)
+#write.csv(trotter.cont, 
+#          "./Results/trotter.family.origin.csv",
+#          row.names = FALSE)
 
 length(df$binomial[df$family.origin == "South.America"]) #658
 length(df$binomial[df$family.origin == "South.America" &
@@ -1932,9 +1933,9 @@ df.family <- arrange(df.family, p.trot) %>%
                 signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
                 signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
 
-write.csv(df.family, 
-          "./Results/family.results.csv",
-          row.names = FALSE)
+#write.csv(df.family, 
+#          "./Results/family.results.csv",
+#          row.names = FALSE)
 
 ##maybe do at order level; maybe don't care about continent of origin for order because too far in past, and families maybe sp w/in families more ecol similar and so behave similarly
 
@@ -2120,17 +2121,19 @@ max(df$avg.mass[df$order == "Carnivora" &
 
 ##### FIGURE ----
 
-#col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+cb_viridis <- c("#FDE725FF", #3+
+                "#1F9E89FF", #2 
+                "#482878FF") #1 
 
 ggplot() + #do histogram; .25 log 
   geom_histogram(aes(df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)]), 
-               colour = "#2ca25f", fill = "#2ca25f",
+               colour = "#482878FF", fill = "#482878FF",
                binwidth = .25) +
   geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
-               colour = "#99d8c9", fill = "#99d8c9",
+               colour = "#1F9E89FF", fill = "#1F9E89FF",
                binwidth = .25) +
   geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
-               colour = "#e5f5f9", fill = "#e5f5f9",
+               colour = "#FDE725FF", fill = "#FDE725FF",
                binwidth = .25) +
   plot_theme +
   theme(legend.position = c(0.6, 0.82)) +
@@ -2334,9 +2337,9 @@ df.breadth <- arrange(df.breadth, p.trot) %>%
                 signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
                 signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
 
-write.csv(df.breadth, 
-          "./Results/diet.breadth.results.csv",
-          row.names = FALSE)
+#write.csv(df.breadth, 
+#          "./Results/diet.breadth.results.csv",
+#         row.names = FALSE)
 
 #include trot.N, null prop, expected, observed-expected, (O-E)^2, (O-E)^2/exp, X crit, p
 
@@ -2359,9 +2362,9 @@ df.diet.stats <- df %>%
             graz.frug = length(df$binomial[df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"])) %>%
   as.data.frame()
 
-write.csv(df.diet.stats,
-          "./Results/diet.summary.csv",
-          row.names = FALSE)
+#write.csv(df.diet.stats,
+#          "./Results/diet.summary.csv",
+#          row.names = FALSE)
 
 ##deeper look into dietary breadth of 3
 df.3 <- df[df$diet.breadth ==3,]
@@ -2604,9 +2607,9 @@ df.diet <- arrange(df.diet, p.trot) %>%
                 signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
                 signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
 
-write.csv(df.diet, 
-          "./Results/diet.results.csv",
-          row.names = FALSE)
+#write.csv(df.diet, 
+#          "./Results/diet.results.csv",
+#          row.names = FALSE)
 
 #test if carnivorans of n=2 and n=3+ are larger than expected
 ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]))
@@ -2816,7 +2819,9 @@ length(df$binomial[df$order == "Chiroptera" &
 
 ###### DIET FIGURES -----
 #UNstacked bar graph
-
+cb_viridis <- c("#FDE725FF", #3+
+                "#1F9E89FF", #2 
+                "#482878FF") #1 
 #Continent as x axis for continent and y for diet
 
 ##DIET BREADTH
@@ -2864,7 +2869,7 @@ ggplot(dietbreadth_bargraph_full,
                     labels = c("1",
                                "2",
                                "3+"),
-                    values = cont_col) +
+                    values = cb_viridis) +
   xlab("\n\nDietary Breadth") + 
   ylab("Proportion") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) + 
@@ -2879,7 +2884,8 @@ ggplot(dietbreadth_bargraph_full,
        aes(x = diet.breadth, y = prop, 
            fill = as.factor(n.cont))) + 
   geom_bar(stat = "identity", position = "dodge", color="black") +
-  scale_fill_manual("Continents", values = cont_col) +
+  scale_fill_manual("Continents", 
+                    values = cb_viridis) +
   xlab("\n\nDietary Breadth") + 
   ylab("Proportion") + 
   theme(legend.position = "none") + 
@@ -2958,7 +2964,7 @@ ggplot(diettype_bargraph_full,
                     labels = c("1",
                                "2",
                                "3+"),
-                    values = cont_col) +
+                    values = cb_viridis) +
   xlab("Diet Type") + 
   ylab("Proportion") + 
   scale_x_discrete(labels=c("diet.browser.tot" = "Browser", 
