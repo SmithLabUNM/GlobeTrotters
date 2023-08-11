@@ -716,6 +716,13 @@ df.mass.age <- df %>%
             phyl.per = n.phyl.na/(n.phyl.na + n.phyl.age)) %>% 
   as.data.frame()
 
+df$age.TF <- FALSE
+df$age.TF[!is.na(df$age.median)] <- TRUE
+df$age.TF[!is.na(df$foss.age)] <- TRUE
+
+anova(lm(age.TF ~ log.size.bin,
+         data = df)) #sig
+
 #write.csv(df.mass.age,
 #          "./Results/age.missing.mass.csv",
 #          row.names = FALSE)
