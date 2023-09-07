@@ -1112,6 +1112,12 @@ nrow(df[df$family.origin == "North.America" &
 #8 species similar to fox (including fox)
 # only 1, the golden jackal, on 2 continents; the rest on 1
 # maybe low speciation for foxes or high enough pop density to maintain and not separate
+fox.sp <- df$binomial[df$family.origin == "North.America" & 
+               df$log.size.bin == 3 & 
+               df$diet.carnivore.tot == TRUE & 
+               df$diet.invertivore.tot == TRUE &
+               df$diet.breadth == 2]
+View(mm.df[mm.df$binomial %in% fox.sp,])
 
 ## Ursus arctos
 nrow(df[df$family.origin == "North.America" & 
@@ -1139,12 +1145,24 @@ nrow(df[df$family.origin == "Eurasia" &
 # 13 species (including Mustela are similar)
 # 1 on two; the rest on 1
 
+must.sp <- df$binomial[df$family.origin == "Eurasia" & 
+                df$log.size.bin == 2 & 
+                df$diet.carnivore.tot == TRUE & 
+                df$diet.invertivore.tot == TRUE &
+                df$diet.breadth == 2]
+View(mm.df[mm.df$binomial %in% must.sp,])
+
 ## Cervus elaphus
 nrow(df[df$family.origin == "Eurasia" & 
           df$log.size.bin == 5 & 
           df$diet.browser.tot == TRUE & 
           df$diet.breadth == 1,])
 # 16 things similar (including Cervus elephas)
+cerv.sp <- df$binomial[df$family.origin == "Eurasia" & 
+                df$log.size.bin == 5 & 
+                df$diet.browser.tot == TRUE & 
+                df$diet.breadth == 1]
+View(mm.df[mm.df$binomial %in% cerv.sp,])
 
 ## Panthera leo
 df[df$family.origin == "Eurasia" & 
@@ -1152,6 +1170,12 @@ df[df$family.origin == "Eurasia" &
    df$diet.carnivore.tot == TRUE & 
    df$diet.breadth == 1,]
 #6 things including P. leo similar; all Felids
+
+fel.sp <- df$binomial[df$family.origin == "Eurasia" & 
+               df$log.size.bin == 5 & 
+               df$diet.carnivore.tot == TRUE & 
+               df$diet.breadth == 1]
+View(mm.df[mm.df$binomial %in% fel.sp,])
 
 ## Miniopterus schreibersii
 yy <- df[df$family.origin == "North.America" & 
@@ -1168,6 +1192,9 @@ nrow(yy[yy$continent.North.America == TRUE,]) #16
 nrow(yy[yy$continent.South.America == TRUE,]) #9
 nrow(yy[yy$continent.Eurasia == TRUE,]) #32
 nrow(yy[yy$continent.Australia == TRUE,]) #8
+bat.sp <- yy$binomial
+View(mm.df[mm.df$binomial %in% bat.sp,])
+
 
 #### H1: CONNECTIVITY ----
 
