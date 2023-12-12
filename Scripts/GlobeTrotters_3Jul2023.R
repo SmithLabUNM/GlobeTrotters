@@ -224,6 +224,122 @@ total <- length(unique(mm.df$binomial)) #5736
 
 (domesticated/total)*100 #0.05%
 
+intro <- mm.df[mm.df$extant.status == "introduction" |
+                   mm.df$extant.status == "domesticated",]
+intro <- intro[intro$continent != "Insular",]
+
+intro <- intro %>% 
+    mutate(Africa = continent == "Africa",
+           North.America = continent == "North.America",
+           South.America = continent == "South.America",
+           Eurasia = continent == "Eurasia",
+           Australia = continent == "Australia")
+
+intro.sums <- intro %>%
+    group_by(binomial) %>%
+    dplyr::summarise(diet.invertivore.tot = isTRUE(sum(diet.invertivore) > 0),
+                     diet.carnivore.tot = isTRUE(sum(diet.carnivore) > 0),
+                     diet.browser.tot = isTRUE(sum(diet.browser) > 0), 
+                     diet.grazer.tot = isTRUE(sum(diet.grazer) > 0),
+                     diet.piscivore.tot = isTRUE(sum(diet.piscivore) > 0),
+                     diet.frugivore.tot = isTRUE(sum(diet.frugivore) > 0),
+                     avg.mass = mean(mass, na.rm = TRUE),
+                     n.cont = length(unique(continent)),
+                     iucn = iucn.status[1])
+
+intro.continent <- intro %>%
+    group_by(binomial) %>%
+    dplyr::summarise(continent.Africa = as.logical(sum(Africa)),
+                     continent.North.America = as.logical(sum(North.America)),
+                     continent.South.America = as.logical(sum(South.America)),
+                     continent.Eurasia = as.logical(sum(Eurasia)),
+                     continent.Australia = as.logical(sum(Australia)))
+
+intro.taxa <- intro[!duplicated(intro$binomial),] %>%
+    dplyr::select(order,
+                  family,
+                  genus,
+                  species,
+                  binomial)
+
+intro.sumTaxa <- left_join(intro.taxa, intro.sums,
+                           by = "binomial")
+intro.contTaxaSums <- left_join(intro.sumTaxa, intro.continent,
+                                by = "binomial")
+
+intro.contTaxaSums$diet.breadth <- intro.contTaxaSums %>%
+    dplyr::select(starts_with("diet.")) %>% 
+    rowSums()
+table(intro.contTaxaSums$diet.breadth)
+# 1  2  3 
+# 18 9  2 
+
+intro.contTaxaSums$n.cont <- intro.contTaxaSums %>%
+    dplyr::select(starts_with("continent.")) %>%
+    rowSums()
+table(intro.contTaxaSums$n.cont)
+# 1    2    3    5 
+# 18   3    7    1 
+intro.contTaxaSums$binomial[intro.contTaxaSums$n.cont == 5] #Felis catus
+
+length(unique(intro$binomial)) #29
+nrow(intro.contTaxaSums) #29
+
+write.csv(intro.contTaxaSums,
+          "./Results/invasive.species.csv",
+          row.names = FALSE)
+
+unique(intro.contTaxaSums$binomial)
+range(intro.contTaxaSums$avg.mass, na.rm = TRUE)
+#16.5 900000.0
+median(intro.contTaxaSums$avg.mass, na.rm = TRUE) #48500 (log10: 4.69)
+mean(intro.contTaxaSums$avg.mass, na.rm = TRUE) #179554.4 (log10: 5.25)
+ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(log10(intro.contTaxaSums$avg.mass)), 
+                   colour = "gray", fill = "gray",
+                   binwidth = .25) +
+    plot_theme +
+    theme(legend.position = c(0.8, 0.6)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+#sampling from most bins, more in bins 4.25 to 6; most in 4.75
+
+table(intro.contTaxaSums$diet.breadth)
+# 1  2  3 
+# 18 9  2 
+
+intro.contTaxaSums %>%
+    dplyr::group_by(n.cont, diet.breadth) %>%
+    dplyr::summarise(n = n())
+#no real difference in dietary breadth if you're on 1 or 2 continents
+#sp on 3 continents more often have dietary breadth of 1 (5 total) than 2 (2 total)
+#the one sp on 5 continents have dietary breadth of 1
+
+intro.contTaxaSums %>%
+    dplyr::group_by(n.cont) %>%
+    dplyr::summarise(n.carn = sum(diet.carnivore.tot == TRUE),
+                     n.invert = sum(diet.invertivore.tot == TRUE),
+                     n.frug = sum(diet.frugivore.tot == TRUE),
+                     n.graz = sum(diet.grazer.tot == TRUE),
+                     n.brows = sum(diet.browser.tot == TRUE),
+                     n.pisc = sum(diet.piscivore.tot == TRUE))
+#1 continent: highest is brows (11), followed by invert (5)
+#2 continent: even (2) for both brows and graz
+#3 continent: (4) for graz, (3) for brows, and (2) frug
+#5 continent: 1 carn (because domestic cat)
+
+intro.contTaxaSums %>%
+    dplyr::group_by(n.cont, family) %>%
+    dplyr::summarise(n = n())
+
+intro.contTaxaSums %>%
+    dplyr::group_by(n.cont, order) %>%
+    dplyr::summarise(n = n())
+
+table(intro.contTaxaSums$order)
+# Artiodactyla    Carnivora      Lagomorpha     Perissodactyla    Rodentia   Soricomorpha 
+# 14              5              2              2                 5          1 
+
 ###### BY CONTINENT ------
 
 mm.df %>% 
@@ -879,7 +995,6 @@ nrow(df[df$family.origin == "" &
 table(df$n.cont[df$family == "Muridae"])
 table(df$n.cont[df$family == "Sciuridae"])
 
-
 ## COUNTS BY CONTINENT
 nrow(df[df$family.origin != "",]) #3572
 df %>%
@@ -1195,7 +1310,6 @@ nrow(yy[yy$continent.Australia == TRUE,]) #8
 bat.sp <- yy$binomial
 View(mm.df[mm.df$binomial %in% bat.sp,])
 
-
 #### H1: CONNECTIVITY ----
 
 #calculate sørensen index
@@ -1276,6 +1390,23 @@ length(unique(df$binomial[df$order == "Didelphimorphia" &
 length(unique(df$binomial[df$continent.South.America == TRUE])) #1200
 length(unique(df$binomial[df$continent.South.America == TRUE &
                             df$n.cont == 2])) #162
+
+#are bats restricted by connectivity?
+bat.cont <- df[df$order == "Chiroptera" & df$n.cont == 2,] %>%
+    dplyr::select(continent.Africa, continent.Eurasia, 
+                  continent.North.America, continent.South.America,
+                  continent.Australia) %>%
+    as.data.frame()
+#want to know how many on Aus
+nrow(bat.cont) #142
+nrow(bat.cont[bat.cont$continent.Australia == TRUE,]) #4; not many
+bat.cont[bat.cont$continent.Australia == TRUE,] #if on Australia, also one Eurasia
+#how many on South America without being on North America?
+nrow(bat.cont[bat.cont$continent.South.America == TRUE &
+              bat.cont$continent.North.America == FALSE,]) #none
+#how many on Africa without being on Eurasia?
+nrow(bat.cont[bat.cont$continent.Africa == TRUE &
+              bat.cont$continent.Eurasia == FALSE,]) #none
 
 #### H2: FAMILY ORIGIN ----
 
@@ -2170,7 +2301,7 @@ ggplot() + #do histogram; .25 log
                colour = "#FDE725FF", fill = "#FDE725FF",
                binwidth = .25) +
   plot_theme +
-  theme(legend.position = c(0.6, 0.82)) +
+  theme(legend.position = c(0.8, 0.6)) +
   scale_fill_manual(values = cont_col, 
                     name="Number of Continents",
                     labels = c("1",
@@ -2178,6 +2309,23 @@ ggplot() + #do histogram; .25 log
                                "3+")) +
   scale_y_continuous(name = "Count") +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+
+ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
+                   colour = "#1F9E89FF", fill = "#1F9E89FF",
+                   binwidth = .25) +
+    geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
+                   colour = "#FDE725FF", fill = "#FDE725FF",
+                   binwidth = .25) +
+    plot_theme +
+    theme(legend.position = c(0.6, 0.82)) +
+    scale_fill_manual(values = cont_col, 
+                      name="Number of Continents",
+                      labels = c("1",
+                                 "2",
+                                 "3+")) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
 
 ggplot(df) + #do histogram; .25 log 
   geom_histogram(aes(log.mass, 
@@ -2696,6 +2844,76 @@ length(df.3$binomial[df.3$diet.browser.tot == TRUE &
 
 table(df.3$n.cont) #180 on 1 continent, 6 on 2 continents
 
+## do bats drive trends in n.cont == 2 for diet
+df.2 <- df[df$n.cont == 2,]
+range(df.2$avg.mass[df.2$order == "Chiroptera"], na.rm = TRUE)
+#most in between 10^0 and 10^2
+range(df$log.size.bin[df$order == "Chiroptera"], na.rm = TRUE)
+#lost 10^3 when just 2 continents
+#want to know what we're losing in mid ranges and what their diets are
+bins.diff <- df[df$log.size.bin >= 2 & df$log.size.bin <=4, ] %>%
+    dplyr::group_by(log.size.bin, n.cont) %>%
+    dplyr::summarise(n.pisc = sum(diet.piscivore.tot == TRUE),
+                     n.carn = sum(diet.carnivore.tot == TRUE),
+                     n.invert = sum(diet.invertivore.tot == TRUE),
+                     n.brows = sum(diet.browser.tot = TRUE),
+                     n.graz = sum(diet.grazer.tot == TRUE),
+                     n.frug = sum(diet.frugivore.tot == TRUE)) %>%
+    as.data.frame()
+View(bins.diff)
+#bin 2: lose graz and invert as go from 1 to 2 cont
+#bin 3: about same, but decrease frug and carn as go from 1 to 2 cont
+#bin 4: also about the same
+#dramatic decrease in everything except piscivores
+#log bin 2: most of 1 continent are frugivores; most are still frugivores with a dramatic decrease in invert and graz
+#log bin 3: most of 1 continent are frugivores or carnivores; most are carn (but significant less) and a dramatic decrease in frug
+#log bin 4: most of 1 continent are grazers; most are now carnivores and dramatic decrease in grazers
+#take away: find that the composition is significantly different; bin 2 switches from dominant in 3 types on 1 cont to just frug in 2 cont
+# bin 3 switches from dominant in 2 types on 1 continent to just carn on 2 continents (i.e., lost carn in bin 2 and gained in bin 3; lost frug in bin 3 and kept in bin 2)
+# bin 4 switches from grazers to carnivores
+
+ord.diff <- df[df$log.size.bin >= 2 & df$log.size.bin <= 4,] %>%
+    dplyr::group_by(log.size.bin, n.cont, order) %>%
+    dplyr::summarise(n = n()) %>%
+    as.data.frame()
+View(ord.diff)
+View(ord.diff[ord.diff$n.cont == 1 & ord.diff$log.size.bin == 2,])
+View(ord.diff[ord.diff$n.cont == 2 & ord.diff$log.size.bin == 2,])
+View(ord.diff[ord.diff$n.cont == 1 & ord.diff$log.size.bin == 3,])
+View(ord.diff[ord.diff$n.cont == 2 & ord.diff$log.size.bin == 3,])
+View(ord.diff[ord.diff$n.cont == 1 & ord.diff$log.size.bin == 4,])
+View(ord.diff[ord.diff$n.cont == 2 & ord.diff$log.size.bin == 4,])
+#lots of artodactyla, carnivorans, primates, and rodents
+
+table(df.2$order[df.2$diet.frugivore.tot == TRUE]) 
+#96 total; 52 are Chiroptera, 30 are Rodents
+
+table(df.2$order[df.2$diet.invertivore.tot == TRUE])
+#141 total; 106 are Chiroptera
+
+df.2[df.2$order == "Chiroptera",] %>%
+    dplyr::summarise(n.pisc = sum(diet.piscivore.tot == TRUE),
+                     n.carn = sum(diet.carnivore.tot == TRUE),
+                     n.invert = sum(diet.invertivore.tot == TRUE),
+                     n.brows = sum(diet.browser.tot = TRUE),
+                     n.graz = sum(diet.grazer.tot == TRUE),
+                     n.frug = sum(diet.frugivore.tot == TRUE))
+#most are invert (106), then frug (52)
+df.2 %>%
+    dplyr::summarise(n.pisc = sum(diet.piscivore.tot == TRUE),
+                     n.carn = sum(diet.carnivore.tot == TRUE),
+                     n.invert = sum(diet.invertivore.tot == TRUE),
+                     n.brows = sum(diet.browser.tot = TRUE),
+                     n.graz = sum(diet.grazer.tot == TRUE),
+                     n.frug = sum(diet.frugivore.tot == TRUE))
+#compared to overall dist of diets; 106/141 of invert are bats; 52/96 of frug are bats
+
+range(df$avg.mass[df$diet.frugivore.tot == TRUE], na.rm = TRUE)
+#3.92 300000  #missing 10^2 to 10^4; here the range is 10^1 to 10^5
+hist(df$log.mass[df$diet.frugivore.tot == TRUE])
+range(df$avg.mass[df$diet.invertivore.tot == TRUE], na.rm = TRUE)
+#same range here
+
 ##deeper look into those with dietary breadth of 2
 #only for diet.breadth == 2
 ## total
@@ -2853,9 +3071,9 @@ length(df$binomial[df$order == "Chiroptera" &
 
 ###### DIET FIGURES -----
 #UNstacked bar graph
-cb_viridis <- c("#FDE725FF", #3+
+cb_viridis <- c("#482878FF", #1
                 "#1F9E89FF", #2 
-                "#482878FF") #1 
+                "#FDE725FF") #3+
 #Continent as x axis for continent and y for diet
 
 ##DIET BREADTH
@@ -2909,7 +3127,7 @@ ggplot(dietbreadth_bargraph_full,
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) + 
   plot_theme + theme(panel.border = element_rect(fill = NA),
                      strip.background = element_rect(fill = NA),
-                     legend.position = c(.85, 0.8)) +
+                     legend.position = c(.9, 0.8)) +
   theme(axis.title.y = element_text(margin = margin(r = 5)))
 
 ## x axis = continent, y axis = diet
@@ -3018,13 +3236,13 @@ ggplot(diettype_bargraph_full,
 ## TEST: animals that are widespread have a larger geographic range than predicted for body size
 
 for(i in 1:length(df$binomial)){
-  if(df$continent[i] == "Eurasia"){
+  if(df$continent.Eurasia[i] == TRUE){
     df$tot.area[i] <- (54.75*10^6)
-  }else if(df$continent[i] == "Africa"){
+  }else if(df$continent.Africa[i] == TRUE){
     df$tot.area[i] <- (30.38*10^6)
-  }else if(df$continent[i] == "North.America"){
+  }else if(df$continent.North.America[i] == TRUE){
     df$tot.area[i] <- (24.70*10^6)
-  }else if(df$continent[i] == "South.America"){
+  }else if(df$continent.South.America[i] == TRUE){
     df$tot.area[i] <- (17.83*10^6)
   }else{
     df$tot.area[i] <- (7.69*10^6)
@@ -3035,12 +3253,12 @@ for(i in 1:length(df$binomial)){
 df.cont <- df %>%
   dplyr::group_by(binomial) %>%
   dplyr::summarise(cont.tot.area = sum(tot.area), 
-                   pan.gr.area = X26.1_GR_Area_km2[1], 
-                   hmrg = X22.1_HomeRange_km2[1],
+                   pan.gr.area = gr.area.km2[1], 
+                   hmrg = home.range.km2[1],
                    faurby.nat.range = present.natural.range.km2[1], 
                    faurby.current.range = current.range.km2[1],
                    num.cont = n.cont[1], 
-                   size = mean(mass)) %>%
+                   size = mean(avg.mass)) %>%
   as.data.frame()
 
 #get cleanest dataset
