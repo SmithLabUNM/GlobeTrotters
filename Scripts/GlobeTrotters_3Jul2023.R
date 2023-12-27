@@ -215,27 +215,47 @@ length(unique(mm.df$binomial)) #5736
 
 ###### INVASIVES & DOMESTICATES ------
 
-invasive <- length(unique(mm.df$binomial[mm.df$extant.status == "introduction"])) #49
-domesticated <- length(unique(mm.df$binomial[mm.df$extant.status == "domesticated"])) #3
+# get species that are introduced or domesticated
+# keep records for where they are native to
+total <- length(unique(mm.df$binomial[mm.df$continent != "Insular"])) #4552
 
-total <- length(unique(mm.df$binomial)) #5736
+sp.intro <- unique(mm.df$binomial[mm.df$extant.status == "introduction" |
+                                  mm.df$extant.status == "domesticated"])
+length(sp.intro) #50 species total
 
-(invasive/total)*100 #0.85%
+intro.df <- mm.df[mm.df$binomial %in% sp.intro,]
 
-(domesticated/total)*100 #0.05%
+setdiff(intro.df$binomial, sp.intro) #no diff
+setdiff(sp.intro, intro.df$binomial) #no diff
 
-intro <- mm.df[mm.df$extant.status == "introduction" |
-                   mm.df$extant.status == "domesticated",]
-intro <- intro[intro$continent != "Insular",]
+#how many of these introduced sp also on islands?
+length(unique(intro.df$binomial[intro.df$continent == "Insular"])) #42
+View(intro.df[intro.df$continent == "Insular",])
+sp.intro.islands <- unique(intro.df$binomial[intro.df$continent == "Insular"])
+intro.df <- intro.df[intro.df$continent != "Insular",]
 
-intro <- intro %>% 
+invasive <- length(unique(intro.df$binomial[intro.df$extant.status == "introduction"])) #49
+domesticated <- length(unique(intro.df$binomial[intro.df$extant.status == "domesticated"])) #3
+
+(invasive/total)*100 #0.615%
+
+(domesticated/total)*100 #0.0659%
+
+#which sp are domesticated and which are invasives?
+unique(intro.df$binomial[intro.df$extant.status == "introduction"])
+unique(intro.df$binomial[intro.df$extant.status == "domesticated"])
+#"Bubalus bubalis" domesticated on Africa and South America; introduced to Australia; from Eurasia; grazer
+#"Capra hircus" domesticated on North Aermica, introduced to Australia, from Eurasia, browser and grazer
+#"Equus caballus" extinct North America?, domesticated on South America, Australia, and Eurasia; grazer
+
+intro.df <- intro.df %>% 
     mutate(Africa = continent == "Africa",
            North.America = continent == "North.America",
            South.America = continent == "South.America",
            Eurasia = continent == "Eurasia",
            Australia = continent == "Australia")
 
-intro.sums <- intro %>%
+intro.sums <- intro.df %>%
     group_by(binomial) %>%
     dplyr::summarise(diet.invertivore.tot = isTRUE(sum(diet.invertivore) > 0),
                      diet.carnivore.tot = isTRUE(sum(diet.carnivore) > 0),
@@ -245,17 +265,19 @@ intro.sums <- intro %>%
                      diet.frugivore.tot = isTRUE(sum(diet.frugivore) > 0),
                      avg.mass = mean(mass, na.rm = TRUE),
                      n.cont = length(unique(continent)),
-                     iucn = iucn.status[1])
+                     iucn = iucn.status[1]) %>%
+    as.data.frame()
 
-intro.continent <- intro %>%
+intro.continent <- intro.df %>%
     group_by(binomial) %>%
     dplyr::summarise(continent.Africa = as.logical(sum(Africa)),
                      continent.North.America = as.logical(sum(North.America)),
                      continent.South.America = as.logical(sum(South.America)),
                      continent.Eurasia = as.logical(sum(Eurasia)),
-                     continent.Australia = as.logical(sum(Australia)))
+                     continent.Australia = as.logical(sum(Australia))) %>%
+    as.data.frame()
 
-intro.taxa <- intro[!duplicated(intro$binomial),] %>%
+intro.taxa <- intro.df[!duplicated(intro.df$binomial),] %>%
     dplyr::select(order,
                   family,
                   genus,
@@ -271,19 +293,19 @@ intro.contTaxaSums$diet.breadth <- intro.contTaxaSums %>%
     dplyr::select(starts_with("diet.")) %>% 
     rowSums()
 table(intro.contTaxaSums$diet.breadth)
-# 1  2  3 
-# 18 9  2 
+# 1  2   3 
+# 29 19  2 
 
 intro.contTaxaSums$n.cont <- intro.contTaxaSums %>%
     dplyr::select(starts_with("continent.")) %>%
     rowSums()
 table(intro.contTaxaSums$n.cont)
-# 1    2    3    5 
-# 18   3    7    1 
-intro.contTaxaSums$binomial[intro.contTaxaSums$n.cont == 5] #Felis catus
+# 1   2   3  4  5 
+# 18  15  6  8  2 
+intro.contTaxaSums$binomial[intro.contTaxaSums$n.cont == 5] #Felis catus, Mus musculus
 
-length(unique(intro$binomial)) #29
-nrow(intro.contTaxaSums) #29
+length(unique(intro.df$binomial)) #50
+nrow(intro.contTaxaSums) #50
 
 write.csv(intro.contTaxaSums,
           "./Results/invasive.species.csv",
@@ -291,9 +313,9 @@ write.csv(intro.contTaxaSums,
 
 unique(intro.contTaxaSums$binomial)
 range(intro.contTaxaSums$avg.mass, na.rm = TRUE)
-#16.5 900000.0
-median(intro.contTaxaSums$avg.mass, na.rm = TRUE) #48500 (log10: 4.69)
-mean(intro.contTaxaSums$avg.mass, na.rm = TRUE) #179554.4 (log10: 5.25)
+#11.25 900000.0
+median(intro.contTaxaSums$avg.mass, na.rm = TRUE) #5500.572 (log10: 3.740408)
+mean(intro.contTaxaSums$avg.mass, na.rm = TRUE) #86993.59 (log10: 4.939487)
 ggplot() + #do histogram; .25 log 
     geom_histogram(aes(log10(intro.contTaxaSums$avg.mass)), 
                    colour = "gray", fill = "gray",
@@ -304,16 +326,12 @@ ggplot() + #do histogram; .25 log
     scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
 #sampling from most bins, more in bins 4.25 to 6; most in 4.75
 
-table(intro.contTaxaSums$diet.breadth)
-# 1  2  3 
-# 18 9  2 
-
 intro.contTaxaSums %>%
     dplyr::group_by(n.cont, diet.breadth) %>%
     dplyr::summarise(n = n())
-#no real difference in dietary breadth if you're on 1 or 2 continents
-#sp on 3 continents more often have dietary breadth of 1 (5 total) than 2 (2 total)
-#the one sp on 5 continents have dietary breadth of 1
+#all groups have dietary breadth of 1 or 2 not being really diff (except those on 4)
+#those on 2 cont are the only ones that also have dietary breadth 3
+#those on 4 cont tend to have dietary breadth of 1 rather than 2
 
 intro.contTaxaSums %>%
     dplyr::group_by(n.cont) %>%
@@ -323,22 +341,42 @@ intro.contTaxaSums %>%
                      n.graz = sum(diet.grazer.tot == TRUE),
                      n.brows = sum(diet.browser.tot == TRUE),
                      n.pisc = sum(diet.piscivore.tot == TRUE))
-#1 continent: highest is brows (11), followed by invert (5)
-#2 continent: even (2) for both brows and graz
-#3 continent: (4) for graz, (3) for brows, and (2) frug
-#5 continent: 1 carn (because domestic cat)
+#1 continent: highest is brows (9) and frug (9), followed by carn (1); no pisc
+#2 continent: most brows (8), then even for invert, frug, and graz (4), then even for carn and pisc (2); only group with pisc
+#3 continent: most are brows (4); no frug or pisc
+#4 continent: most are graz (4) or brows (3); no pisc
+#5 continent: no invert, graz, or pisc
 
-intro.contTaxaSums %>%
-    dplyr::group_by(n.cont, family) %>%
-    dplyr::summarise(n = n())
-
-intro.contTaxaSums %>%
-    dplyr::group_by(n.cont, order) %>%
-    dplyr::summarise(n = n())
+table(intro.contTaxaSums$family)
+# Bovidae    Camelidae   Canidae Castoridae  Cercopithecidae 
+# 7          1           2       1           1 
+# Cervidae   Cuniculidae Equidae Felidae     Herpestidae 
+# 9          1           2       1           3 
+# Leporidae  Macropodidae    Muridae     Mustelidae  Petauridae 
+# 3          1               6           3           1 
+# Phalangeridae  Procyonidae     Pteropodidae    Sciuridae   Soricidae 
+# 1              1               1               1           1 
+# Suidae Viverridae 
+# 1      2 
 
 table(intro.contTaxaSums$order)
 # Artiodactyla    Carnivora      Lagomorpha     Perissodactyla    Rodentia   Soricomorpha 
-# 14              5              2              2                 5          1 
+# 18              12             3              2                 9          1 
+# Chiroptera    Diprotodontia   Primates
+# 1             2               1
+
+intro.contTaxaSums %>%
+    dplyr::group_by(n.cont, family) %>%
+    dplyr::summarise(n = n()) %>%
+    as.data.frame()
+#1 continent: grps with the most sp (3) are Cervids, Herpestidae, Muridae
+#2 continent: grps with the most sp (3) is Cervidae
+#4 continent: grps with the most sp (2) are Bovidae, Cervidae
+
+intro.contTaxaSums %>%
+    dplyr::group_by(n.cont, order) %>%
+    dplyr::summarise(n = n()) %>%
+    as.data.frame()
 
 ###### BY CONTINENT ------
 
