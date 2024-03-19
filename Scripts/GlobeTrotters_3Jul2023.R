@@ -11,6 +11,20 @@ require(reshape2)
 require(ggplot2)
 require(stringr)
 library(gcookbook)
+library(scales)
+#library(rgl)
+#library(colorfindr)
+library(plot3D)
+
+#get_colors <- function(groups, group.col = palette()){
+#    groups <- as.factor(groups)
+#    ngrps <- length(levels(groups))
+#    if(ngrps > length(group.col)) 
+#        group.col <- rep(group.col, ngrps)
+#    color <- group.col[as.numeric(groups)]
+#    names(color) <- as.vector(groups)
+#    return(color)
+#}
 
 #### PLOT THEME ----
 
@@ -21,22 +35,37 @@ library(gcookbook)
 #Eurasia = #F2CDA0; dark #A68C6D
 #Australia = #D9967E; dark #8C6151
 
-cont_col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
-cont_bw <- c("gray72", "gray47", "black")
+#cont_col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
+cont_bw <- c("black", "gray47", "red")
 
 plot_theme <- theme(panel.grid = element_blank(), 
                     aspect.ratio = .75, #adjust as needed
-                    axis.text = element_text(size = 21, color = "black"), 
-                    axis.ticks.length=unit(0.2,"cm"),
-                    axis.title = element_text(size = 21),
+                    axis.text = element_text(size = 26, color = "black"), 
+                    axis.ticks.length = unit(0.2,"cm"),
+                    axis.title = element_text(size = 32),
                     axis.title.y = element_text(margin = margin(r = 10)),
                     axis.title.x = element_text(margin = margin(t = 10)),
                     axis.title.x.top = element_text(margin = margin(b = 5)),
                     plot.title = element_text(size = 21, face = "plain", hjust = 10),
-                    panel.border = element_rect(colour = "black", fill=NA, size=1),
+                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
                     panel.background = element_blank(),
                     legend.position = "none",
-                    text = element_text(family = 'Helvetica')) 
+                    text = element_text(family = 'Helvetica'),
+                    plot.background = element_rect(fill = 'transparent', color = NA))
+
+    # theme(panel.grid = element_blank(), 
+    #                 aspect.ratio = .75, #adjust as needed
+    #                 axis.text = element_text(size = 21, color = "black"), 
+    #                 axis.ticks.length=unit(0.2,"cm"),
+    #                 axis.title = element_text(size = 21),
+    #                 axis.title.y = element_text(margin = margin(r = 10)),
+    #                 axis.title.x = element_text(margin = margin(t = 10)),
+    #                 axis.title.x.top = element_text(margin = margin(b = 5)),
+    #                 plot.title = element_text(size = 21, face = "plain", hjust = 10),
+    #                 panel.border = element_rect(colour = "black", fill=NA, size=1),
+    #                 panel.background = element_blank(),
+    #                 legend.position = "none",
+    #                 text = element_text(family = 'Helvetica')) 
 
 #### LOAD DATA ----
 
@@ -247,6 +276,8 @@ unique(intro.df$binomial[intro.df$extant.status == "domesticated"])
 #"Bubalus bubalis" domesticated on Africa and South America; introduced to Australia; from Eurasia; grazer
 #"Capra hircus" domesticated on North Aermica, introduced to Australia, from Eurasia, browser and grazer
 #"Equus caballus" extinct North America?, domesticated on South America, Australia, and Eurasia; grazer
+
+mean(intro.df$mass, na.rm = TRUE)
 
 intro.df <- intro.df %>% 
     mutate(Africa = continent == "Africa",
@@ -690,6 +721,9 @@ df$log.size.bin <- trunc(df$log.mass) #log10 size bins
 #write.csv(df, 
 #          "./Data/data.for.analyses.csv",
 #          row.names = FALSE)
+
+#df <- read.csv("./Data/data.for.analyses.csv",
+#               header = TRUE)
 
 #### ABOUT DATA ----
 
@@ -1251,6 +1285,104 @@ unique(df[which(df$n.cont == "3+"), c("order", "family", "binomial")])
 # "Miniopterus schreibersii" "Mustela nivalis"          "Vulpes vulpes"           
 # "Ursus arctos"             "Cervus elaphus"           "Panthera leo" 
 
+#how many on each continent?
+nrow(df[df$continent.North.America == TRUE,]) #808
+nrow(df[df$continent.North.America == TRUE,])/tot #18.4%
+
+nrow(df[df$continent.South.America == TRUE,]) #1200
+nrow(df[df$continent.South.America == TRUE,])/tot #27.4%
+
+nrow(df[df$continent.Eurasia == TRUE,]) #1165
+nrow(df[df$continent.Eurasia == TRUE,])/tot #26.6
+
+nrow(df[df$continent.Africa == TRUE,]) #1150
+nrow(df[df$continent.Africa == TRUE,])/tot #26.2
+
+nrow(df[df$continent.Australia == TRUE,]) #336
+nrow(df[df$continent.Australia == TRUE,])/tot #7.7
+
+#how many between continents
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.South.America == TRUE,]) #163
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.South.America == TRUE,])/tot #3.7%
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.South.America == TRUE,])/nrow(df[df$continent.North.America == TRUE |
+                                                      df$continent.South.America == TRUE,]) #8.8% are on both
+
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.Eurasia == TRUE,]) #20
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.Eurasia == TRUE,])/tot #.5%
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.Eurasia == TRUE,])/nrow(df[df$continent.North.America == TRUE |
+                                                df$continent.Eurasia == TRUE,]) #.1%
+
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.Africa == TRUE,]) #5
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.Africa == TRUE,])/tot #0.1%
+
+nrow(df[df$n.cont != 1 & 
+        df$continent.North.America == TRUE &
+        df$continent.Australia == TRUE,]) #0
+
+nrow(df[df$n.cont != 1 & 
+        df$continent.South.America == TRUE &
+        df$continent.Eurasia == TRUE,]) #1
+nrow(df[df$n.cont != 1 & 
+        df$continent.South.America == TRUE &
+        df$continent.Eurasia == TRUE,])/tot #0.02
+
+nrow(df[df$n.cont != 1 & 
+        df$continent.South.America == TRUE &
+        df$continent.Africa == TRUE,]) #1
+nrow(df[df$n.cont != 1 & 
+        df$continent.South.America == TRUE &
+        df$continent.Africa == TRUE,])/tot #.02
+
+nrow(df[df$n.cont == 2 & 
+        df$continent.South.America == TRUE &
+        df$continent.Australia == TRUE,]) #0
+
+nrow(df[df$n.cont != 1 & 
+        df$continent.Eurasia == TRUE &
+        df$continent.Africa == TRUE,]) #85
+nrow(df[df$n.cont != 1 & 
+        df$continent.Eurasia == TRUE &
+        df$continent.Africa == TRUE,])/tot #1.9%
+nrow(df[df$n.cont != 1 & 
+        df$continent.Eurasia == TRUE &
+        df$continent.Africa == TRUE,])/nrow(df[df$continent.Eurasia == TRUE |
+                                               df$continent.Africa == TRUE,]) #3.8%
+
+nrow(df[df$n.cont != 1 & 
+        df$continent.Eurasia == TRUE &
+        df$continent.Australia == TRUE,]) #5
+nrow(df[df$n.cont != 1 & 
+        df$continent.Eurasia == TRUE &
+        df$continent.Australia == TRUE,])/tot #0.1%
+nrow(df[df$n.cont != 1 & 
+        df$continent.Eurasia == TRUE &
+        df$continent.Australia == TRUE,])/nrow(df[df$continent.Eurasia == TRUE |
+                                                  df$continent.Australia == TRUE,]) #0.3%
+
+nrow(df[df$n.cont != 1 & 
+        df$continent.Africa == TRUE &
+        df$continent.Australia == TRUE,]) #1
+nrow(df[df$n.cont != 1 & 
+        df$continent.Africa == TRUE &
+        df$continent.Australia == TRUE,])/tot #0.02
+
+
 ##### WHAT IS SPECIAL ABOUT THESE 6? -----
 ##what is so special about these six?
 ## WHAT ELSE HAS SAME METADATA (diet, family origin, but NOT family or order; discount dispersal because everything can get everywhere)
@@ -1383,6 +1515,48 @@ indeces[4,5] <- sorensen(x = df$binomial[df$continent.Africa == TRUE],
 #          "./Results/sorensen.index.csv",
 #          row.names = FALSE)
 
+## look at which groups are unique to each continent
+setdiff(unique(df$family[df$n.cont == 1 & df$continent.Africa == TRUE]),
+        unique(df$family[df$n.cont == 1 & df$continent.Africa == FALSE]))
+setdiff(unique(df$family[df$n.cont == 1 & df$continent.North.America == TRUE]),
+        unique(df$family[df$n.cont == 1 & df$continent.North.America == FALSE]))
+setdiff(unique(df$family[df$n.cont == 1 & df$continent.South.America == TRUE]),
+        unique(df$family[df$n.cont == 1 & df$continent.South.America == FALSE]))
+setdiff(unique(df$family[df$n.cont == 1 & df$continent.Eurasia == TRUE]),
+        unique(df$family[df$n.cont == 1 & df$continent.Eurasia == FALSE]))
+setdiff(unique(df$family[df$n.cont == 1 & df$continent.Australia == TRUE]),
+        unique(df$family[df$n.cont == 1 & df$continent.Australia == FALSE]))
+
+setdiff(unique(df$order[df$n.cont == 1 & df$continent.Africa == TRUE]),
+        unique(df$order[df$n.cont == 1 & df$continent.Africa == FALSE]))
+setdiff(unique(df$order[df$n.cont == 1 & df$continent.North.America == TRUE]), #No orders unique to North America!
+        unique(df$order[df$n.cont == 1 & df$continent.North.America == FALSE]))
+setdiff(unique(df$order[df$n.cont == 1 & df$continent.South.America == TRUE]),
+        unique(df$order[df$n.cont == 1 & df$continent.South.America == FALSE]))
+setdiff(unique(df$order[df$n.cont == 1 & df$continent.Eurasia == TRUE]),
+        unique(df$order[df$n.cont == 1 & df$continent.Eurasia == FALSE]))
+setdiff(unique(df$order[df$n.cont == 1 & df$continent.Australia == TRUE]),
+        unique(df$order[df$n.cont == 1 & df$continent.Australia == FALSE]))
+
+## which families are unique to certain pairs of continents?
+setdiff(unique(df$family[df$n.cont == 2 & df$continent.Africa == TRUE & df$continent.Eurasia == TRUE]),
+        unique(df$family[df$n.cont == 2 & df$continent.Africa == FALSE & df$continent.Eurasia == FALSE]))
+setdiff(unique(df$family[df$n.cont == 2 & df$continent.South.America == TRUE & df$continent.North.America == TRUE]),
+        unique(df$family[df$n.cont == 2 & df$continent.South.America == FALSE & df$continent.North.America == FALSE]))
+setdiff(unique(df$family[df$n.cont == 2 & df$continent.North.America == TRUE & df$continent.Eurasia == TRUE]),
+        unique(df$family[df$n.cont == 2 & df$continent.North.America == FALSE & df$continent.Eurasia == FALSE]))
+setdiff(unique(df$family[df$n.cont == 2 & df$continent.Australia == TRUE & df$continent.Eurasia == TRUE]),
+        unique(df$family[df$n.cont == 2 & df$continent.Australia == FALSE & df$continent.Eurasia == FALSE]))
+
+setdiff(unique(df$order[df$n.cont == 2 & df$continent.Africa == TRUE & df$continent.Eurasia == TRUE]),
+        unique(df$order[df$n.cont == 2 & df$continent.Africa == FALSE & df$continent.Eurasia == FALSE]))
+setdiff(unique(df$order[df$n.cont == 2 & df$continent.South.America == TRUE & df$continent.North.America == TRUE]),
+        unique(df$order[df$n.cont == 2 & df$continent.South.America == FALSE & df$continent.North.America == FALSE]))
+setdiff(unique(df$order[df$n.cont == 2 & df$continent.North.America == TRUE & df$continent.Eurasia == TRUE]),
+        unique(df$order[df$n.cont == 2 & df$continent.North.America == FALSE & df$continent.Eurasia == FALSE]))
+setdiff(unique(df$order[df$n.cont == 2 & df$continent.Australia == TRUE & df$continent.Eurasia == TRUE]),
+        unique(df$order[df$n.cont == 2 & df$continent.Australia == FALSE & df$continent.Eurasia == FALSE]))
+
 ##which two continents are limited dispersers on?
 df[df$n.cont == 2,] %>%
   summarise(n.AF = sum(continent.Africa == TRUE),
@@ -1447,7 +1621,6 @@ nrow(bat.cont[bat.cont$continent.Africa == TRUE &
               bat.cont$continent.Eurasia == FALSE,]) #none
 
 #### H2: FAMILY ORIGIN ----
-
 #jumpers (no longer living where family originated) and spreaders (living where family originated and other continents too)
 
 length(unique(df$order[df$family.origin != ""])) #28
@@ -1546,6 +1719,7 @@ homies.origin$prop.jump[homies.origin$family.origin == "Eurasia"] <- as.numeric(
 homies.origin$prop.stay[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.Eurasia[homies.origin$family.origin == "Eurasia"])/as.numeric(sum(homies.origin$N))
 homies.origin$prop.leave[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Eurasia"])/as.numeric(sum(homies.origin$N))
 
+
 #write.csv(homies.origin, 
 #          "./Results/homies.family.origin.csv",
 #          row.names = FALSE)
@@ -1553,6 +1727,73 @@ homies.origin$prop.leave[homies.origin$family.origin == "Eurasia"] <- as.numeric
 unique(homies$order[homies$family.origin == "Africa"])
 
 ##FIGURE
+df$family.origin <- factor(df$family.origin,
+                           levels = c("Australia",
+                                      "Africa",
+                                      "Eurasia",
+                                      "North.America",
+                                      "South.America",
+                                      ""))
+
+df.origin.counts <- df %>%
+    group_by(n.cont, family.origin) %>%
+    summarize(n = n()) %>%
+    as.data.frame()
+two.add <- c("2", "Australia", 0)
+three.add.aus <- c("3+", "Australia", 0)
+three.add.sa <- c("3+", "South.America", 0)
+three.add.af <- c("3+", "Africa", 0)
+df.origin.counts <- rbind(df.origin.counts, two.add, three.add.af,
+                          three.add.aus, three.add.sa)
+
+p.origin.2 <- ggplot() +  
+    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "2"],
+                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "2"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
+                   colour = "gray47", fill = "gray47") +
+    plot.theme +
+    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Continent of Family Origin",
+                     labels = c("Australia" = "AU", "Africa" = "AF", 
+                                "Eurasia" = "EA", "North.America" = "NA", 
+                                "South.America" = "SA"))
+
+ggsave(p.origin.2, 
+       file = "./Figures/continent.origin.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.origin.1 <- ggplot() +  
+    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "1"],
+                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "1"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
+             colour = "black", fill = "black") +
+    plot_theme +
+    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Continent of Family Origin",
+                     labels = c("Australia" = "AU", "Africa" = "AF", 
+                                "Eurasia" = "EA", "North.America" = "NA", 
+                                "South.America" = "SA"))
+
+ggsave(p.origin.1, 
+       file = "./Figures/continent.origin.one.png", 
+       width = 20, height = 10, units = "cm")
+
+p.origin.3 <- ggplot() +  
+    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "3+"],
+                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "3+"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
+             colour = "red", fill = "red") +
+    plot_theme +
+    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Continent of Family Origin",
+                     labels = c("Australia" = "AU", "Africa" = "AF", 
+                                "Eurasia" = "EA", "North.America" = "NA", 
+                                "South.America" = "SA"))
+
+ggsave(p.origin.3, 
+       file = "./Figures/continent.origin.three.png", 
+       width = 20, height = 10, units = "cm")
+
 homies.origin$per.stay <- as.numeric(homies.origin$prop.stay)*100
 homies.origin$per.leave <- as.numeric(homies.origin$prop.leave)*100
 
@@ -1606,6 +1847,96 @@ p <- ggplot(homies.origin.melt, aes(x = "", y = value, fill = family.origin.per)
                                "South America - stay")) +
   coord_polar("y", start = 0) +
   theme_void()
+
+#use light ones for homebodies and dark for wanderers?
+
+##North America
+homies.origin.na.melt <- melt(homies.origin[homies.origin$family.origin == "North.America",],
+                              id.vars = "family.origin",
+                              measure.vars = c("N.Africa", "N.Australia", "N.South.America",
+                                               "N.North.America", "N.Eurasia"),
+                              variable.name = "continent",
+                              value.name = "N")
+homies.origin.na.melt$per <- homies.origin.na.melt$N/homies.origin$N[homies.origin$family.origin == "North.America"]
+homies.origin.na.melt <- as.data.frame(homies.origin.na.melt)
+ggplot(homies.origin.na.melt, aes(x = "", y = per, fill = continent)) +
+  #geom_col(color = 'black',
+  #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+  #geom_bar(stat="identity", width=1) +
+  geom_bar(stat="identity", width=1, color="white") +
+  scale_fill_manual(values = c("N.Africa" = "#c5dc93",
+                               "N.Australia" = "#e4a182",
+                               "N.Eurasia" = "#fee0a6",
+                               "N.North.America" = "#bbe3d4",
+                               "N.South.America" = "#f0d2ff")) +
+  coord_polar("y", start = 0) +
+  theme_void() 
+
+## South America
+homies.origin.sa.melt <- melt(homies.origin[homies.origin$family.origin == "South.America",],
+                              id.vars = "family.origin",
+                              measure.vars = c("N.Africa", "N.Australia", "N.South.America",
+                                               "N.North.America", "N.Eurasia"),
+                              variable.name = "continent",
+                              value.name = "N")
+homies.origin.sa.melt$per <- homies.origin.sa.melt$N/homies.origin$N[homies.origin$family.origin == "South.America"]
+homies.origin.sa.melt <- as.data.frame(homies.origin.sa.melt)
+ggplot(homies.origin.sa.melt, aes(x = "", y = per, fill = continent)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("N.Africa" = "#c5dc93",
+                                 "N.Australia" = "#e4a182",
+                                 "N.Eurasia" = "#fee0a6",
+                                 "N.North.America" = "#bbe3d4",
+                                 "N.South.America" = "#f0d2ff")) +
+    coord_polar("y", start = 0) +
+    theme_void()
+
+## Eurasia
+homies.origin.ea.melt <- melt(homies.origin[homies.origin$family.origin == "Eurasia",],
+                              id.vars = "family.origin",
+                              measure.vars = c("N.Africa", "N.Australia", "N.South.America",
+                                               "N.North.America", "N.Eurasia"),
+                              variable.name = "continent",
+                              value.name = "N")
+homies.origin.ea.melt$per <- homies.origin.ea.melt$N/homies.origin$N[homies.origin$family.origin == "Eurasia"]
+homies.origin.ea.melt <- as.data.frame(homies.origin.ea.melt)
+ggplot(homies.origin.ea.melt, aes(x = "", y = per, fill = continent)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("N.Africa" = "#c5dc93",
+                                 "N.Australia" = "#e4a182",
+                                 "N.Eurasia" = "#fee0a6",
+                                 "N.North.America" = "#bbe3d4",
+                                 "N.South.America" = "#f0d2ff")) +
+    coord_polar("y", start = 0) +
+    theme_void()
+
+## Africa
+homies.origin.af.melt <- melt(homies.origin[homies.origin$family.origin == "Africa",],
+                              id.vars = "family.origin",
+                              measure.vars = c("N.Africa", "N.Australia", "N.South.America",
+                                               "N.North.America", "N.Eurasia"),
+                              variable.name = "continent",
+                              value.name = "N")
+homies.origin.af.melt$per <- homies.origin.af.melt$N/homies.origin$N[homies.origin$family.origin == "Africa"]
+homies.origin.af.melt <- as.data.frame(homies.origin.af.melt)
+ggplot(homies.origin.af.melt, aes(x = "", y = per, fill = continent)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("N.Africa" = "#c5dc93",
+                                 "N.Australia" = "#e4a182",
+                                 "N.Eurasia" = "#fee0a6",
+                                 "N.North.America" = "#bbe3d4",
+                                 "N.South.America" = "#f0d2ff")) +
+    coord_polar("y", start = 0) +
+    theme_void()
 
 ##limited dispersers
 limited.origin <- limited %>%
@@ -1774,6 +2105,245 @@ q <- ggplot(limited.cont.melt, aes(x = "", y = value, fill = family.origin.per))
                                "South America - stay")) +
   coord_polar("y", start = 0) +
   theme_void()
+
+##by shared continents
+limited.shared <- limited[limited$family.origin != "",]
+
+limited$shared <- ""
+limited$shared[limited$continent.Africa == TRUE & limited$continent.Eurasia == TRUE] <- "EA.AF"
+limited$shared[limited$continent.Eurasia == TRUE & limited$continent.North.America == TRUE] <- "EA.NA"
+limited$shared[limited$continent.Eurasia == TRUE & limited$continent.Australia == TRUE] <- "EA.AU"
+limited$shared[limited$continent.South.America == TRUE & limited$continent.North.America == TRUE] <- "NA.SA"
+
+limited.shared <- limited.shared %>%
+    group_by(shared) %>%
+    dplyr::summarise(N = n(),
+                     N.Africa = length(family.origin[family.origin == "Africa"]),
+                     N.Australia = length(family.origin[family.origin == "Australia"]),
+                     N.South.America = length(family.origin[family.origin == "South.America"]),
+                     N.North.America = length(family.origin[family.origin == "North.America"]),
+                     N.Eurasia = length(family.origin[family.origin == "Eurasia"])) %>%
+    as.data.frame() 
+
+limited.shared$per.AF <- (limited.shared$N.Africa/limited.shared$N)*100
+limited.shared$per.AU <- (limited.shared$N.Australia/limited.shared$N)*100
+limited.shared$per.EA <- (limited.shared$N.Eurasia/limited.shared$N)*100
+limited.shared$per.NA <- (limited.shared$N.North.America/limited.shared$N)*100
+limited.shared$per.SA <- (limited.shared$N.South.America/limited.shared$N)*100
+
+limited.shared.melt <- melt(limited.shared, 
+                            id.vars = "shared",
+                            measure.vars = c("per.AF", "per.AU",
+                                             "per.EA", "per.NA",
+                                             "per.SA"),
+                            variable.name = "per")
+limited.shared.melt$group <- paste(limited.shared.melt$shared, 
+                                   limited.shared.melt$per,
+                                   sep = ".")
+limited.shared.EA.AF <- limited.shared.melt[limited.shared.melt$shared == "EA.AF",]
+limited.shared.EA.AU <- limited.shared.melt[limited.shared.melt$shared == "EA.AU",]
+limited.shared.EA.NA <- limited.shared.melt[limited.shared.melt$shared == "EA.NA",]
+limited.shared.NA.SA <- limited.shared.melt[limited.shared.melt$shared == "NA.SA",]
+
+ggplot(limited.shared.EA.AF, aes(x = "", y = value, fill = group)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("EA.AF.per.AF" = "#c5dc93",
+                                 "EA.AF.per.AU" = "#e4a182",
+                                 "EA.AF.per.EA" = "#fee0a6",
+                                 "EA.AF.per.NA" = "#bbe3d4",
+                                 "EA.AF.per.SA" = "#f0d2ff"),
+                      name = "Family Origin",
+                      labels = c("EA.AF.per.AF" = paste0("Africa (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.AF"], ")"),
+                                 "EA.AF.per.AU" = paste0("Australia (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.AU"], ")"),
+                                 "EA.AF.per.EA" = paste0("Eurasia (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.EA"], ")"),
+                                 "EA.AF.per.NA" = paste0("North America (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.NA"], ")"),
+                                 "EA.AF.per.SA" = paste0("South America (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.SA"], ")"))) +
+    coord_polar("y", start = 0) +
+    theme_void()
+
+ggplot(limited.shared.EA.AU, aes(x = "", y = value, fill = group)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("EA.AU.per.AF" = "#c5dc93",
+                                 "EA.AU.per.AU" = "#e4a182",
+                                 "EA.AU.per.EA" = "#fee0a6",
+                                 "EA.AU.per.NA" = "#bbe3d4",
+                                 "EA.AU.per.SA" = "#f0d2ff"),
+                      name = "Family Origin",
+                      labels = c("EA.AU.per.AF" = paste0("Africa (", limited.shared.EA.AU$value[limited.shared.EA.AU$per == "per.AF"], ")"),
+                                 "EA.AU.per.AU" = paste0("Australia (", limited.shared.EA.AU$value[limited.shared.EU.AU$per == "per.AU"], ")"),
+                                 "EA.AU.per.EA" = paste0("Eurasia (", limited.shared.EA.AU$value[limited.shared.EA.AU$per == "per.EA"], ")"),
+                                 "EA.AU.per.NA" = paste0("North America (", limited.shared.EA.AU$value[limited.shared.EA.AU$per == "per.NA"], ")"),
+                                 "EA.AU.per.SA" = paste0("South America (", limited.shared.EA.AU$value[limited.shared.EA.AU$per == "per.SA"], ")"))) +
+    coord_polar("y", start = 0) +
+    theme_void()
+
+ggplot(limited.shared.EA.NA, aes(x = "", y = value, fill = group)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("EA.NA.per.AF" = "#c5dc93",
+                                 "EA.NA.per.AU" = "#e4a182",
+                                 "EA.NA.per.EA" = "#fee0a6",
+                                 "EA.NA.per.NA" = "#bbe3d4",
+                                 "EA.NA.per.SA" = "#f0d2ff"),
+                      name = "Family Origin",
+                      labels = c("EA.NA.per.AF" = paste0("Africa (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.AF"], ")"),
+                                 "EA.NA.per.AU" = paste0("Australia (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.AU"], ")"),
+                                 "EA.NA.per.EA" = paste0("Eurasia (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.EA"], ")"),
+                                 "EA.NA.per.NA" = paste0("North America (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.NA"], ")"),
+                                 "EA.NA.per.SA" = paste0("South America (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.SA"], ")"))) +
+    coord_polar("y", start = 0) +
+    theme_void()
+
+ggplot(limited.shared.NA.SA, aes(x = "", y = value, fill = group)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("NA.SA.per.AF" = "#c5dc93",
+                                 "NA.SA.per.AU" = "#e4a182",
+                                 "NA.SA.per.EA" = "#fee0a6",
+                                 "NA.SA.per.NA" = "#bbe3d4",
+                                 "NA.SA.per.SA" = "#f0d2ff"),
+                      name = "Family Origin",
+                      labels = c("NA.SA.per.AF" = paste0("Africa (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.AF"], ")"),
+                                 "NA.SA.per.AU" = paste0("Australia (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.AU"], ")"),
+                                 "NA.SA.per.EA" = paste0("Eurasia (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.EA"], ")"),
+                                 "NA.SA.per.NA" = paste0("North America (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.NA"], ")"),
+                                 "NA.SA.per.SA" = paste0("South America (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.SA"], ")"))) +
+    coord_polar("y", start = 0) +
+    theme_void()
+
+## North.America
+lim.origin.na.melt <- melt(limited.cont[limited.cont$family.origin == "North.America",],
+                              id.vars = "family.origin",
+                              measure.vars = c("N.Africa.Eurasia", "N.Africa.Australia", 
+                                               "N.Africa.North.America", "N.Africa.South.America",
+                                               "N.Australia.Eurasia", "N.Australia.South.America",
+                                               "N.Australia.North.America",
+                                               "N.Eurasia.North.America", "N.Eurasia.South.America",
+                                               "N.South.America.North.America"),
+                              variable.name = "continent.combo",
+                              value.name = "N")
+lim.origin.na.melt$per <- lim.origin.na.melt$N/limited.cont$N[limited.cont$family.origin == "North.America"]
+lim.origin.na.melt <- as.data.frame(lim.origin.na.melt)
+ggplot(lim.origin.na.melt, aes(x = "", y = per, fill = continent.combo)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("N.Africa.Eurasia" = "#C2D991",
+                                 "N.Africa.Australia" = "black", 
+                                 "N.Africa.North.America" = "black", 
+                                 "N.Africa.South.America" = "black",
+                                 "N.Australia.Eurasia" = "#D9967E", 
+                                 "N.Australia.South.America" = "black",
+                                 "N.Australia.North.America" = "#F2CDA0",
+                                 "N.Eurasia.North.America" = "#B4D9C8", 
+                                 "N.Eurasia.South.America" = "black",
+                                 "N.South.America.North.America" = "#E2C9F2")) +
+    coord_polar("y", start = 0) +
+    theme_void()
+
+## South.America
+lim.origin.sa.melt <- melt(limited.cont[limited.cont$family.origin == "South.America",],
+                           id.vars = "family.origin",
+                           measure.vars = c("N.Africa.Eurasia", "N.Africa.Australia", 
+                                            "N.Africa.North.America", "N.Africa.South.America",
+                                            "N.Australia.Eurasia", "N.Australia.South.America",
+                                            "N.Australia.North.America",
+                                            "N.Eurasia.North.America", "N.Eurasia.South.America",
+                                            "N.South.America.North.America"),
+                           variable.name = "continent.combo",
+                           value.name = "N")
+lim.origin.sa.melt$per <- lim.origin.sa.melt$N/limited.cont$N[limited.cont$family.origin == "South.America"]
+lim.origin.sa.melt <- as.data.frame(lim.origin.sa.melt)
+ggplot(lim.origin.sa.melt, aes(x = "", y = per, fill = continent.combo)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("N.Africa.Eurasia" = "black",
+                                 "N.Africa.Australia" = "black", 
+                                 "N.Africa.North.America" = "black", 
+                                 "N.Africa.South.America" = "black",
+                                 "N.Australia.Eurasia" = "black", 
+                                 "N.Australia.South.America" = "black",
+                                 "N.Australia.North.America" = "black",
+                                 "N.Eurasia.North.America" = "black", 
+                                 "N.Eurasia.South.America" = "black",
+                                 "N.South.America.North.America" = "#E2C9F2")) +
+    coord_polar("y", start = 0) +
+    theme_void()
+
+## Eurasia
+lim.origin.ea.melt <- melt(limited.cont[limited.cont$family.origin == "Eurasia",],
+                           id.vars = "family.origin",
+                           measure.vars = c("N.Africa.Eurasia", "N.Africa.Australia", 
+                                            "N.Africa.North.America", "N.Africa.South.America",
+                                            "N.Australia.Eurasia", "N.Australia.South.America",
+                                            "N.Australia.North.America",
+                                            "N.Eurasia.North.America", "N.Eurasia.South.America",
+                                            "N.South.America.North.America"),
+                           variable.name = "continent.combo",
+                           value.name = "N")
+lim.origin.ea.melt$per <- lim.origin.ea.melt$N/limited.cont$N[limited.cont$family.origin == "Eurasia"]
+lim.origin.ea.melt <- as.data.frame(lim.origin.ea.melt)
+ggplot(lim.origin.ea.melt, aes(x = "", y = per, fill = continent.combo)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("N.Africa.Eurasia" = "#C2D991",#YES
+                                 "N.Africa.Australia" = "black", 
+                                 "N.Africa.North.America" = "black", 
+                                 "N.Africa.South.America" = "black",
+                                 "N.Australia.Eurasia" = "#D9967E", #YES
+                                 "N.Australia.South.America" = "black",
+                                 "N.Australia.North.America" = "#F2CDA0",
+                                 "N.Eurasia.North.America" = "#B4D9C8", #YES
+                                 "N.Eurasia.South.America" = "black",
+                                 "N.South.America.North.America" = "#E2C9F2")) + #YES
+    coord_polar("y", start = 0) +
+    theme_void()
+
+## Africa
+lim.origin.af.melt <- melt(limited.cont[limited.cont$family.origin == "Africa",],
+                           id.vars = "family.origin",
+                           measure.vars = c("N.Africa.Eurasia", "N.Africa.Australia", 
+                                            "N.Africa.North.America", "N.Africa.South.America",
+                                            "N.Australia.Eurasia", "N.Australia.South.America",
+                                            "N.Australia.North.America",
+                                            "N.Eurasia.North.America", "N.Eurasia.South.America",
+                                            "N.South.America.North.America"),
+                           variable.name = "continent.combo",
+                           value.name = "N")
+lim.origin.af.melt$per <- lim.origin.af.melt$N/limited.cont$N[limited.cont$family.origin == "Africa"]
+lim.origin.af.melt <- as.data.frame(lim.origin.af.melt)
+ggplot(lim.origin.af.melt, aes(x = "", y = per, fill = continent.combo)) +
+    #geom_col(color = 'black',
+    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
+    #geom_bar(stat="identity", width=1) +
+    geom_bar(stat="identity", width=1, color="white") +
+    scale_fill_manual(values = c("N.Africa.Eurasia" = "#C2D991",#YES
+                                 "N.Africa.Australia" = "black", 
+                                 "N.Africa.North.America" = "black", 
+                                 "N.Africa.South.America" = "black",
+                                 "N.Australia.Eurasia" = "#D9967E", #YES
+                                 "N.Australia.South.America" = "black",
+                                 "N.Australia.North.America" = "#F2CDA0",
+                                 "N.Eurasia.North.America" = "#B4D9C8", #YES
+                                 "N.Eurasia.South.America" = "black",
+                                 "N.South.America.North.America" = "#E2C9F2")) + #YES
+    coord_polar("y", start = 0) +
+    theme_void()
 
 ##trotter
 trotter.origin <- trotter %>%
@@ -2055,6 +2625,347 @@ table(df.dispersal$n.cont[!is.na(df.dispersal$dispersal.phylo)])
 #is the filtering clade or ecological type specific? answer than by looking at families or something
 #problem with home range: already constricted by filtering of some sort
 
+ggplot(df.dispersal) + #do histogram; .25 log 
+    geom_histogram(aes(log10(dispersal.distance),
+                       group = n.cont, 
+                       fill = n.cont),
+                   binwidth = .25) +
+    plot_theme +
+    #theme(legend.position = c(0.8, 0.6)) +
+    scale_fill_manual(values = cont_bw, 
+                      name="Number of Continents",
+                      labels = c("1",
+                                 "2",
+                                 "3+")) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(dispersal~distance~(km)))
+range(log10(df.dispersal$dispersal.distance[df.dispersal$n.cont == "1"]), na.rm = TRUE)
+#8.04 km to 2260000 km
+range(log10(df.dispersal$dispersal.distance[df.dispersal$n.cont == "3+"]))
+#293 km to 1103928 kn
+#starts 2 orders are mag higher than everyone else?
+
+ggplot(df.dispersal) + #do histogram; .25 log 
+    geom_histogram(aes(log10(age),
+                       group = n.cont, 
+                       fill = n.cont),
+                   binwidth = .25) +
+    plot_theme +
+    #theme(legend.position = c(0.8, 0.6)) +
+    scale_fill_manual(values = cont_bw, 
+                      name="Number of Continents",
+                      labels = c("1",
+                                 "2",
+                                 "3+")) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(phylo~age~(mya)))
+range(log10(df.dispersal$age[df.dispersal$n.cont == "1"]), na.rm = TRUE)
+#3.937665 7.895312
+range(log10(df.dispersal$age[df.dispersal$n.cont == "3+"]))
+#5.884275 6.448300
+#nothing spectacular?
+
+##### FIGURE -----
+p.disp.1 <- ggplot() + 
+    geom_histogram(aes(log10(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "1" & !is.na(df.dispersal$dispersal.phylo)])), 
+                   colour = "black", fill = "black",
+                   binwidth = .25) +
+    plot_theme +
+    scale_y_continuous(name = "Count") +
+    theme(axis.text.x = element_text(size = 24)) +
+    scale_x_continuous(name = "Dispersal distance (km)",
+                       limits = c(log10(1), log10(10^12)),
+                       breaks = c(log10(1), log10(10^2), log10(10^4),
+                                  log10(10^6), log10(10^8), log10(10^10),
+                                  log10(10^12)),
+                       labels = c(expression(10^0), expression(10^2),
+                                  expression(10^4), expression(10^6),
+                                  expression(10^8), expression(10^10),
+                                  expression(10^12)))
+
+ggsave(p.disp.1, 
+       file = "./Figures/dispersal.one.png", 
+       width = 20, height = 10, units = "cm")
+
+p.disp.2 <- ggplot() + 
+    geom_histogram(aes(log10(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo)])), 
+                   colour = "gray47", fill = "gray47",
+                   binwidth = .25) +
+    plot_theme +
+    theme(axis.text.x = element_text(size = 24)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dispersal distance (km)",
+                       limits = c(log10(1), log10(10^12)),
+                       breaks = c(log10(1), log10(10^2), log10(10^4),
+                                  log10(10^6), log10(10^8), log10(10^10),
+                                  log10(10^12)),
+                       labels = c(expression(10^0), expression(10^2),
+                                  expression(10^4), expression(10^6),
+                                  expression(10^8), expression(10^10),
+                                  expression(10^12)))
+ggsave(p.disp.2, 
+       file = "./Figures/dispersal.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.disp.3 <- ggplot() + 
+    geom_histogram(aes(log10(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "3+" & !is.na(df.dispersal$dispersal.phylo)])), 
+                   colour = "red", fill = "red",
+                   binwidth = .25) +
+    plot_theme +
+    theme(axis.text.x = element_text(size = 24)) +
+    scale_y_continuous(name = "Count",
+                       breaks = c(0, 1)) +
+    scale_x_continuous(name = "Dispersal distance (km)",
+                       limits = c(log10(1), log10(10^12)),
+                       breaks = c(log10(1), log10(10^2), log10(10^4),
+                                  log10(10^6), log10(10^8), log10(10^10),
+                                  log10(10^12)),
+                       labels = c(expression(10^0), expression(10^2),
+                                  expression(10^4), expression(10^6),
+                                  expression(10^8), expression(10^10),
+                                  expression(10^12)))
+
+ggsave(p.disp.3, 
+       file = "./Figures/dispersal.three.png", 
+       width = 20, height = 10, units = "cm")
+
+
+p.disp.age <- ggplot(df.dispersal[!is.na(df.dispersal$dispersal.phylo),]) +
+    geom_point(aes(log10(age), log10(dispersal.phylo),
+                   group = n.cont,
+                   col = n.cont),
+               size = 2) +
+    plot_theme +
+    #theme(legend.position = c(0.6, 0.82)) +
+    theme(plot.background = element_rect(fill = 'transparent', color = NA)) +
+    scale_y_continuous(name = "Dispersal Distance",
+                  limits = c(log10(10^3), log10(10^12)),
+                  breaks = c(log10(10^4), log10(10^6),
+                             log10(10^8), log10(10^10),
+                             log10(10^12)),
+                  labels = c(expression(10^4), expression(10^6),
+                             expression(10^8), expression(10^10),
+                             expression(10^12))) +
+     scale_x_continuous(name = "Age",
+                        limits = c(log10(10^4), log10(10^8)),
+                        breaks = c(log10(10^4), log10(10^5),
+                                   log10(10^6), log10(10^7),
+                                   log10(10^8)),
+                        labels = c("10 kya", "100 kya", "1 mya",
+                                   "10 mya", "100 mya")) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 18),
+          axis.text.y = element_text(size = 16)) +
+    scale_color_manual(values = cont_bw) +
+    geom_hline(yintercept = log10(Eurasia.EW), #longest distance
+               linetype = 'dashed',
+               col = "#fee0a6", size = 1) + 
+    geom_hline(yintercept = log10(Africa.NS), #longest distance
+               linetype = 'dashed',
+               col = "#c5dc93", size = 1) +
+    geom_hline(yintercept = log10(North.America.NS), #longest distance
+               linetype = 'dashed',
+               col = "#bbe3d4", size = 1) +
+    geom_hline(yintercept = log10(South.America.NS), #longest distance
+               linetype = 'dashed',
+               col = "#f0d2ff", size = 1) +
+    geom_hline(yintercept = log10(Australia.EW), #longest distance
+               linetype = 'dashed',
+               col = "#e4a182", size = 1) + 
+    geom_hline(yintercept = (log10(South.America.NS + North.America.NS)),
+               linetype = 'dashed',
+               col = "#afa298", size = 1) + 
+    geom_hline(yintercept = (log10(Eurasia.EW + North.America.NS)),
+               linetype = 'dashed',
+               col = "#afa298", size = 1) + 
+    geom_hline(yintercept = (log10(Africa.NS + Eurasia.EW)),
+               linetype = 'dashed',
+               col = "#afa298", size = 1)
+
+ggsave(p.disp.age, 
+       file = "./Figures/dispersal.age.png", 
+       width = 20, height = 10, units = "cm")
+
+#model: age of dispersal (delay), generation length, age of lineage (fossil age), and dispersal amount
+#((df.dispersal$age * 365)/(df.dispersal$gen.length + df.dispersal$disp.age))*df.dispersal$dispersal.distance
+df.dispersal$dispersal.10 =  ((10 * 365)/(df.dispersal$gen.length + 10))*df.dispersal$dispersal.distance
+df.dispersal$dispersal.100 =  ((100 * 365)/(df.dispersal$gen.length + 100))*df.dispersal$dispersal.distance
+df.dispersal$dispersal.1000 =  ((1000 * 365)/(df.dispersal$gen.length + 1000))*df.dispersal$dispersal.distance
+df.dispersal$dispersal.10000 =  ((10000 * 365)/(df.dispersal$gen.length + 10000))*df.dispersal$dispersal.distance
+df.dispersal$dispersal.100000 =  ((100000 * 365)/(df.dispersal$gen.length + 100000))*df.dispersal$dispersal.distance
+
+#add in lines for continents
+
+p.disp.age2 <- ggplot(df.dispersal[!is.na(df.dispersal$dispersal.phylo),]) +
+    geom_point(aes(log10(age), log10(dispersal.phylo),
+                   group = n.cont,
+                   col = n.cont),
+               size = 4) +
+    plot_theme +
+    #theme(legend.position = c(0.6, 0.82)) +
+    theme(plot.background = element_rect(fill = 'transparent', color = NA)) +
+    scale_y_continuous(name = "Dispersal Distance (km)",
+                       limits = c(log10(10^0), log10(10^12)),
+                       breaks = c(log10(10^0), log10(10^2), 
+                                  log10(10^4), log10(10^6),
+                                  log10(10^8), log10(10^10),
+                                  log10(10^12)),
+                       labels = c(expression(10^0), expression(10^2),
+                                  expression(10^4), expression(10^6),
+                                  expression(10^8), expression(10^10),
+                                  expression(10^12))) +
+    scale_x_continuous(name = "Time for Dispersal (y)",
+                       limits = c(log10(10^0), log10(10^8)),
+                       breaks = c(log10(10^0), log10(10^1),
+                                  log10(10^2), log10(10^3),
+                                  log10(10^4), log10(10^5), 
+                                  log10(10^6), log10(10^7), 
+                                  log10(10^8)),
+                       labels = c(expression(10^0), expression(10^1),
+                                  expression(10^2), expression(10^3),
+                                  expression(10^4), expression(10^5),
+                                  expression(10^6), expression(10^7),
+                                  expression(10^8))) +
+    scale_color_manual(values = cont_bw) +
+    geom_hline(yintercept = (log10(Australia.NS)),
+               col = "#afa298", size = 1) + 
+    geom_hline(yintercept = (log10(Eurasia.EW + Africa.NS)),
+               col = "#afa298", size = 1)
+
+ggsave(p.disp.age2, 
+       file = "./Figures/dispersal.age2.png", 
+       width = 24, height = 15, units = "cm")
+
+
+df.time <- df.dispersal[!is.na(df.dispersal$dispersal.phylo), c("n.cont", "binomial", 
+                                                                "dispersal.distance", 
+                                                                "dispersal.10", "dispersal.100", "dispersal.1000", "dispersal.10000", "dispersal.100000")]
+#need it so age a row and dispersal type and then dispersal value
+disp.min <- c(min(df.time$dispersal.distance),
+              min(df.time$dispersal.10),
+              min(df.time$dispersal.100),
+              min(df.time$dispersal.1000),
+              min(df.time$dispersal.10000),
+              min(df.time$dispersal.100000),
+              1, 1, 1)
+disp.max <- c(max(df.time$dispersal.distance),
+              max(df.time$dispersal.10),
+              max(df.time$dispersal.100),
+              max(df.time$dispersal.1000),
+              max(df.time$dispersal.10000),
+              max(df.time$dispersal.100000),
+              1, 1, 1)
+disp.mean <- c(mean(df.time$dispersal.distance),
+               mean(df.time$dispersal.10),
+               mean(df.time$dispersal.100),
+               mean(df.time$dispersal.1000),
+               mean(df.time$dispersal.10000),
+               mean(df.time$dispersal.100000),
+               1, 1, 1)
+disp.age <- c(1, 10, 100, 1000, 100000, 100000, 1000000, 10000000, 100000000)
+disp.type <- c("gen", "decade", "century", "millenia", "10kya", "100kya",
+               "1 mya", "10 mya", "100 mya")
+df.time2 <- as.data.frame(cbind(disp.type, disp.min, disp.max, disp.mean, disp.age))
+df.time2$disp.type <- as.factor(df.time2$disp.type)
+df.time2$disp.age <- as.numeric(df.time2$disp.age)
+df.time2$disp.min <- as.numeric(df.time2$disp.min)
+df.time2$disp.max <- as.numeric(df.time2$disp.max)
+df.time2$disp.mean <- as.numeric(df.time2$disp.mean)
+
+df.time2$disp.type <- factor(df.time2$disp.type,
+                             levels = c("gen", "decade", "century", "millenia", "10kya", "100kya",
+                                        "1 mya", "10 mya", "100 mya"))
+
+p.disp.age.time <-  ggplot(df.time2, 
+                           aes(x = disp.type)) +
+    geom_boxplot(aes(ymin = log10(disp.min),
+                     lower = log10(disp.min),
+                     middle = log10(disp.mean),
+                     ymax = log10(disp.max),
+                     upper = log10(disp.max)),
+                 stat = "identity",
+                 width=0.7) +
+    # geom_point(aes(log10(100), log10(dispersal.100)),
+    #            pch = 1, size = 2, col = "black") +
+    # geom_point(aes(log10(1000), log10(dispersal.1000)),
+    #            pch = 1, size = 2, col = "black") +
+    # geom_point(aes(log10(10000), log10(dispersal.10000)),
+    #            pch = 1, size = 2, col = "black") +
+    # geom_point(aes(log10(100000), log10(dispersal.100000)),
+    #            pch = 1, size = 2, col = "black") +
+    plot_theme +
+    #theme(legend.position = c(0.6, 0.82)) +
+    scale_y_continuous(name = "Dispersal Distance (km)",
+                       limits = c(log10(10^0), log10(10^12)),
+                       breaks = c(log10(10^0), log10(10^2), 
+                                  log10(10^4), log10(10^6),
+                                  log10(10^8), log10(10^10),
+                                  log10(10^12)),
+                       labels = c(expression(10^0), expression(10^2),
+                                  expression(10^4), expression(10^6),
+                                  expression(10^8), expression(10^10),
+                                  expression(10^12))) +
+    scale_x_discrete(name = "Time for Dispersal (y)",
+                     labels = c(expression(10^0), expression(10^1),
+                                expression(10^2), expression(10^3),
+                                expression(10^4), expression(10^5),
+                                expression(10^6), expression(10^7),
+                                expression(10^8)))
+
+ggsave(p.disp.age.time, 
+       file = "./Figures/dispersal.time.png", 
+       width = 24, height = 15, units = "cm")
+    
+p.age.1 <- ggplot() + #do histogram; .5 log 
+    geom_histogram(aes(log10(df$age.median[df$n.cont == "1" & !is.na(df$age.median)])), 
+                   colour = "black", fill = "black",
+                   binwidth = .25) +
+    plot_theme +
+    theme(axis.text.x = element_text(size = 24)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Age (mya)",
+                       limits = c(log10(10^-2.25), log10(10^2)),
+                       labels = c(expression(10^-2), expression(10^-1),
+                                  expression(10^0), expression(10^1),
+                                  expression(10^2)))
+
+ggsave(p.age.1, 
+       file = "./Figures/age.one.png", 
+       width = 20, height = 10, units = "cm")
+
+
+p.age.2 <- ggplot() + #do histogram; .5 log 
+    geom_histogram(aes(log10(df$age.median[df$n.cont == "2" & !is.na(df$age.median)])), 
+                   colour = "gray47", fill = "gray47",
+                   binwidth = .25) +
+    plot_theme +
+    theme(axis.text.x = element_text(size = 24)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Age (mya)",
+                       limits = c(log10(10^-2.25), log10(10^2)),
+                       labels = c(expression(10^-2), expression(10^-1),
+                                  expression(10^0), expression(10^1),
+                                  expression(10^2)))
+ggsave(p.age.2, 
+       file = "./Figures/age.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.age.3 <- ggplot() + #do histogram; .5 log 
+    geom_histogram(aes(log10(df$age.median[df$n.cont == "3+" & !is.na(df$age.median)])), 
+                   colour = "red", fill = "red",
+                   binwidth = .25) +
+    plot_theme +
+    theme(axis.text.x = element_text(size = 24)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Age (mya)",
+                       limits = c(log10(10^-2.25), log10(10^2)),
+                       labels = c(expression(10^-2), expression(10^-1),
+                                  expression(10^0), expression(10^1),
+                                  expression(10^2)))
+
+ggsave(p.age.3, 
+       file = "./Figures/age.three.png", 
+       width = 20, height = 10, units = "cm")
+
 #### H3: DIVERSITY OF CLADE ----
 
 null.family <- df %>%
@@ -2321,101 +3232,133 @@ min(df$avg.mass[df$order == "Carnivora" &
 max(df$avg.mass[df$order == "Carnivora" &
                   df$n.cont == "3+"], na.rm = TRUE) #297349.5
 
+df.sub<-df %>% 
+    mutate(quart.bin = cut(log.mass, breaks = seq(0, 7.25, .25))) %>%
+    as.data.frame
+
+df.sub.cts <- df.sub %>%
+    dplyr::group_by(quart.bin) %>%
+    dplyr::summarise(diff.per = 1-(length(log.mass[n.cont == 2])/length(log.mass[n.cont == 1])),
+                     n.1 = length(log.mass[n.cont == 1]),
+                     n.2 = length(log.mass[n.cont == 2])) %>%
+    as.data.frame()
+plot(df.sub.cts$quart.bin, df.sub.cts$diff.per)
 
 ##### FIGURE ----
 
-cb_viridis <- c("#FDE725FF", #3+
-                "#1F9E89FF", #2 
-                "#482878FF") #1 
-
-ggplot() + #do histogram; .25 log 
-  geom_histogram(aes(df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)]), 
-               colour = "#482878FF", fill = "#482878FF",
-               binwidth = .25) +
-  geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
-               colour = "#1F9E89FF", fill = "#1F9E89FF",
-               binwidth = .25) +
-  geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
-               colour = "#FDE725FF", fill = "#FDE725FF",
-               binwidth = .25) +
-  plot_theme +
-  theme(legend.position = c(0.8, 0.6)) +
-  scale_fill_manual(values = cont_col, 
-                    name="Number of Continents",
-                    labels = c("1",
-                               "2",
-                               "3+")) +
-  scale_y_continuous(name = "Count") +
-  scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
-
-ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
-                   colour = "#1F9E89FF", fill = "#1F9E89FF",
-                   binwidth = .25) +
-    geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
-                   colour = "#FDE725FF", fill = "#FDE725FF",
+df.na <- df %>%
+    drop_na(log.mass) %>%
+    as.data.frame()
+p.bs <- ggplot(df.na) + #do histogram; .25 log 
+    geom_histogram(aes(log.mass,
+                       group = n.cont, 
+                       fill = n.cont),
                    binwidth = .25) +
     plot_theme +
-    theme(legend.position = c(0.6, 0.82)) +
-    scale_fill_manual(values = cont_col, 
+    theme(legend.position = c(0.8, 0.6)) +
+    theme(plot.background = element_rect(fill='transparent', color=NA)) +
+    scale_fill_manual(values = cont_bw, 
                       name="Number of Continents",
                       labels = c("1",
                                  "2",
                                  "3+")) +
     scale_y_continuous(name = "Count") +
     scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+ggsave(p.bs, 
+       file = "./Figures/body_size_bw-red.png", 
+       width = 20, height = 10, units = "cm")
 
-ggplot(df) + #do histogram; .25 log 
-  geom_histogram(aes(log.mass, 
-                 group = n.cont,
-                 colour = n.cont, fill = n.cont),
-                 binwidth = .25) +
-  #geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
-  #               colour = "#99d8c9", fill = "#99d8c9",
-  #               binwidth = .25) +
-  #geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
-  #               colour = "#e5f5f9", fill = "#e5f5f9",
-  #               binwidth = .25) +
-  plot_theme +
-  theme(legend.position = c(0.8, 0.6)) +
-  scale_fill_manual(values = cont_col, 
-                    name="Number of Continents",
-                    labels = c("1",
-                               "2",
-                               "3+")) +
-  scale_color_manual(values = cont_col, 
-                    name="Number of Continents",
-                    labels = c("1",
-                               "2",
-                               "3+")) +
-  scale_y_continuous(name = "Count") +
-  scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+p.bs.no.legend <- ggplot(df.na) + #do histogram; .25 log 
+    geom_histogram(aes(log.mass,
+                       group = n.cont, 
+                       fill = n.cont),
+                   binwidth = .25) +
+    plot_theme +
+    scale_fill_manual(values = cont_bw, 
+                      name="Number of Continents",
+                      labels = c("1",
+                                 "2",
+                                 "3+")) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
+                       limits = c(log10(1), log10(10^6)),
+                       labels = c(expression(10^0), expression(10^2), 
+                                  expression(10^4), expression(10^6)))
 
-ggplot(df) + #do histogram; .25 log 
-  geom_histogram(aes(log.mass, 
-                     group = n.cont,
-                     colour = n.cont, fill = n.cont),
-                 binwidth = .25) +
-  #geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
-  #               colour = "#99d8c9", fill = "#99d8c9",
-  #               binwidth = .25) +
-  #geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
-  #               colour = "#e5f5f9", fill = "#e5f5f9",
-  #               binwidth = .25) +
-  plot_theme +
-  theme(legend.position = c(0.8, 0.6)) +
-  scale_fill_manual(values = cont_bw, 
-                    name="Number of Continents",
-                    labels = c("1",
-                               "2",
-                               "3+")) +
-  scale_color_manual(values = cont_bw, 
-                     name="Number of Continents",
-                     labels = c("1",
-                                "2",
-                                "3+")) +
-  scale_y_continuous(name = "Count") +
-  scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
+ggsave(p.bs.no.legend, 
+       file = "./Figures/body_size_no.legend_bw-red.png", 
+       width = 20, height = 10, units = "cm")
+
+p.bs.2.1 <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
+                   colour = "gray47", fill = "gray47",
+                   binwidth = .25) +
+    geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
+                   colour = "red", fill = "red",
+                   binwidth = .25) +
+    plot_theme +
+    scale_fill_manual(values = cont_bw, 
+                      name="Number of Continents",
+                      labels = c("1",
+                                 "2",
+                                 "3+")) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
+                       limits = c(log10(1), log10(10^6)),
+                       labels = c(expression(10^0), expression(10^2), 
+                                  expression(10^4), expression(10^6)))
+
+ggsave(p.bs.2.1, 
+       file = "./Figures/body_size_zoom_bw-red.png", 
+       width = 14, height = 10, units = "cm")
+
+p.bs.2 <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]), 
+                   colour = "gray47", fill = "gray47",
+                   binwidth = .25) +
+    plot_theme +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
+                       limits = c(log10(1), log10(10^6)),
+                       labels = c(expression(10^0), expression(10^2), 
+                                  expression(10^4), expression(10^6)))
+    
+ggsave(p.bs.2, 
+       file = "./Figures/body_size_two.cont.png", 
+       width = 14, height = 10, units = "cm")
+
+p.bs.1 <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)]), 
+                   colour = "black", fill = "black",
+                   binwidth = .25) +
+    plot_theme +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
+                       limits = c(log10(1), log10(10^6)),
+                       labels = c(expression(10^0), expression(10^2), 
+                                  expression(10^4), expression(10^6)))
+
+ggsave(p.bs.1, 
+       file = "./Figures/body_size_one.cont.png", 
+       width = 14, height = 10, units = "cm")
+
+p.bs.3 <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
+                   colour = "red", fill = "red",
+                   binwidth = .25) +
+    plot_theme +
+    scale_y_continuous(name = "Count",
+                       breaks = c(0, 1, 2)) +
+    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
+                       limits = c(log10(1), log10(10^6)),
+                       labels = c(expression(10^0), expression(10^2), 
+                                  expression(10^4), expression(10^6)))
+
+ggsave(p.bs.3, 
+       file = "./Figures/body_size_three.cont.png", 
+       width = 14, height = 10, units = "cm")
+
+df$log.size.bin.quarter <- df$log.mass
 
 ##### 1 v 2+ -----
 
@@ -3109,9 +4052,6 @@ length(df$binomial[df$order == "Chiroptera" &
 
 ###### DIET FIGURES -----
 #UNstacked bar graph
-cb_viridis <- c("#482878FF", #1
-                "#1F9E89FF", #2 
-                "#FDE725FF") #3+
 #Continent as x axis for continent and y for diet
 
 ##DIET BREADTH
@@ -3269,6 +4209,152 @@ ggplot(diettype_bargraph_full,
                     strip.background = element_rect(fill=NA),
                     legend.position = c(.3, 0.8)) +
   theme(axis.title.y = element_text(margin = margin(r = 5)))
+
+## BREADTH
+ggplot() +  
+    geom_bar(aes(df$diet.breadth, group = df$n.cont, fill = df$n.cont)) +
+    plot_theme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) +
+    theme(plot.background = element_rect(fill = 'transparent', color = NA)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary breadth") + 
+    scale_fill_manual(values = cont_bw)
+
+p.diet.brd.1 <-  ggplot() +  
+    geom_bar(aes(df$diet.breadth[df$n.cont == "1"]),
+             colour = "black", fill = "black") +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary breadth")
+
+ggsave(p.diet.brd.1, 
+       file = "./Figures/diet.breadth.one.png", 
+       width = 20, height = 10, units = "cm")
+
+p.diet.brd.2 <-  ggplot() +  
+    geom_bar(aes(df$diet.breadth[df$n.cont == "2"]),
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary breadth")
+
+ggsave(p.diet.brd.2, 
+       file = "./Figures/diet.breadth.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.diet.brd.3 <-  ggplot() +  
+    geom_bar(aes(df$diet.breadth[df$n.cont == "3+"]),
+             colour = "red", fill = "red") +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -.5),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary Breadth",
+                       limits = c(.5, 3.5),
+                       breaks = c(1, 2, 3),
+                       labels = c(1, 2, 3))
+
+ggsave(p.diet.brd.3, 
+       file = "./Figures/diet.breadth.three.png", 
+       width = 20, height = 10, units = "cm")
+
+## TYPE
+ggplot(diettype_bargraph_full, 
+       aes(x = diettype, y = log10(V1), 
+           fill = numconts)) + 
+    geom_bar(stat = "identity") +
+    xlab("Diet Type") + 
+    ylab("Count") + 
+    scale_x_discrete(labels=c("diet.carnivore.tot" = "Carnivore", "diet.piscivore.tot" = "Piscivore", 
+                              "diet.invertivore.tot" = "Invertivore", "diet.browser.tot" = "Browser", 
+                              "diet.grazer.tot" = "Grazer", "diet.frugivore.tot" = "Frugivore")) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 11)) + 
+    scale_fill_manual(values = cont_bw,
+                      name = "Number of Continents",
+                      labels = c("1",
+                                 "2",
+                                 "3+")) +
+    geom_col(position = position_stack(reverse = TRUE)) +
+    plot_theme +
+    theme(panel.border = element_rect(fill = NA),
+          strip.background = element_rect(fill = NA),
+          legend.position = c(1.25, 0.5)) +
+    theme(axis.title.y = element_text(margin = margin(r = 5)))
+
+diettype_bargraph_full$numconts <- factor(diettype_bargraph_full$numconts,
+                                          levels = c("1", "2", "3+"))
+
+p.diet.1 <- ggplot() + 
+    geom_bar(aes(x = diettype_bargraph_full$diettype[diettype_bargraph_full$numconts == "1"], 
+                 y = diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "1"]),
+             colour = "black", fill = "black",
+             stat = "identity") +
+    xlab("Diet Type") + 
+    ylab("Count") + 
+    scale_x_discrete(labels=c("diet.carnivore.tot" = "Ca.", 
+                              "diet.piscivore.tot" = "Pi.", 
+                              "diet.invertivore.tot" = "In.", 
+                              "diet.browser.tot" = "Br.", 
+                              "diet.grazer.tot" = "Gr.", 
+                              "diet.frugivore.tot" = "Fr.")) + 
+    geom_col(position = position_stack(reverse = TRUE)) +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -1),
+          axis.title.x = element_text(vjust = -1))
+    
+
+ggsave(p.diet.1, 
+       file = "./Figures/diet.type.one.png", 
+       width = 20, height = 10, units = "cm")
+
+p.diet.2 <- ggplot() + 
+    geom_bar(aes(x = diettype_bargraph_full$diettype[diettype_bargraph_full$numconts == "2"], 
+                 y = diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "2"]),
+             colour = "gray47", fill = "gray47",
+             stat = "identity") +
+    xlab("Diet Type") + 
+    ylab("Count") + 
+    scale_x_discrete(labels=c("diet.carnivore.tot" = "Ca.", 
+                              "diet.piscivore.tot" = "Pi.", 
+                              "diet.invertivore.tot" = "In.", 
+                              "diet.browser.tot" = "Br.", 
+                              "diet.grazer.tot" = "Gr.", 
+                              "diet.frugivore.tot" = "Fr.")) + 
+    geom_col(position = position_stack(reverse = TRUE)) +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -1),
+          axis.title.x = element_text(vjust = -1))
+
+ggsave(p.diet.2, 
+       file = "./Figures/diet.type.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.diet.3 <- ggplot() + 
+    geom_bar(aes(x = diettype_bargraph_full$diettype[diettype_bargraph_full$numconts == "3+"], 
+                 y = diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "3+"]),
+             colour = "red", fill = "red",
+             stat = "identity") +
+    xlab("Diet Type") + 
+    ylab("Count") + 
+    scale_x_discrete(labels=c("diet.carnivore.tot" = "Ca.", 
+                              "diet.piscivore.tot" = "Pi.", 
+                              "diet.invertivore.tot" = "In.", 
+                              "diet.browser.tot" = "Br.", 
+                              "diet.grazer.tot" = "Gr.", 
+                              "diet.frugivore.tot" = "Fr.")) + 
+    geom_col(position = position_stack(reverse = TRUE)) +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -.5),
+          axis.title.x = element_text(vjust = -1))
+
+ggsave(p.diet.3, 
+       file = "./Figures/diet.type.three.png", 
+       width = 20, height = 10, units = "cm")
+
 
 #### H6: GEOGRAPHIC RANGE SIZE ----
 ## TEST: animals that are widespread have a larger geographic range than predicted for body size
@@ -3512,4 +4598,3 @@ summary(lm(df$foss.age ~ log10(df$mass))) #sig buy r2 = 0.03
 # a.1 <- a[!(a$binomial == y.1$binomial[1] & a$GenerationLength_d == y.1$GenerationLength_d[1]),]
 # a.2 <- a.1[!(a.1$binomial == y.2$binomial[1] & a.1$GenerationLength_d == y.2$GenerationLength_d[2]),]
 
-#
