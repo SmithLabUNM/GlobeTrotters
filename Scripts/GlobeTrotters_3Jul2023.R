@@ -3392,6 +3392,15 @@ ks.test(df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)],
 # D^- = 0.20863, p-value = 1.961e-09
 # alternative hypothesis: the CDF of x lies below that of y
 
+ks.test(df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)], 
+        df$avg.mass[df$n.cont == 2 & !is.na(df$avg.mass)],
+        alternative = "less") #p-value = 1.961e-09 (i.e., 1 cont is not "less" than 2+ cont)
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  df$avg.mass[df$n.cont == 1 & !is.na(df$avg.mass)] and df$avg.mass[df$n.cont != 1 & !is.na(df$avg.mass)]
+# D^- = 0.20863, p-value = 1.961e-09
+# alternative hypothesis: the CDF of x lies below that of y
+
 ##### 1+2 v 3+ -----
 length(df$avg.mass[df$n.cont != "3+" & !is.na(df$avg.mass)]) #3311
 length(df$avg.mass[df$n.cont == "3+" & !is.na(df$avg.mass)]) #6
