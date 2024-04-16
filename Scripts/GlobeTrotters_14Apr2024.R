@@ -12,19 +12,11 @@ require(ggplot2)
 require(stringr)
 library(gcookbook)
 library(scales)
-#library(rgl)
-#library(colorfindr)
 library(plot3D)
-
-#get_colors <- function(groups, group.col = palette()){
-#    groups <- as.factor(groups)
-#    ngrps <- length(levels(groups))
-#    if(ngrps > length(group.col)) 
-#        group.col <- rep(group.col, ngrps)
-#    color <- group.col[as.numeric(groups)]
-#    names(color) <- as.vector(groups)
-#    return(color)
-#}
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(caret)
 
 #### PLOT THEME ----
 
@@ -35,7 +27,6 @@ library(plot3D)
 #Eurasia = #F2CDA0; dark #A68C6D
 #Australia = #D9967E; dark #8C6151
 
-#cont_col <- c("#2ca25f", "#99d8c9", "#e5f5f9")
 cont_bw <- c("black", "gray47", "red")
 
 plot_theme <- theme(panel.grid = element_blank(), 
@@ -53,27 +44,16 @@ plot_theme <- theme(panel.grid = element_blank(),
                     text = element_text(family = 'Helvetica'),
                     plot.background = element_rect(fill = 'transparent', color = NA))
 
-    # theme(panel.grid = element_blank(), 
-    #                 aspect.ratio = .75, #adjust as needed
-    #                 axis.text = element_text(size = 21, color = "black"), 
-    #                 axis.ticks.length=unit(0.2,"cm"),
-    #                 axis.title = element_text(size = 21),
-    #                 axis.title.y = element_text(margin = margin(r = 10)),
-    #                 axis.title.x = element_text(margin = margin(t = 10)),
-    #                 axis.title.x.top = element_text(margin = margin(b = 5)),
-    #                 plot.title = element_text(size = 21, face = "plain", hjust = 10),
-    #                 panel.border = element_rect(colour = "black", fill=NA, size=1),
-    #                 panel.background = element_blank(),
-    #                 legend.position = "none",
-    #                 text = element_text(family = 'Helvetica')) 
-
 #### LOAD DATA ----
 
 options(stringsAsFactors = FALSE)
 
 ## MOM database
-mm.df <- read.csv("./Data/MOMv11.csv", 
+mm.df <- read.csv("./Data/MOMv11.1.csv", 
                   header = TRUE)
+
+mm.df.old <- read.csv("./Data/MOMv11.csv",
+                      header = TRUE)
 
 ## Pacifici et al. 2013 data for dispersal
 pacifici <- read.csv("./Data/Generation Length for Mammals.csv", 
@@ -99,9 +79,7 @@ ranges <- read.csv("./Data/ranges.csv",
 pantheria <- read.csv("./Data/pantheria.csv", 
                       header = TRUE)
 
-#### DATA WRANGLE ----
-
-##### FIX DIET -----
+#### FIX DIET ----
 
 mm.df$trophic[which(mm.df$trophic == "")] <- NA
 sort(table(mm.df$trophic))
@@ -153,11 +131,8 @@ length(unique(mm.df$binomial[mm.df$diet.piscivore == TRUE])) #102
 length(unique(mm.df$binomial[mm.df$diet.invertivore == TRUE])) #1668
 
 mm.df$diet.breadth <- select(mm.df, diet.invertivore:diet.piscivore) %>% rowSums()
-table(mm.df$diet.breadth[!duplicated(mm.df$binomial)])
-# 0    1    2    3 
-# 2195 2002 1390  149 
 
-###### MAKE GENERIC & FAMILY AVERAGES -----
+#### MAKE GENERIC & FAMILY AVERAGES ----
 mm.df$diet.src <- NA
 mm.df$diet.src[troph.diet] <- "troph.diet"
 
@@ -231,9 +206,7 @@ setdiff(unique(mm.df$binomial[mm.df$diet.breadth == 0]),
         unique(mm.df$binomial[is.na(mm.df$diet.src)]))
 View(mm.df[mm.df$diet.breadth == 0 &!(is.na(mm.df$diet.src)),]) #all diets are FALSE
 
-##### ABOUT FULL DATASET -----
-
-###### TOTAL RECORDS -------
+#### ABOUT FULL DATASET ----
 
 nrow(mm.df) #6695
 
@@ -242,7 +215,7 @@ length(unique(mm.df$family)) #170
 length(unique(mm.df$genus)) #1360
 length(unique(mm.df$binomial)) #5736
 
-###### INVASIVES & DOMESTICATES ------
+##### INVASIVES & DOMESTICATES -----
 
 # get species that are introduced or domesticated
 # keep records for where they are native to
@@ -427,7 +400,7 @@ mm.df %>%
 # North.America      13       60     262   841
 # South.America      17       62     345  1229
 
-###### BY DIET ------
+##### BY DIET -----
 
 length(unique(mm.df$binomial[mm.df$diet.browser == TRUE])) #1933
 length(unique(mm.df$binomial[mm.df$diet.grazer == TRUE])) #658
@@ -440,7 +413,7 @@ table(mm.df$diet.breadth[!duplicated(mm.df$binomial)])
 # 0    1    2    3 
 # 214 3266 1995  261 
 
-###### N INVALID MASS ------
+##### N INVALID MASS -----
 
 nrow(mm.df[mm.df$mass.status == "invalid",]) #73 records
 
@@ -457,7 +430,7 @@ table(mm.df$size.bin[mm.df$mass.status == "invalid"])
 # 1  2   3  4 
 # 41 22  4  5 
 
-###### N DATA DEFICIENT (IUCN) ------
+##### DATA DEFICIENT (IUCN) -----
 
 nrow(mm.df[mm.df$iucn.status == "DD",]) #684 records
 
@@ -468,12 +441,12 @@ length(unique(mm.df$binomial[mm.df$iucn.status == "DD"])) #616
 
 unique(mm.df$continent[mm.df$iucn.status == "DD"]) #all continents
 
-## SIZE
+##### SIZE -----
 table(mm.df$size.bin[mm.df$iucn.status == "DD"])
 # 0  1   2    3    4   5   6    7 
 # 1  95  127  42   9   2   11   8 
 
-##### TRIM DATA -----
+#### TRIM DATA ----
 
 #remove humans
 mm.df <- mm.df[mm.df$binomial != "Homo sapiens",]
@@ -525,7 +498,23 @@ stopifnot(!any(str_trim(mm.df$species) != mm.df$species))
 ##remove continental duplicates
 mm.df[(duplicated(mm.df[c("binomial", "continent")])),]
 
-#write.csv(mm.df, "data.trimmed.csv")
+##check habitat.mode
+#check that all bats are volant
+unique(mm.df$habitat.mode)
+unique(mm.df$order[mm.df$habitat.mode == "volant"])
+unique(mm.df$habitat.mode[mm.df$order == "Chiroptera"])
+mm.df$habitat.mode[mm.df$order == "Chiroptera"] <- "volant"
+unique(mm.df$habitat.mode[mm.df$order == "Chiroptera"])
+
+#remove marine
+mm.df[mm.df$habitat.mode == "marine- births on land",] #enhydra lutris; remove
+mm.df <- mm.df[mm.df$binomial != "Enhydra lutris",]
+
+#fix redundancy
+mm.df$habitat.mode[mm.df$habitat.mode == "terr; freshwater inland"] <- "terr _ aquatic"
+mm.df$habitat.mode[mm.df$habitat.mode == "aquatic"] <- "terr _ aquatic"
+
+nrow(mm.df[mm.df$habitat.mode == "",]) #missing 607
 
 ##### WHICH LEVEL IS DIET DATA CREATED? ----
 unique(mm.df$diet.src)
@@ -570,13 +559,14 @@ df.taxa <- mm.df[!duplicated(mm.df$binomial),] %>%
                 family,
                 genus,
                 species,
-                binomial)
+                binomial,
+                habitat.mode)
 
 df.sumTaxa <- left_join(df.taxa, df.sums,
                         by = "binomial")
 df.contTaxaSums <- left_join(df.sumTaxa, df.continent,
                              by = "binomial")
-
+    
 df.contTaxaSums$diet.breadth <- df.contTaxaSums %>%
   dplyr::select(starts_with("diet.")) %>% 
   rowSums()
@@ -593,8 +583,6 @@ table(df.contTaxaSums$n.cont)
 
 length(unique(mm.df$binomial)) #4386
 nrow(df.contTaxaSums) #4386
-
-#write.csv(df.contTaxaSums, "data.long.csv")
 
 ##### ADD AGES -----
 
@@ -716,11 +704,12 @@ df[c('log.mass')][sapply(df[c('log.mass')], is.infinite)] <- NA
 
 ## SIZE BINS
 df$log.size.bin <- trunc(df$log.mass) #log10 size bins
+df <- mutate(df, qtr.bin = cut(log.mass, breaks = seq(0, 7.25, .25)))
 
 ##### WRITE DATA FOR ANALYSES -----
-#write.csv(df, 
-#          "./Data/data.for.analyses.csv",
-#          row.names = FALSE)
+write.csv(df, 
+          "./Data/data.for.analyses.csv",
+          row.names = FALSE)
 
 #df <- read.csv("./Data/data.for.analyses.csv",
 #               header = TRUE)
@@ -738,24 +727,23 @@ length(unique(df$family[df$family.origin != ""])) #128
 # dispersal age from PanTHERIA
 length(unique(df$binomial[!is.na(df$dispersal.age.d)])) #109
 # generation length from Pacifici
-length(unique(df$binomial[!is.na(df$GenerationLength_d)])) #3851
+length(unique(df$binomial[!is.na(df$GenerationLength_d)])) #3850
 
 ## fossil ages
 # pbdb
-length(unique(df$genus[!is.na(df$foss.age)])) #390
-length(unique(df$binomial[df$foss.age > 0])) #662
+length(unique(df$genus[!is.na(df$foss.age)])) #389
+length(unique(df$binomial[df$foss.age > 0])) #661
 # faurby
-length(unique(df$genus[!is.na(df$age.median)])) #1027
-length(unique(df$binomial[!is.na(df$age.median)])) #3968
+length(unique(df$genus[!is.na(df$age.median)])) #1026
+length(unique(df$binomial[!is.na(df$age.median)])) #3967
 
 #### BIASES IN DATA FOR ANALYSES ----
 
-##### TOTAL RECODS ----
-nrow(df) #4386
-length(unique(df$order)) #29
+nrow(df) #4385
+length(unique(df$order)) #28
 length(unique(df$family)) #135
-length(unique(df$genus)) #1072
-length(unique(df$binomial)) #4386
+length(unique(df$genus)) #1071
+length(unique(df$binomial)) #4385
 
 ## TABLE FOR COUNTS PER ORDER
 df %>%
@@ -777,13 +765,13 @@ bs.cont <- ggplot() +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
   scale_y_continuous(name = "Density")
 
-#ggsave(bs.cont, file = paste0("./Figures/bodyMassDensityByContinent",".png"), 
-#       width = 14, height = 10, units = "cm")
+ggsave(bs.cont, file = paste0("./Figures/bodyMassDensityByContinent",".png"), 
+       width = 14, height = 10, units = "cm")
 
 #qualitatively similar
 
 ## COUNT OF BODY MASS
-nrow(df[!is.na(df$log.mass),]) #3317
+nrow(df[!is.na(df$log.mass),]) #3316
 nrow(df[is.na(df$log.mass),]) #1069
 
 ## BY CLADE
@@ -803,28 +791,37 @@ df.clade.mass <- df %>%
 ## HOW MANY ORDERS?
 unique(df.clade.mass$order) #29
 
-#write.csv(df.clade.mass,
-#          "./Results/clade.missing.mass.csv",
-#          row.names = FALSE)
+write.csv(df.clade.mass,
+          "./Results/clade.missing.mass.csv",
+          row.names = FALSE)
 
 ## BY CONTINENT
 ## are certain continents more affected by this missing data?
+nrow(df[df$continent.Africa == TRUE,]) #115
 nrow(df[df$continent.Africa == TRUE & is.na(df$log.mass),]) #357 (out of 1150; 31%)
-nrow(df[df$continent.North.America == TRUE & is.na(df$log.mass),]) #92 (out of 808; 11.3%)
+
+nrow(df[df$continent.North.America == TRUE,]) #807
+nrow(df[df$continent.North.America == TRUE & is.na(df$log.mass),]) #92 (out of 807; 11.4%)
+
+nrow(df[df$continent.South.America == TRUE,]) #1200
 nrow(df[df$continent.South.America == TRUE & is.na(df$log.mass),]) #277 (out of 1200; 14.8%)
+
+nrow(df[df$continent.Eurasia == TRUE,]) #1165
 nrow(df[df$continent.Eurasia == TRUE & is.na(df$log.mass),]) #325 (out of 1165; 28%
+
+nrow(df[df$continent.Australia == TRUE,]) #336
 nrow(df[df$continent.Australia == TRUE & is.na(df$log.mass),]) #35 (out of 336; 10%)
 
 ##### FOSSIL AGES ----
 ## PBDB COUNTS
 length(unique(df$order[df$foss.age >= 0]))  #21
 length(unique(df$family[df$foss.age >= 0])) #93
-length(unique(df$genus[df$foss.age >= 0])) #391
-length(unique(df$binomial[df$foss.age >= 0])) #662
+length(unique(df$genus[df$foss.age >= 0])) #390
+length(unique(df$binomial[df$foss.age >= 0])) #661
 nrow(df[is.na(df$foss.age),]) #3725
 
 length(unique(df$binomial[df$foss.age >= 0 &
-                          df$n.cont == 1])) #574
+                          df$n.cont == 1])) #573
 length(unique(df$binomial[df$foss.age >= 0 &
                             df$n.cont == 2])) #84
 length(unique(df$binomial[df$foss.age >= 0 &
@@ -833,17 +830,16 @@ length(unique(df$binomial[df$foss.age >= 0 &
 ## FAURBY COUNTS
 length(unique(df$order[df$age.median >= 0]))  #30
 length(unique(df$family[df$age.median >= 0])) #136
-length(unique(df$genus[df$age.median >= 0])) #1028
-length(unique(df$binomial[df$age.median >= 0])) #3969
+length(unique(df$genus[df$age.median >= 0])) #1027
+length(unique(df$binomial[df$age.median >= 0])) #3968
 nrow(df[is.na(df$age.median),]) #418
 
 length(unique(df$binomial[df$age.median >= 0 &
-                            df$n.cont == 1])) #3712
+                            df$n.cont == 1])) #3711
 length(unique(df$binomial[df$age.median >= 0 &
                             df$n.cont == 2])) #252
 length(unique(df$binomial[df$age.median >= 0 &
                             df$n.cont == "3+"])) #6
-
 
 ## BY SIZE
 
@@ -856,8 +852,8 @@ foss.na <- ggplot() +
   scale_y_continuous(name = "Number of Missing Mass Values")
 #missing a lot of younger fossils, actually
 
-#ggsave(foss.na, file = paste0("./Figures/PBDBfossilAgeMissing",".png"), 
-#       width = 14, height = 10, units = "cm")
+ggsave(foss.na, file = paste0("./Figures/PBDBfossilAgeMissing",".png"), 
+       width = 14, height = 10, units = "cm")
 
 # FAURBY
 phyl.na <- ggplot() +
@@ -867,8 +863,8 @@ phyl.na <- ggplot() +
   scale_y_continuous(name = "Number of Missing Mass Values")
 #missing a lot of younger fossils, actually
 
-#ggsave(phyl.na, file = paste0("./Figures/PhyloAgeMissing",".png"), 
-#       width = 14, height = 10, units = "cm")
+ggsave(phyl.na, file = paste0("./Figures/PhyloAgeMissing",".png"), 
+       width = 14, height = 10, units = "cm")
 
 ## WHICH SIZES DO WE HAVE FOSSIL AGES FOR?
 # PBDB
@@ -879,8 +875,8 @@ size.fossil.na <- ggplot() +
   scale_y_continuous(name = "Number of Missing Age Values")
 #missing a lot of smaller bodied organisms, of course
 
-#ggsave(size.fossil.na, file = paste0("./Figures/FossilSizeMissing",".png"), 
-#       width = 14, height = 10, units = "cm")
+ggsave(size.fossil.na, file = paste0("./Figures/FossilSizeMissing",".png"), 
+       width = 14, height = 10, units = "cm")
 
 # FAURBY
 size.phylo.na <- ggplot() +
@@ -890,8 +886,8 @@ size.phylo.na <- ggplot() +
   scale_y_continuous(name = "Number of Missing Age Values")
 #missing a size classes from all over...looks weird
 
-#ggsave(size.phylo.na, file = paste0("./Figures/PhyloSizeMissing",".png"), 
-#       width = 14, height = 10, units = "cm")
+ggsave(size.phylo.na, file = paste0("./Figures/PhyloSizeMissing",".png"), 
+       width = 14, height = 10, units = "cm")
 
 ## COUNTS BY LOG SIZE BIN
 df.mass.age <- df %>% 
@@ -909,11 +905,14 @@ df$age.TF[!is.na(df$age.median)] <- TRUE
 df$age.TF[!is.na(df$foss.age)] <- TRUE
 
 anova(lm(age.TF ~ log.size.bin,
-         data = df)) #sig
+         data = df)) #sig difference in which sizes we have ages for
 
-#write.csv(df.mass.age,
-#          "./Results/age.missing.mass.csv",
-#          row.names = FALSE)
+ggplot(df) +
+    geom_bar(aes(x = log.size.bin, fill = age.TF))
+
+write.csv(df.mass.age,
+          "./Results/age.missing.mass.csv",
+          row.names = FALSE)
 
 ## CORRELATION OF BODY MASS AND AGE?
 #want to look for coverage in species (genus) age
@@ -927,10 +926,11 @@ foss.age.lm <- ggplot() +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
   scale_y_continuous(name = "Fossil Age (Genus)")
 
-#ggsave(foss.age.lm , file = paste0("./Figures/lm.fossil.age",".png"), 
-#       width = 14, height = 10, units = "cm")
+ggsave(foss.age.lm , file = paste0("./Figures/lm.fossil.age",".png"), 
+       width = 14, height = 10, units = "cm")
 
 summary(lm(df$foss.age ~ df$avg.mass)) #p-value: 3.173e-07; Adjusted R-squared: 0.03849
+#baseically 0, no explanitory power
 
 phyl.age.lm <- ggplot() +
   geom_point(aes(x = df$log.mass[!is.na(df$log.mass) & !is.na(df$age.median)], 
@@ -941,10 +941,11 @@ phyl.age.lm <- ggplot() +
   scale_x_continuous(name = expression(log[10]~Body~Mass~(g))) +
   scale_y_continuous(name = "Median Phylogenetic Age (Genus)")
 
-#ggsave(phyl.age.lm , file = paste0("./Figures/lm.phylo.age",".png"), 
-#       width = 14, height = 10, units = "cm")
+ggsave(phyl.age.lm , file = paste0("./Figures/lm.phylo.age",".png"), 
+       width = 14, height = 10, units = "cm")
 
 summary(lm(df$age.median ~ df$avg.mass)) #p-value: 0.001473; Adjusted R-squared: 0.002964
+#basically 0, no explanatory power
 
 ## BY CLADE
 #from which groups are we missing things from?
@@ -961,9 +962,9 @@ df.clade.foss <- df %>%
             avg.size = mean(avg.mass, na.rm = TRUE)) %>% 
   as.data.frame()
 
-#write.csv(df.clade.foss,
-#          "./Results/foss.missing.clade.csv",
-#          row.names = FALSE)
+write.csv(df.clade.foss,
+          "./Results/foss.missing.clade.csv",
+          row.names = FALSE)
 
 ## BY CONTINENT
 
@@ -1018,28 +1019,28 @@ df.cont.foss <- cbind(foss.Africa, foss.Africa.na, per.foss.missing.Africa,
                       foss.South.America, foss.South.America.na, per.foss.missing.South.America,
                       phyl.South.America, phyl.South.America.na, per.phyl.missing.South.America)
 
-#write.csv(df.cont.foss,
-#          "./Results/DataExploration/foss.missing.cont.csv",
-#          row.names = FALSE)
+write.csv(df.cont.foss,
+          "./Results/foss.missing.cont.csv",
+          row.names = FALSE)
 
 ##### DISPERSAL ------
 nrow(df[!is.na(df$dispersal.age.d),])
 
 table(df$log.size.bin[!is.na(df$dispersal.age.d)])
 # 1  2  3  4  5  6 
-# 3 24 44 24 12  2 
+# 3 24 44 23 12  2 
 table(df$log.size.bin[is.na(df$dispersal.age.d)])
 # 0    1    2    3    4    5    6    7 
 # 385 1312  696  392  229  148   44    2 
 
-nrow(df[!is.na(df$dispersal.age.d),]) #109
-nrow(df[!is.na(df$GenerationLength_d),]) #3851
+nrow(df[!is.na(df$dispersal.age.d),]) #108
+nrow(df[!is.na(df$GenerationLength_d),]) #3850
 
 ##### CONTINENT OF ORIGIN ------
 ## FAMILY ORIGIN
 
 length(unique(df$family[df$family.origin != ""])) #128
-nrow(df[df$family.origin != "",]) #3572
+nrow(df[df$family.origin != "",]) #3571
 
 length(unique(df$family[df$family.origin == ""])) #7
 length(df$binomial[df$family.origin == ""]) #814
@@ -1047,6 +1048,8 @@ table(df$order[df$family.origin == ""])
 # "Chiroptera"  "Rodentia" "Paucituberculata" "Carnivora"  "Artiodactyla"  
 #  87            713        6                  1            7
 
+#which groups have the most species that we are missing data for and that would 
+#affect our family origin results?
 length(unique(df$family[df$family.origin == "" & df$order == "Chiroptera"])) #2
 unique(df$family[df$family.origin == "" & df$order == "Chiroptera"]) 
 #Molossidae and Nycteridae
@@ -1068,7 +1071,7 @@ table(df$n.cont[df$family == "Muridae"])
 table(df$n.cont[df$family == "Sciuridae"])
 
 ## COUNTS BY CONTINENT
-nrow(df[df$family.origin != "",]) #3572
+nrow(df[df$family.origin != "",]) #3571
 df %>%
   filter(family.origin != "") %>%
   group_by(family.origin) %>%
@@ -1076,9 +1079,10 @@ df %>%
 # family.origin     N
 # Africa          319 (9%)
 # Australia       205 (5.7%)
-# Eurasia        1754 (49%)
+# Eurasia        1753 (49%)
 # North.America   636 (17.8%)
 # South.America   658 (18.4%)
+#total is 3571 for %
 
 ## SIZE
 nrow(df[!is.na(df$family.origin) & is.na(df$log.mass),]) #1069
@@ -1086,7 +1090,7 @@ nrow(df[!is.na(df$family.origin) & is.na(df$log.mass),]) #1069
 ##### CONTINENT -----
 
 ## counts
-length(unique(df$binomial[df$continent.North.America == TRUE])) #808
+length(unique(df$binomial[df$continent.North.America == TRUE])) #807
 length(unique(df$binomial[df$continent.South.America == TRUE])) #1200
 length(unique(df$binomial[df$continent.Eurasia == TRUE])) #1165
 length(unique(df$binomial[df$continent.Africa == TRUE])) #1150
@@ -1097,7 +1101,7 @@ cont.counts <- df %>%
   dplyr::select(starts_with("continent.")) %>%
   dplyr::summarise_all(sum)
 #  Africa   North.America   South.America   Eurasia   Australia
-#  1150     808             1200            1165      336
+#  1150     807             1200            1165      336
 
 ## BY SIZE
 # which continents are missing the most mass data?
@@ -1127,9 +1131,9 @@ df.cont.mass <- cbind(mass.Africa, mass.Africa.na, per.Africa.missing.mass,
                       mass.North.America, mass.North.America.na, per.North.America.missing.mass,
                       mass.South.America, mass.South.America.na, per.South.America.missing.mass)
 
-#write.csv(df.cont.mass,
-#          "./Results/cont.missing.mass.csv",
-#          row.names = FALSE)
+write.csv(df.cont.mass,
+          "./Results/cont.missing.mass.csv",
+          row.names = FALSE)
 
 ##### DIET TYPE ----
 
@@ -1140,15 +1144,21 @@ diet.counts <- df %>%
 
 unique(df$diet.breadth)
 table(df$diet.breadth)
+#1    2    3 
+#2462 1737  186 
 
 ## BY SIZE
 # which diet types are missing the most mass data?
-nrow(df[is.na(df$log.mass),])
-
+nrow(df[is.na(df$log.mass),]) #1069
 
 df$mass.TF <- !is.na(df$avg.mass) #TRUE = mass, FALSE = no mass
 
-df.melt <- melt(df, measure.vars = c(6:11),
+df.melt <- melt(df, measure.vars = c("diet.invertivore.tot", 
+                                     "diet.carnivore.tot",
+                                     "diet.browser.tot",
+                                     "diet.grazer.tot",
+                                     "diet.piscivore.tot",
+                                     "diet.frugivore.tot"),
                 variable.name = "diet.type",
                 value.name = "has.diet")
 df.diet <- df.melt[df.melt$has.diet == TRUE,]
@@ -1158,12 +1168,12 @@ df.diet %>%
   summarise(n.mass = sum(mass.TF == TRUE),
             n.na = sum(mass.TF == FALSE))
 #diet.type              n.mass  n.na
-# diet.invertivore.tot   1419   553
-# diet.carnivore.tot      281    49
-# diet.browser.tot       1239   381
-# diet.grazer.tot         493   121
+# diet.invertivore.tot   1423   549
+# diet.carnivore.tot      282    48
+# diet.browser.tot       1240   380
+# diet.grazer.tot         495   119
 # diet.piscivore.tot       28     1
-# diet.frugivore.tot     1460   469
+# diet.frugivore.tot     1462   467
 
 nrow(df[!is.na(df$diet.breadth) & is.na(df$log.mass),]) #1069
 
@@ -1178,22 +1188,22 @@ df.diet.mass <- df.diet %>%
             per = n.na/(n.na+n.mass)) %>% 
   as.data.frame()
 
-#write.csv(df.diet.mass,
-#          "./Results/diet.missing.mass.csv",
-#          row.names = FALSE)
+write.csv(df.diet.mass,
+          "./Results/diet.missing.mass.csv",
+          row.names = FALSE)
 
 ##### DIET BREADTH ----
 
 table(df$diet.breadth)
-#1    2     3 
-#2463 1737  186 
+#1     2      3 
+#2462  1737   186 
 
 ##### N DATA DEFICIENT (IUCN) -----
 
 dd <- df[df$iucn == "DD",]
 #[2 rows are NA]
 
-nrow(dd) #434 records
+nrow(dd) #434 records (minus 2 NA rows)
 
 ## What size range are these records?
 table(dd$log.size.bin)
@@ -1209,12 +1219,12 @@ table(dd$continent.South.America) #166 TRUE; 266 FALSE (38%)
 
 ## Which clades are most of these records from?
 table(dd$order)
-#Afrosoricida    Artiodactyla       Carnivora      Chiroptera 
-#3              10               3             103 
-#Cingulata  Dasyuromorphia Didelphimorphia  Erinaceomorpha 
-#5               2              10               1 
-#Lagomorpha   Macroscelidea        Primates        Rodentia 
-#3               3               4             222 
+#Afrosoricida   Artiodactyla        Carnivora           Chiroptera 
+#3              10                  3                   103 
+#Cingulata      Dasyuromorphia      Didelphimorphia     Erinaceomorpha 
+#5              2                   10                  1 
+#Lagomorpha     Macroscelidea       Primates            Rodentia 
+#3              3                   4                   222 
 #Soricomorpha 
 #63 
 #most Chiroptera, Rodents
@@ -1223,7 +1233,8 @@ table(dd$order)
 ##what is overlap between DD and other missing information?
 
 #missing size
-View(dd[is.na(dd$avg.mass),]) #249 (out of 434; 57%); 2 rows NA
+nrow(dd) #434
+nrow(dd[is.na(dd$avg.mass),]) #249 (out of 434; 57%); 2 rows NA
 
 #missing diet
 View(dd[is.na(dd$diet.breadth),]) #0 (all NA)
@@ -1273,8 +1284,8 @@ df.dispersal %>%
 #### Q1: NUM SP PER CONTINENT ----
 #Tally number of species on 1, 2, or 3+ continents
 
-tot <- length(unique(df$binomial)) #4386
-n.one <- length(unique(df$binomial[df$n.cont == 1])) #4120
+tot <- length(unique(df$binomial)) #4385
+n.one <- length(unique(df$binomial[df$n.cont == 1])) #4119
 per.one <- n.one/tot #93.94%
 n.two <- length(unique(df$binomial[df$n.cont == 2])) #260
 per.two <- n.two/tot #5.93%
@@ -1286,7 +1297,7 @@ unique(df[which(df$n.cont == "3+"), c("order", "family", "binomial")])
 # "Ursus arctos"             "Cervus elaphus"           "Panthera leo" 
 
 #how many on each continent?
-nrow(df[df$continent.North.America == TRUE,]) #808
+nrow(df[df$continent.North.America == TRUE,]) #807
 nrow(df[df$continent.North.America == TRUE,])/tot #18.4%
 
 nrow(df[df$continent.South.America == TRUE,]) #1200
@@ -1382,6 +1393,18 @@ nrow(df[df$n.cont != 1 &
         df$continent.Africa == TRUE &
         df$continent.Australia == TRUE,])/tot #0.02
 
+## Which groups are most common in each group?
+sort(table(df$order[df$n.cont == "1"])) #Rodentia
+sort(table(df$family[df$n.cont == "1"])) #Cricetidae
+head(sort(table(df$genus[df$n.cont == "1"]), decreasing = TRUE)) #Crocidura
+
+sort(table(df$order[df$n.cont == "2"])) #Chiroptera
+sort(table(df$family[df$n.cont == "2" & df$order == "Chiroptera"])) #Phyllostomidae
+sort(table(df$genus[df$n.cont == "2" & df$order == "Chiroptera"])) #Myotis
+
+sort(table(df$order[df$n.cont == "2" & df$habitat.mode != "volant"])) #Carnivora with Rodentia as a close second
+sort(table(df$family[df$n.cont == "2" & df$habitat.mode != "volant"])) #Muridae then Felidae
+sort(table(df$genus[df$n.cont == "2" & df$habitat.mode != "volant"])) #Sylvilagus, Felis, Leopardus, Mustela, Vulpes
 
 ##### WHAT IS SPECIAL ABOUT THESE 6? -----
 ##what is so special about these six?
@@ -1394,7 +1417,7 @@ nrow(df[df$family.origin == "North.America" &
           df$diet.carnivore.tot == TRUE & 
           df$diet.invertivore.tot == TRUE &
           df$diet.breadth == 2,])
-#8 species similar to fox (including fox)
+#8 species similar to fox (including fox) (1 row NA)
 # only 1, the golden jackal, on 2 continents; the rest on 1
 # maybe low speciation for foxes or high enough pop density to maintain and not separate
 fox.sp <- df$binomial[df$family.origin == "North.America" & 
@@ -1409,16 +1432,20 @@ nrow(df[df$family.origin == "North.America" &
           df$log.size.bin == 5 & 
           df$diet.carnivore.tot == TRUE & 
           df$diet.frugivore.tot == TRUE &
-          df$diet.breadth == 2,])
+          df$diet.breadth == 2,] %>%
+         drop_na(order))
 #2 (including Ursus arctos)
 #other one is cave bear and Ursus americanus; both on 1
 
+#if allow for fish too
 xx <- df[df$family.origin == "North.America" & 
            df$log.size.bin == 5 & 
            df$diet.breadth >= 2,]
+
 xx[xx$diet.carnivore.tot == TRUE | 
      xx$diet.frugivore.tot == TRUE |
-     xx$diet.piscivore.tot == TRUE,] #if allow for fish too
+     xx$diet.piscivore.tot == TRUE,] %>%
+    drop_na(order) 
 #JUST BEARS
 
 ## Mustela nivalis
@@ -1426,7 +1453,8 @@ nrow(df[df$family.origin == "Eurasia" &
           df$log.size.bin == 2 & 
           df$diet.carnivore.tot == TRUE & 
           df$diet.invertivore.tot == TRUE &
-          df$diet.breadth == 2,])
+          df$diet.breadth == 2,] %>%
+         drop_na(order))
 # 13 species (including Mustela are similar)
 # 1 on two; the rest on 1
 
@@ -1435,40 +1463,42 @@ must.sp <- df$binomial[df$family.origin == "Eurasia" &
                 df$diet.carnivore.tot == TRUE & 
                 df$diet.invertivore.tot == TRUE &
                 df$diet.breadth == 2]
-View(mm.df[mm.df$binomial %in% must.sp,])
+View(df[df$binomial %in% must.sp,])
 
 ## Cervus elaphus
 nrow(df[df$family.origin == "Eurasia" & 
           df$log.size.bin == 5 & 
           df$diet.browser.tot == TRUE & 
-          df$diet.breadth == 1,])
+          df$diet.breadth == 1,] %>%
+         drop_na(order))
 # 16 things similar (including Cervus elephas)
 cerv.sp <- df$binomial[df$family.origin == "Eurasia" & 
                 df$log.size.bin == 5 & 
                 df$diet.browser.tot == TRUE & 
                 df$diet.breadth == 1]
-View(mm.df[mm.df$binomial %in% cerv.sp,])
+View(df[df$binomial %in% cerv.sp,])
 
 ## Panthera leo
 df[df$family.origin == "Eurasia" & 
    df$log.size.bin == 5 & 
    df$diet.carnivore.tot == TRUE & 
-   df$diet.breadth == 1,]
+   df$diet.breadth == 1,] %>%
+    drop_na(order)
 #6 things including P. leo similar; all Felids
 
 fel.sp <- df$binomial[df$family.origin == "Eurasia" & 
                df$log.size.bin == 5 & 
                df$diet.carnivore.tot == TRUE & 
                df$diet.breadth == 1]
-View(mm.df[mm.df$binomial %in% fel.sp,])
+View(df[df$binomial %in% fel.sp,])
 
 ## Miniopterus schreibersii
 yy <- df[df$family.origin == "North.America" & 
          df$log.size.bin == 1 & 
          df$diet.invertivore.tot == TRUE & 
-         df$diet.breadth == 1,]
-yy <- yy %>% drop_na(binomial)
-nrow(yy) #68 incl. bat
+         df$diet.breadth == 1,] %>%
+    drop_na(order)
+nrow(yy) #70 incl. bat
 table(yy$n.cont)
 # 1  2   3+ 
 # 58 11  1 
@@ -1478,7 +1508,7 @@ nrow(yy[yy$continent.South.America == TRUE,]) #9
 nrow(yy[yy$continent.Eurasia == TRUE,]) #32
 nrow(yy[yy$continent.Australia == TRUE,]) #8
 bat.sp <- yy$binomial
-View(mm.df[mm.df$binomial %in% bat.sp,])
+View(df[df$binomial %in% bat.sp,])
 
 #### H1: CONNECTIVITY ----
 
@@ -1511,9 +1541,9 @@ indeces[3,5] <- sorensen(x = df$binomial[df$continent.Eurasia == TRUE],
                          y = df$binomial[df$continent.Australia == TRUE])
 indeces[4,5] <- sorensen(x = df$binomial[df$continent.Africa == TRUE], 
                          y = df$binomial[df$continent.Australia == TRUE])
-#write.csv(indeces, 
-#          "./Results/sorensen.index.csv",
-#          row.names = FALSE)
+write.csv(indeces, 
+          "./Results/sorensen.index.csv",
+          row.names = FALSE)
 
 ## look at which groups are unique to each continent
 setdiff(unique(df$family[df$n.cont == 1 & df$continent.Africa == TRUE]),
@@ -1557,7 +1587,7 @@ setdiff(unique(df$order[df$n.cont == 2 & df$continent.North.America == TRUE & df
 setdiff(unique(df$order[df$n.cont == 2 & df$continent.Australia == TRUE & df$continent.Eurasia == TRUE]),
         unique(df$order[df$n.cont == 2 & df$continent.Australia == FALSE & df$continent.Eurasia == FALSE]))
 
-##which two continents are limited dispersers on?
+##which two continents are species on?
 df[df$n.cont == 2,] %>%
   summarise(n.AF = sum(continent.Africa == TRUE),
             n.EA = sum(continent.Eurasia == TRUE),
@@ -1569,8 +1599,8 @@ df[df$n.cont == 2,] %>%
 # 79   98   177  162    4
 
 ##which groups of limited dispersers are groups on?
-lim.disp <- df[df$n.cont == 2,]
-lim.cont <- lim.disp %>%
+on2 <- df[df$n.cont == 2,]
+on2.cont <- on2 %>%
   group_by(order) %>%
   dplyr::summarise(N = n(),
                    N.Africa.Eurasia = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE]),
@@ -1587,21 +1617,43 @@ lim.cont <- lim.disp %>%
 
 ##### CLOSER LOOK AT LIMITED DISPERSERS -----
 #eutherians v marsupial limited dispersals
-lim.cont <- lim.disp %>%
+on2.n <- on2 %>%
   group_by(order, n.cont) %>%
   dplyr::summarise(count = n()) %>%
   as.data.frame()
+
 marsup <- c("Didelphimorphia", "Paucituberculata", "Microbiotheria",
             "Dasyuromorphia", "Peramelemorphia", "Notoryctemorphia",
             "Diprotodontia")
-lim.cont[lim.cont$order %in% marsup,] #only didelmorphia
+on2.n[on2.n$order %in% marsup,] #only didelmorphia
 length(unique(df$binomial[df$order == "Didelphimorphia"])) #87 total
-length(unique(lim.disp$binomial[lim.disp$order == "Didelphimorphia"])) #5 (5.755 of total Didelmorphia diversity (5/87))
+length(unique(on2.n$binomial[on2.n$order == "Didelphimorphia"])) #5 (5.755 of total Didelmorphia diversity (5/87))
 length(unique(df$binomial[df$order == "Didelphimorphia" &
-                            df$continent.South.America == TRUE])) #83 (represent 6%; 83/1200)
+                          df$continent.South.America == TRUE])) #83 (represent 6%; 83/1200)
 length(unique(df$binomial[df$continent.South.America == TRUE])) #1200
 length(unique(df$binomial[df$continent.South.America == TRUE &
                             df$n.cont == 2])) #162
+
+## are things in trees not wide-ranging?
+nrow(df[df$habitat.mode == "arboreal",]) #480
+nrow(df[df$habitat.mode == "arboreal" & df$n.cont == "1",]) #470
+#which are on 2? are they from the new world?
+df[df$habitat.mode == "arboreal" & df$n.cont == "2",]
+#yes, all on North and South America
+
+table(df$habitat.mode[df$n.cont == "2"])
+#aquatic            arboreal        terr    terr _ aquatic 
+#2                  2               10      100               2 
+#terr- fossorial    volant 
+#2                  142 
+#most volant, then terr
+df$binomial[df$habitat.mode == "terr _ aquatic" & df$n.cont == "2"]
+#artiodactyla and rodentia; hippo and Hoplyomys gymnurus
+
+table(df$order[df$habitat.mode == "terr" & df$n.cont == "2"])
+#carnivora and rodents, of course
+table(df$log.size.bin[df$habitat.mode == "terr" & df$n.cont == "2"])
+#most from 10^3 or 10^4 (similar to islands...?)
 
 #are bats restricted by connectivity?
 bat.cont <- df[df$order == "Chiroptera" & df$n.cont == 2,] %>%
@@ -1624,7 +1676,7 @@ nrow(bat.cont[bat.cont$continent.Africa == TRUE &
 #jumpers (no longer living where family originated) and spreaders (living where family originated and other continents too)
 
 length(unique(df$order[df$family.origin != ""])) #28
-length(df$family.origin[df$family.origin != ""]) #3572
+length(df$family.origin[df$family.origin != ""]) #3571
 
 #gather data
 
@@ -1646,6 +1698,12 @@ df %>%
             n.sp.aus = sum(continent.Australia == TRUE),
             n.sp.sa = sum(continent.South.America == TRUE),
             n.sp.ea = sum(continent.Eurasia == TRUE))
+#n.cont     n.sp.af     n.sp.na     n.sp.aus    n.sp.sa     n.sp.ea
+#1          1065        625         331         1037        1061
+#2          79          177         4           162         98
+#3+          6          5           1           1           6
+
+
 #2. looking at family level
 nrow(df[df$family.origin == "Eurasia",])
 df %>% 
@@ -1655,6 +1713,11 @@ df %>%
             n.sp.aus = sum(family.origin == "Australia"), #205 have as origin
             n.sp.sa = sum(family.origin == "South.America"), #658 have as origin
             n.sp.ea = sum(family.origin == "Eurasia")) #1754
+#n.cont     n.sp.af     n.sp.na     n.sp.aus    n.sp.sa     n.sp.ea
+#1          299         587         205         575         1675
+#2          20          46          0           83          75
+#3+         0           3           0           0           3
+
 
 unique(df$family[df$family.origin == ""]) #only 7 families; most small groups but really diverse
 # Molossidae, Muridae, and Sciuridae are super diverse
@@ -1667,12 +1730,140 @@ nrow(df[df$n.cont == 2 & df$family == "Sciuridae",]) #2
 nrow(df[df$n.cont == 2 & df$family == "Muridae",]) #14
 #all Muridae on Africa and Eurasia
 
+##### FAMILY ORIGIN BAR CHART -----
+df$family.origin <- factor(df$family.origin,
+                           levels = c("Australia",
+                                      "Africa",
+                                      "Eurasia",
+                                      "North.America",
+                                      "South.America",
+                                      ""))
 
+df.origin.counts <- df %>%
+    group_by(n.cont, family.origin) %>%
+    summarize(n = n()) %>%
+    as.data.frame()
+two.add <- c("2", "Australia", 0)
+three.add.aus <- c("3+", "Australia", 0)
+three.add.sa <- c("3+", "South.America", 0)
+three.add.af <- c("3+", "Africa", 0)
+df.origin.counts <- rbind(df.origin.counts, two.add, three.add.af,
+                          three.add.aus, three.add.sa)
+
+p.origin.2 <- ggplot() +  
+    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "2"],
+                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "2"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Continent of Family Origin",
+                     labels = c("Australia" = "AU", "Africa" = "AF", 
+                                "Eurasia" = "EA", "North.America" = "NA", 
+                                "South.America" = "SA"))
+#sample size
+sum(as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "2"])) 
+#224
+
+ggsave(p.origin.2, 
+       file = "./Figures/continent.origin.two.png", 
+       width = 20, height = 10, units = "cm")
+
+df.vol <- df[df$habitat.mode == "volant",]
+df.nonvol <- df[df$habitat.mode != "volant",]
+
+df.origin.counts.nonvol <- df.nonvol %>%
+    group_by(n.cont, family.origin) %>%
+    dplyr::summarize(n = n()) %>%
+    as.data.frame()
+df.origin.counts.nonvol <- rbind(df.origin.counts.nonvol, two.add, three.add.af,
+                                 three.add.aus, three.add.sa)
+
+df.origin.counts.vol <- df.vol %>%
+    dplyr::group_by(n.cont, family.origin) %>%
+    dplyr::summarize(n = n()) %>%
+    as.data.frame()
+df.origin.counts.vol <- rbind(df.origin.counts.vol, two.add, three.add.af,
+                              three.add.aus, three.add.sa)
+
+p.origin.2.nonvol <- ggplot() +  
+    geom_col(aes(df.origin.counts.nonvol$family.origin[df.origin.counts.nonvol$family.origin != "" & df.origin.counts.nonvol$n.cont == "2"],
+                 as.numeric(df.origin.counts.nonvol$n[df.origin.counts.nonvol$family.origin != "" & df.origin.counts.nonvol$n.cont == "2"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Nonvolant Continent of Family Origin",
+                     labels = c("Australia" = "AU", "Africa" = "AF", 
+                                "Eurasia" = "EA", "North.America" = "NA", 
+                                "South.America" = "SA"))
+#sample size
+sum(as.numeric(df.origin.counts.nonvol$n[df.origin.counts.nonvol$family.origin != "" & df.origin.counts.nonvol$n.cont == "2"])) 
+#102
+
+ggsave(p.origin.2.nonvol, 
+       file = "./Figures/continent.origin.two.nonvol.png", 
+       width = 20, height = 10, units = "cm")
+
+p.origin.2.vol <- ggplot() +  
+    geom_col(aes(df.origin.counts.vol$family.origin[df.origin.counts.vol$family.origin != "" & df.origin.counts.vol$n.cont == "2"],
+                 as.numeric(df.origin.counts.vol$n[df.origin.counts.vol$family.origin != "" & df.origin.counts.vol$n.cont == "2"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Volant Continent of Family Origin",
+                     labels = c("Australia" = "AU", "Africa" = "AF", 
+                                "Eurasia" = "EA", "North.America" = "NA", 
+                                "South.America" = "SA"))
+#sample size
+sum(as.numeric(df.origin.counts.vol$n[df.origin.counts.vol$family.origin != "" & df.origin.counts.vol$n.cont == "2"])) 
+#122
+
+ggsave(p.origin.2.vol, 
+       file = "./Figures/continent.origin.two.vol.png", 
+       width = 20, height = 10, units = "cm")
+
+p.origin.1 <- ggplot() +  
+    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "1"],
+                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "1"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
+             colour = "black", fill = "black") +
+    plot_theme +
+    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Continent of Family Origin",
+                     labels = c("Australia" = "AU", "Africa" = "AF", 
+                                "Eurasia" = "EA", "North.America" = "NA", 
+                                "South.America" = "SA"))
+#sample size
+sum(as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "1"])) 
+#3342
+
+ggsave(p.origin.1, 
+       file = "./Figures/continent.origin.one.png", 
+       width = 20, height = 10, units = "cm")
+
+p.origin.3 <- ggplot() +  
+    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "3+"],
+                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "3+"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
+             colour = "red", fill = "red") +
+    plot_theme +
+    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Continent of Family Origin",
+                     labels = c("Australia" = "AU", "Africa" = "AF", 
+                                "Eurasia" = "EA", "North.America" = "NA", 
+                                "South.America" = "SA"))
+#sample size
+sum(as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "3+"])) 
+#6
+
+ggsave(p.origin.3, 
+       file = "./Figures/continent.origin.three.png", 
+       width = 20, height = 10, units = "cm")
+
+##### HOMIES (ON1) ORIGIN -----
 homies <- df[df$n.cont == 1,]
-limited <- df[df$n.cont == 2,]
-trotter <- df[df$n.cont == "3+",]
-
-#homies
 homies.origin <- homies %>%
   group_by(family.origin) %>%
   dplyr::summarise(N = n(),
@@ -1719,138 +1910,11 @@ homies.origin$prop.jump[homies.origin$family.origin == "Eurasia"] <- as.numeric(
 homies.origin$prop.stay[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.Eurasia[homies.origin$family.origin == "Eurasia"])/as.numeric(sum(homies.origin$N))
 homies.origin$prop.leave[homies.origin$family.origin == "Eurasia"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Eurasia"])/as.numeric(sum(homies.origin$N))
 
-
-#write.csv(homies.origin, 
-#          "./Results/homies.family.origin.csv",
-#          row.names = FALSE)
+write.csv(homies.origin, 
+          "./Results/homies.family.origin.csv",
+          row.names = FALSE)
 
 unique(homies$order[homies$family.origin == "Africa"])
-
-##FIGURE
-df$family.origin <- factor(df$family.origin,
-                           levels = c("Australia",
-                                      "Africa",
-                                      "Eurasia",
-                                      "North.America",
-                                      "South.America",
-                                      ""))
-
-df.origin.counts <- df %>%
-    group_by(n.cont, family.origin) %>%
-    summarize(n = n()) %>%
-    as.data.frame()
-two.add <- c("2", "Australia", 0)
-three.add.aus <- c("3+", "Australia", 0)
-three.add.sa <- c("3+", "South.America", 0)
-three.add.af <- c("3+", "Africa", 0)
-df.origin.counts <- rbind(df.origin.counts, two.add, three.add.af,
-                          three.add.aus, three.add.sa)
-
-p.origin.2 <- ggplot() +  
-    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "2"],
-                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "2"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
-                   colour = "gray47", fill = "gray47") +
-    plot.theme +
-    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_discrete(name = "Continent of Family Origin",
-                     labels = c("Australia" = "AU", "Africa" = "AF", 
-                                "Eurasia" = "EA", "North.America" = "NA", 
-                                "South.America" = "SA"))
-sum(as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "2"])) #224
-
-ggsave(p.origin.2, 
-       file = "./Figures/continent.origin.two.png", 
-       width = 20, height = 10, units = "cm")
-
-df.vol <- df[df$order == "Chiroptera",]
-df.nonvol <- df[df$order != "Chiroptera",]
-
-df.origin.counts.nonvol <- df.nonvol %>%
-    group_by(n.cont, family.origin) %>%
-    dplyr::summarize(n = n()) %>%
-    as.data.frame()
-df.origin.counts.nonvol <- rbind(df.origin.counts.nonvol, two.add, three.add.af,
-                                 three.add.aus, three.add.sa)
-
-df.origin.counts.vol <- df.vol %>%
-    dplyr::group_by(n.cont, family.origin) %>%
-    dplyr::summarize(n = n()) %>%
-    as.data.frame()
-df.origin.counts.vol <- rbind(df.origin.counts.vol, two.add, three.add.af,
-                              three.add.aus, three.add.sa)
-
-p.origin.2.nonvol <- ggplot() +  
-    geom_col(aes(df.origin.counts.nonvol$family.origin[df.origin.counts.nonvol$family.origin != "" & df.origin.counts.nonvol$n.cont == "2"],
-                 as.numeric(df.origin.counts.nonvol$n[df.origin.counts.nonvol$family.origin != "" & df.origin.counts.nonvol$n.cont == "2"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
-             colour = "gray47", fill = "gray47") +
-    plot_theme +
-    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_discrete(name = "Nonvolant Continent of Family Origin",
-                     labels = c("Australia" = "AU", "Africa" = "AF", 
-                                "Eurasia" = "EA", "North.America" = "NA", 
-                                "South.America" = "SA"))
-
-sum(as.numeric(df.origin.counts.nonvol$n[df.origin.counts.nonvol$family.origin != "" & df.origin.counts.nonvol$n.cont == "2"])) #102
-
-ggsave(p.origin.2.nonvol, 
-       file = "./Figures/continent.origin.two.nonvol.png", 
-       width = 20, height = 10, units = "cm")
-
-p.origin.2.vol <- ggplot() +  
-    geom_col(aes(df.origin.counts.vol$family.origin[df.origin.counts.vol$family.origin != "" & df.origin.counts.vol$n.cont == "2"],
-                 as.numeric(df.origin.counts.vol$n[df.origin.counts.vol$family.origin != "" & df.origin.counts.vol$n.cont == "2"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
-             colour = "gray47", fill = "gray47") +
-    plot_theme +
-    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_discrete(name = "Volant Continent of Family Origin",
-                     labels = c("Australia" = "AU", "Africa" = "AF", 
-                                "Eurasia" = "EA", "North.America" = "NA", 
-                                "South.America" = "SA"))
-
-sum(as.numeric(df.origin.counts.vol$n[df.origin.counts.vol$family.origin != "" & df.origin.counts.vol$n.cont == "2"])) #122
-
-ggsave(p.origin.2.vol, 
-       file = "./Figures/continent.origin.two.vol.png", 
-       width = 20, height = 10, units = "cm")
-
-p.origin.1 <- ggplot() +  
-    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "1"],
-                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "1"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
-             colour = "black", fill = "black") +
-    plot_theme +
-    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_discrete(name = "Continent of Family Origin",
-                     labels = c("Australia" = "AU", "Africa" = "AF", 
-                                "Eurasia" = "EA", "North.America" = "NA", 
-                                "South.America" = "SA"))
-
-sum(as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "1"])) #3342
-
-ggsave(p.origin.1, 
-       file = "./Figures/continent.origin.one.png", 
-       width = 20, height = 10, units = "cm")
-
-p.origin.3 <- ggplot() +  
-    geom_col(aes(df.origin.counts$family.origin[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "3+"],
-                 as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "3+"])), #df$family.origin[df$n.cont == "2" & df$family.origin != ""]
-             colour = "red", fill = "red") +
-    plot_theme +
-    theme(axis.text.x = element_text(hjust = 1, size = 26)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_discrete(name = "Continent of Family Origin",
-                     labels = c("Australia" = "AU", "Africa" = "AF", 
-                                "Eurasia" = "EA", "North.America" = "NA", 
-                                "South.America" = "SA"))
-
-sum(as.numeric(df.origin.counts$n[df.origin.counts$family.origin != "" & df.origin.counts$n.cont == "3+"])) #6
-
-ggsave(p.origin.3, 
-       file = "./Figures/continent.origin.three.png", 
-       width = 20, height = 10, units = "cm")
 
 homies.origin$per.stay <- as.numeric(homies.origin$prop.stay)*100
 homies.origin$per.leave <- as.numeric(homies.origin$prop.leave)*100
@@ -1864,9 +1928,11 @@ homies.origin.melt$family.origin.per <- paste(homies.origin.melt$family.origin,
                                               homies.origin.melt$per,
                                               sep = ".")
 
-#write.csv(homies.origin.melt,
-#          "./Results/homebodies.origin.results.csv",
-#          row.names = FALSE)
+write.csv(homies.origin.melt,
+          "./Results/homebodies.origin.results.csv",
+          row.names = FALSE)
+
+###### HOMIES (ON1) PIE CHART ------
 
 ##pie chart
 ## COLOR SCHEME
@@ -1876,7 +1942,7 @@ homies.origin.melt$family.origin.per <- paste(homies.origin.melt$family.origin,
 #Eurasia = #F2CDA0; dark #A68C6D
 #Australia = #D9967E; dark #8C6151
 
-p <- ggplot(homies.origin.melt, aes(x = "", y = value, fill = family.origin.per)) +
+p.homies.pie <- ggplot(homies.origin.melt, aes(x = "", y = value, fill = family.origin.per)) +
   geom_col(color = 'black',
            position = position_stack(reverse = TRUE),
            show.legend = TRUE) +
@@ -1917,7 +1983,8 @@ homies.origin.na.melt <- melt(homies.origin[homies.origin$family.origin == "Nort
                               value.name = "N")
 homies.origin.na.melt$per <- homies.origin.na.melt$N/homies.origin$N[homies.origin$family.origin == "North.America"]
 homies.origin.na.melt <- as.data.frame(homies.origin.na.melt)
-ggplot(homies.origin.na.melt, aes(x = "", y = per, fill = continent)) +
+
+p.homies.pie.NA <- ggplot(homies.origin.na.melt, aes(x = "", y = per, fill = continent)) +
   #geom_col(color = 'black',
   #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
   #geom_bar(stat="identity", width=1) +
@@ -1930,6 +1997,10 @@ ggplot(homies.origin.na.melt, aes(x = "", y = per, fill = continent)) +
   coord_polar("y", start = 0) +
   theme_void() 
 
+ggsave(p.homies.pie.NA, 
+       file = "./Figures/homies.pie.NA.png", 
+       width = 20, height = 10, units = "cm")
+
 ## South America
 homies.origin.sa.melt <- melt(homies.origin[homies.origin$family.origin == "South.America",],
                               id.vars = "family.origin",
@@ -1939,7 +2010,8 @@ homies.origin.sa.melt <- melt(homies.origin[homies.origin$family.origin == "Sout
                               value.name = "N")
 homies.origin.sa.melt$per <- homies.origin.sa.melt$N/homies.origin$N[homies.origin$family.origin == "South.America"]
 homies.origin.sa.melt <- as.data.frame(homies.origin.sa.melt)
-ggplot(homies.origin.sa.melt, aes(x = "", y = per, fill = continent)) +
+
+p.homies.pie.SA <- ggplot(homies.origin.sa.melt, aes(x = "", y = per, fill = continent)) +
     #geom_col(color = 'black',
     #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
     #geom_bar(stat="identity", width=1) +
@@ -1951,6 +2023,10 @@ ggplot(homies.origin.sa.melt, aes(x = "", y = per, fill = continent)) +
                                  "N.South.America" = "#f0d2ff")) +
     coord_polar("y", start = 0) +
     theme_void()
+
+ggsave(p.homies.pie.SA, 
+       file = "./Figures/homies.pie.SA.png", 
+       width = 20, height = 10, units = "cm")
 
 ## Eurasia
 homies.origin.ea.melt <- melt(homies.origin[homies.origin$family.origin == "Eurasia",],
@@ -1961,7 +2037,8 @@ homies.origin.ea.melt <- melt(homies.origin[homies.origin$family.origin == "Eura
                               value.name = "N")
 homies.origin.ea.melt$per <- homies.origin.ea.melt$N/homies.origin$N[homies.origin$family.origin == "Eurasia"]
 homies.origin.ea.melt <- as.data.frame(homies.origin.ea.melt)
-ggplot(homies.origin.ea.melt, aes(x = "", y = per, fill = continent)) +
+
+p.homies.pie.EA <- ggplot(homies.origin.ea.melt, aes(x = "", y = per, fill = continent)) +
     #geom_col(color = 'black',
     #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
     #geom_bar(stat="identity", width=1) +
@@ -1973,6 +2050,10 @@ ggplot(homies.origin.ea.melt, aes(x = "", y = per, fill = continent)) +
                                  "N.South.America" = "#f0d2ff")) +
     coord_polar("y", start = 0) +
     theme_void()
+
+ggsave(p.homies.pie.EA, 
+       file = "./Figures/homies.pie.EA.png", 
+       width = 20, height = 10, units = "cm")
 
 ## Africa
 homies.origin.af.melt <- melt(homies.origin[homies.origin$family.origin == "Africa",],
@@ -1983,7 +2064,8 @@ homies.origin.af.melt <- melt(homies.origin[homies.origin$family.origin == "Afri
                               value.name = "N")
 homies.origin.af.melt$per <- homies.origin.af.melt$N/homies.origin$N[homies.origin$family.origin == "Africa"]
 homies.origin.af.melt <- as.data.frame(homies.origin.af.melt)
-ggplot(homies.origin.af.melt, aes(x = "", y = per, fill = continent)) +
+
+p.homies.pie.AU <- ggplot(homies.origin.af.melt, aes(x = "", y = per, fill = continent)) +
     #geom_col(color = 'black',
     #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
     #geom_bar(stat="identity", width=1) +
@@ -1996,8 +2078,12 @@ ggplot(homies.origin.af.melt, aes(x = "", y = per, fill = continent)) +
     coord_polar("y", start = 0) +
     theme_void()
 
-##limited dispersers
-limited.origin <- limited %>%
+ggsave(p.homies.pie.AU, 
+       file = "./Figures/homies.pie.AU.png", 
+       width = 20, height = 10, units = "cm")
+
+##### WIDE-RANGING (ON2) ORIGIN ----
+rangers.origin <- on2 %>%
   group_by(family.origin) %>%
   dplyr::summarise(N = n(),
                    N.Africa = length(continent.Africa[continent.Africa == TRUE]),
@@ -2006,22 +2092,22 @@ limited.origin <- limited %>%
                    N.North.America = length(continent.North.America[continent.North.America == TRUE]),
                    N.Eurasia = length(continent.Eurasia[continent.Eurasia == TRUE])) %>%
   as.data.frame() 
-limited.origin <- limited.origin[limited.origin$family.origin != "",]
+rangers.origin <- rangers.origin[rangers.origin$family.origin != "",]
 
 #get proportions
-limited.origin$prop.spread <- ""
-limited.origin$prop.spread[limited.origin$family.origin == "Africa"] <- limited.origin$N.Africa[limited.origin$family.origin == "Africa"]/limited.origin$N[limited.origin$family.origin == "Africa"]
-limited.origin$prop.spread[limited.origin$family.origin == "Eurasia"] <- limited.origin$N.Eurasia[limited.origin$family.origin == "Eurasia"]/limited.origin$N[limited.origin$family.origin == "Eurasia"]
-limited.origin$prop.spread[limited.origin$family.origin == "Australia"] <- limited.origin$N.Australia[limited.origin$family.origin == "Australia"]/limited.origin$N[limited.origin$family.origin == "Australia"]
-limited.origin$prop.spread[limited.origin$family.origin == "South.America"] <- limited.origin$N.South.America[limited.origin$family.origin == "South.America"]/limited.origin$N[limited.origin$family.origin == "South.America"]
-limited.origin$prop.spread[limited.origin$family.origin == "North.America"] <- limited.origin$N.North.America[limited.origin$family.origin == "North.America"]/limited.origin$N[limited.origin$family.origin == "North.America"]
+rangers.origin$prop.spread <- ""
+rangers.origin$prop.spread[rangers.origin$family.origin == "Africa"] <- rangers.origin$N.Africa[rangers.origin$family.origin == "Africa"]/rangers.origin$N[rangers.origin$family.origin == "Africa"]
+rangers.origin$prop.spread[rangers.origin$family.origin == "Eurasia"] <- rangers.origin$N.Eurasia[rangers.origin$family.origin == "Eurasia"]/rangers.origin$N[rangers.origin$family.origin == "Eurasia"]
+rangers.origin$prop.spread[rangers.origin$family.origin == "Australia"] <- rangers.origin$N.Australia[rangers.origin$family.origin == "Australia"]/rangers.origin$N[rangers.origin$family.origin == "Australia"]
+rangers.origin$prop.spread[rangers.origin$family.origin == "South.America"] <- rangers.origin$N.South.America[rangers.origin$family.origin == "South.America"]/rangers.origin$N[rangers.origin$family.origin == "South.America"]
+rangers.origin$prop.spread[rangers.origin$family.origin == "North.America"] <- rangers.origin$N.North.America[rangers.origin$family.origin == "North.America"]/rangers.origin$N[rangers.origin$family.origin == "North.America"]
 #no jumpers in North.America
 #no spreaders from Australia
 
-limited.origin$prop.jump <- 1- as.numeric(limited.origin$prop.spread)
+rangers.origin$prop.jump <- 1- as.numeric(rangers.origin$prop.spread)
 
 #want to know where the jumpers and spreaders went to
-limited.cont <- limited %>%
+rangers.origin.shared <- on2 %>%
   group_by(family.origin) %>%
   dplyr::summarise(N = n(),
                    N.Africa.Eurasia = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE]),
@@ -2035,97 +2121,97 @@ limited.cont <- limited %>%
                    N.Eurasia.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.South.America == TRUE]),
                    N.South.America.North.America = length(continent.South.America[continent.South.America == TRUE & continent.North.America == TRUE])) %>%
   as.data.frame() 
-limited.cont <- limited.cont[limited.cont$family.origin != "",]
+rangers.origin.shared <- rangers.origin.shared[rangers.origin.shared$family.origin != "",]
 #Australia not here...? No family now on two continents originated in Australia
 
-limited.cont$prop.spread <- ""
-limited.cont$prop.jump <- ""
+rangers.origin.shared$prop.spread <- ""
+rangers.origin.shared$prop.jump <- ""
 
-limited.cont$prop.spread[limited.cont$family.origin == "Africa"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Africa"] + 
-                                                                          limited.cont$N.Africa.Australia[limited.cont$family.origin == "Africa"] + 
-                                                                          limited.cont$N.Africa.North.America[limited.cont$family.origin == "Africa"] +
-                                                                          limited.cont$N.Africa.South.America[limited.cont$family.origin == "Africa"])/limited.cont$N[limited.cont$family.origin == "Africa"]
-limited.cont$prop.jump[limited.cont$family.origin == "Africa"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "Africa"])
+rangers.origin.shared$prop.spread[rangers.origin.shared$family.origin == "Africa"] <- sum(rangers.origin.shared$N.Africa.Eurasia[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                          + rangers.origin.shared$N.Africa.Australia[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                          + rangers.origin.shared$N.Africa.North.America[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                          + rangers.origin.shared$N.Africa.South.America[rangers.origin.shared$family.origin == "Africa"])/rangers.origin.shared$N[rangers.origin.shared$family.origin == "Africa"]
+rangers.origin.shared$prop.jump[rangers.origin.shared$family.origin == "Africa"] <- 1 - as.numeric(rangers.origin.shared$prop.spread[rangers.origin.shared$family.origin == "Africa"])
 
-limited.cont$prop.stay[limited.cont$family.origin == "Africa"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Africa"] + 
-                                                                        limited.cont$N.Africa.Australia[limited.cont$family.origin == "Africa"] + 
-                                                                        limited.cont$N.Africa.North.America[limited.cont$family.origin == "Africa"] +
-                                                                        limited.cont$N.Africa.South.America[limited.cont$family.origin == "Africa"])/sum(limited.cont$N)
-limited.cont$prop.leave[limited.cont$family.origin == "Africa"] <- (limited.cont$N[limited.cont$family.origin == "Africa"] - sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Africa"] + 
-                                                                                                                                   limited.cont$N.Africa.Australia[limited.cont$family.origin == "Africa"] + 
-                                                                                                                                   limited.cont$N.Africa.North.America[limited.cont$family.origin == "Africa"] +
-                                                                                                                                   limited.cont$N.Africa.South.America[limited.cont$family.origin == "Africa"]))/as.numeric(sum(limited.cont$N))
-
-
-limited.cont$prop.spread[limited.cont$family.origin == "Eurasia"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Eurasia"] + 
-                                                                           limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
-                                                                           limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
-                                                                           limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"])/limited.cont$N[limited.cont$family.origin == "Eurasia"]
-limited.cont$prop.jump[limited.cont$family.origin == "Eurasia"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "Eurasia"])
+rangers.origin.shared$prop.stay[rangers.origin.shared$family.origin == "Africa"] <- sum(rangers.origin.shared$N.Africa.Eurasia[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                        + rangers.origin.shared$N.Africa.Australia[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                        + rangers.origin.shared$N.Africa.North.America[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                        + rangers.origin.shared$N.Africa.South.America[rangers.origin.shared$family.origin == "Africa"])/sum(rangers.origin.shared$N)
+rangers.origin.shared$prop.leave[rangers.origin.shared$family.origin == "Africa"] <- (rangers.origin.shared$N[rangers.origin.shared$family.origin == "Africa"] - sum(rangers.origin.shared$N.Africa.Eurasia[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                                                                                                     + rangers.origin.shared$N.Africa.Australia[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                                                                                                     + rangers.origin.shared$N.Africa.North.America[rangers.origin.shared$family.origin == "Africa"] 
+                                                                                                                                                                     + rangers.origin.shared$N.Africa.South.America[rangers.origin.shared$family.origin == "Africa"]))/as.numeric(sum(rangers.origin.shared$N))
 
 
-limited.cont$prop.stay[limited.cont$family.origin == "Eurasia"] <- sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Eurasia"] + 
-                                                                         limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
-                                                                         limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
-                                                                         limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"])/sum(limited.cont$N)
-limited.cont$prop.leave[limited.cont$family.origin == "Eurasia"] <- (limited.cont$N[limited.cont$family.origin == "Eurasia"] - sum(limited.cont$N.Africa.Eurasia[limited.cont$family.origin == "Eurasia"] + 
-                                                                                                                                   limited.cont$N.Australia.Eurasia[limited.cont$family.origin == "Eurasia"] + 
-                                                                                                                                   limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "Eurasia"] + 
-                                                                                                                                   limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "Eurasia"]))/as.numeric(sum(limited.cont$N))
+rangers.origin.shared$prop.spread[rangers.origin.shared$family.origin == "Eurasia"] <- sum(rangers.origin.shared$N.Africa.Eurasia[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                           + rangers.origin.shared$N.Australia.Eurasia[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                           + rangers.origin.shared$N.Eurasia.North.America[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                           + rangers.origin.shared$N.Eurasia.South.America[rangers.origin.shared$family.origin == "Eurasia"])/rangers.origin.shared$N[rangers.origin.shared$family.origin == "Eurasia"]
+rangers.origin.shared$prop.jump[rangers.origin.shared$family.origin == "Eurasia"] <- 1 - as.numeric(rangers.origin.shared$prop.spread[rangers.origin.shared$family.origin == "Eurasia"])
+
+
+rangers.origin.shared$prop.stay[rangers.origin.shared$family.origin == "Eurasia"] <- sum(rangers.origin.shared$N.Africa.Eurasia[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                         + rangers.origin.shared$N.Australia.Eurasia[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                         + rangers.origin.shared$N.Eurasia.North.America[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                         + rangers.origin.shared$N.Eurasia.South.America[rangers.origin.shared$family.origin == "Eurasia"])/sum(rangers.origin.shared$N)
+rangers.origin.shared$prop.leave[rangers.origin.shared$family.origin == "Eurasia"] <- (rangers.origin.shared$N[rangers.origin.shared$family.origin == "Eurasia"] - sum(rangers.origin.shared$N.Africa.Eurasia[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                                                                                                       + rangers.origin.shared$N.Australia.Eurasia[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                                                                                                       + rangers.origin.shared$N.Eurasia.North.America[rangers.origin.shared$family.origin == "Eurasia"] 
+                                                                                                                                                                       + rangers.origin.shared$N.Eurasia.South.America[rangers.origin.shared$family.origin == "Eurasia"]))/as.numeric(sum(rangers.origin.shared$N))
 
 
 
-limited.cont$prop.spread[limited.cont$family.origin == "North.America"] <- sum(limited.cont$N.Africa.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                                 limited.cont$N.Australia.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                                 limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                                 limited.cont$N.South.America.North.America[limited.cont$family.origin == "North.America"])/limited.cont$N[limited.cont$family.origin == "North.America"]
-limited.cont$prop.jump[limited.cont$family.origin == "North.America"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "North.America"])
+rangers.origin.shared$prop.spread[rangers.origin.shared$family.origin == "North.America"] <- sum(rangers.origin.shared$N.Africa.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                                 + rangers.origin.shared$N.Australia.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                                 + rangers.origin.shared$N.Eurasia.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                                 + rangers.origin.shared$N.South.America.North.America[rangers.origin.shared$family.origin == "North.America"])/rangers.origin.shared$N[rangers.origin.shared$family.origin == "North.America"]
+rangers.origin.shared$prop.jump[rangers.origin.shared$family.origin == "North.America"] <- 1 - as.numeric(rangers.origin.shared$prop.spread[rangers.origin.shared$family.origin == "North.America"])
 
 
-limited.cont$prop.stay[limited.cont$family.origin == "North.America"] <- sum(limited.cont$N.Africa.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                               limited.cont$N.Australia.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                               limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                               limited.cont$N.South.America.North.America[limited.cont$family.origin == "North.America"])/sum(limited.cont$N)
-limited.cont$prop.leave[limited.cont$family.origin == "North.America"] <- (limited.cont$N[limited.cont$family.origin == "North.America"] - sum(limited.cont$N.Africa.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                                                                                                 limited.cont$N.Australia.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                                                                                                 limited.cont$N.Eurasia.North.America[limited.cont$family.origin == "North.America"] + 
-                                                                                                                                                 limited.cont$N.South.America.North.America[limited.cont$family.origin == "North.America"]))/as.numeric(sum(limited.cont$N))
+rangers.origin.shared$prop.stay[rangers.origin.shared$family.origin == "North.America"] <- sum(rangers.origin.shared$N.Africa.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                               + rangers.origin.shared$N.Australia.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                               + rangers.origin.shared$N.Eurasia.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                               + rangers.origin.shared$N.South.America.North.America[rangers.origin.shared$family.origin == "North.America"])/sum(rangers.origin.shared$N)
+rangers.origin.shared$prop.leave[rangers.origin.shared$family.origin == "North.America"] <- (rangers.origin.shared$N[rangers.origin.shared$family.origin == "North.America"] - sum(rangers.origin.shared$N.Africa.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                                                                                                                   + rangers.origin.shared$N.Australia.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                                                                                                                   + rangers.origin.shared$N.Eurasia.North.America[rangers.origin.shared$family.origin == "North.America"] 
+                                                                                                                                                                                   + rangers.origin.shared$N.South.America.North.America[rangers.origin.shared$family.origin == "North.America"]))/as.numeric(sum(rangers.origin.shared$N))
 
-limited.cont$prop.spread[limited.cont$family.origin == "South.America"] <- sum(limited.cont$N.Africa.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                                 limited.cont$N.Australia.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                                 limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                                 limited.cont$N.South.America.North.America[limited.cont$family.origin == "South.America"])/limited.cont$N[limited.cont$family.origin == "South.America"]
-limited.cont$prop.jump[limited.cont$family.origin == "South.America"] <- 1 - as.numeric(limited.cont$prop.spread[limited.cont$family.origin == "South.America"])
+rangers.origin.shared$prop.spread[rangers.origin.shared$family.origin == "South.America"] <- sum(rangers.origin.shared$N.Africa.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                                 + rangers.origin.shared$N.Australia.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                                 + rangers.origin.shared$N.Eurasia.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                                 + rangers.origin.shared$N.South.America.North.America[rangers.origin.shared$family.origin == "South.America"])/rangers.origin.shared$N[rangers.origin.shared$family.origin == "South.America"]
+rangers.origin.shared$prop.jump[rangers.origin.shared$family.origin == "South.America"] <- 1 - as.numeric(rangers.origin.shared$prop.spread[rangers.origin.shared$family.origin == "South.America"])
 #100% spread
 
-limited.cont$prop.stay[limited.cont$family.origin == "South.America"] <- sum(limited.cont$N.Africa.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                               limited.cont$N.Australia.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                               limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                               limited.cont$N.South.America.North.America[limited.cont$family.origin == "South.America"])/sum(limited.cont$N)
-limited.cont$prop.leave[limited.cont$family.origin == "South.America"] <- (limited.cont$N[limited.cont$family.origin == "South.America"] - sum(limited.cont$N.Africa.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                                                                                                 limited.cont$N.Australia.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                                                                                                 limited.cont$N.Eurasia.South.America[limited.cont$family.origin == "South.America"] + 
-                                                                                                                                                 limited.cont$N.South.America.North.America[limited.cont$family.origin == "South.America"]))/as.numeric(sum(limited.cont$N))
+rangers.origin.shared$prop.stay[rangers.origin.shared$family.origin == "South.America"] <- sum(rangers.origin.shared$N.Africa.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                               + rangers.origin.shared$N.Australia.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                               + rangers.origin.shared$N.Eurasia.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                               + rangers.origin.shared$N.South.America.North.America[rangers.origin.shared$family.origin == "South.America"])/sum(rangers.origin.shared$N)
+rangers.origin.shared$prop.leave[rangers.origin.shared$family.origin == "South.America"] <- (rangers.origin.shared$N[rangers.origin.shared$family.origin == "South.America"] - sum(rangers.origin.shared$N.Africa.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                                                                                                                   + rangers.origin.shared$N.Australia.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                                                                                                                   + rangers.origin.shared$N.Eurasia.South.America[rangers.origin.shared$family.origin == "South.America"] 
+                                                                                                                                                                                   + rangers.origin.shared$N.South.America.North.America[rangers.origin.shared$family.origin == "South.America"]))/as.numeric(sum(rangers.origin.shared$N))
 
 
-sum(limited.cont$prop.leave)+sum(limited.cont$prop.stay)
-#write.csv(limited.cont, 
-#          "./Results/limited.family.origin.csv",
-#          row.names = FALSE)
+sum(rangers.origin.shared$prop.leave)+sum(rangers.origin.shared$prop.stay)
+write.csv(rangers.origin.shared, 
+          "./Results/rangers.family.origin.csv",
+          row.names = FALSE)
 
 ##FIGURE
-limited.cont$per.stay <- as.numeric(limited.cont$prop.stay)*100
-limited.cont$per.leave <- as.numeric(limited.cont$prop.leave)*100
+rangers.origin.shared$per.stay <- as.numeric(rangers.origin.shared$prop.stay)*100
+rangers.origin.shared$per.leave <- as.numeric(rangers.origin.shared$prop.leave)*100
 
-limited.cont.melt <- melt(limited.cont, 
+rangers.origin.shared.melt <- melt(rangers.origin.shared, 
                           id.vars = "family.origin",
                           measure.vars = c("per.stay",
                                            "per.leave"),
                           variable.name = "per")
-limited.cont.melt$family.origin.per <- paste(limited.cont.melt$family.origin, 
-                                             limited.cont.melt$per,
+rangers.origin.shared.melt$family.origin.per <- paste(rangers.origin.shared.melt$family.origin, 
+                                                     rangers.origin.shared.melt$per,
                                              sep = ".")
-
+###### WIDE-RANGING (ON2) PIE CHART -----
 ##pie chart
 ## COLOR SCHEME
 #South America = #E2C9F2; dark #9A8AA6
@@ -2134,7 +2220,7 @@ limited.cont.melt$family.origin.per <- paste(limited.cont.melt$family.origin,
 #Eurasia = #F2CDA0; dark #A68C6D
 #Australia = #D9967E; dark #8C6151
 
-q <- ggplot(limited.cont.melt, aes(x = "", y = value, fill = family.origin.per)) +
+p.ranger.pie <- ggplot(limited.cont.melt, aes(x = "", y = value, fill = family.origin.per)) +
   geom_col(color = 'black', 
            position = position_stack(reverse = TRUE), 
            show.legend = TRUE) +
@@ -2165,15 +2251,15 @@ q <- ggplot(limited.cont.melt, aes(x = "", y = value, fill = family.origin.per))
   theme_void()
 
 ##by shared continents
-limited.shared <- limited[limited$family.origin != "",]
+rangers.shared <- on2[on2$family.origin != "",]
 
-limited$shared <- ""
-limited$shared[limited$continent.Africa == TRUE & limited$continent.Eurasia == TRUE] <- "EA.AF"
-limited$shared[limited$continent.Eurasia == TRUE & limited$continent.North.America == TRUE] <- "EA.NA"
-limited$shared[limited$continent.Eurasia == TRUE & limited$continent.Australia == TRUE] <- "EA.AU"
-limited$shared[limited$continent.South.America == TRUE & limited$continent.North.America == TRUE] <- "NA.SA"
+rangers.shared$shared <- ""
+rangers.shared$shared[rangers.shared$continent.Africa == TRUE & rangers.shared$continent.Eurasia == TRUE] <- "EA.AF"
+rangers.shared$shared[rangers.shared$continent.Eurasia == TRUE & rangers.shared$continent.North.America == TRUE] <- "EA.NA"
+rangers.shared$shared[rangers.shared$continent.Eurasia == TRUE & rangers.shared$continent.Australia == TRUE] <- "EA.AU"
+rangers.shared$shared[rangers.shared$continent.South.America == TRUE & rangers.shared$continent.North.America == TRUE] <- "NA.SA"
 
-limited.shared <- limited.shared %>%
+rangers.shared.stats <- rangers.shared %>%
     group_by(shared) %>%
     dplyr::summarise(N = n(),
                      N.Africa = length(family.origin[family.origin == "Africa"]),
@@ -2183,27 +2269,28 @@ limited.shared <- limited.shared %>%
                      N.Eurasia = length(family.origin[family.origin == "Eurasia"])) %>%
     as.data.frame() 
 
-limited.shared$per.AF <- (limited.shared$N.Africa/limited.shared$N)*100
-limited.shared$per.AU <- (limited.shared$N.Australia/limited.shared$N)*100
-limited.shared$per.EA <- (limited.shared$N.Eurasia/limited.shared$N)*100
-limited.shared$per.NA <- (limited.shared$N.North.America/limited.shared$N)*100
-limited.shared$per.SA <- (limited.shared$N.South.America/limited.shared$N)*100
+rangers.shared.stats$per.AF <- (rangers.shared.stats$N.Africa/rangers.shared.stats$N)*100
+rangers.shared.stats$per.AU <- (rangers.shared.stats$N.Australia/rangers.shared.stats$N)*100
+rangers.shared.stats$per.EA <- (rangers.shared.stats$N.Eurasia/rangers.shared.stats$N)*100
+rangers.shared.stats$per.NA <- (rangers.shared.stats$N.North.America/rangers.shared.stats$N)*100
+rangers.shared.stats$per.SA <- (rangers.shared.stats$N.South.America/rangers.shared.stats$N)*100
 
-limited.shared.melt <- melt(limited.shared, 
+rangers.shared.melt <- melt(rangers.shared.stats, 
                             id.vars = "shared",
                             measure.vars = c("per.AF", "per.AU",
                                              "per.EA", "per.NA",
                                              "per.SA"),
                             variable.name = "per")
-limited.shared.melt$group <- paste(limited.shared.melt$shared, 
-                                   limited.shared.melt$per,
+rangers.shared.melt$group <- paste(rangers.shared.melt$shared, 
+                                   rangers.shared.melt$per,
                                    sep = ".")
-limited.shared.EA.AF <- limited.shared.melt[limited.shared.melt$shared == "EA.AF",]
-limited.shared.EA.AU <- limited.shared.melt[limited.shared.melt$shared == "EA.AU",]
-limited.shared.EA.NA <- limited.shared.melt[limited.shared.melt$shared == "EA.NA",]
-limited.shared.NA.SA <- limited.shared.melt[limited.shared.melt$shared == "NA.SA",]
+rangers.shared.EA.AF <- rangers.shared.melt[rangers.shared.melt$shared == "EA.AF",]
+rangers.shared.EA.AU <- rangers.shared.melt[rangers.shared.melt$shared == "EA.AU",]
+rangers.shared.EA.NA <- rangers.shared.melt[rangers.shared.melt$shared == "EA.NA",]
+rangers.shared.NA.SA <- rangers.shared.melt[rangers.shared.melt$shared == "NA.SA",]
 
-ggplot(limited.shared.EA.AF, aes(x = "", y = value, fill = group)) +
+## EA - AF
+p.rangers.pie.EA.AF <- ggplot(rangers.shared.EA.AF, aes(x = "", y = value, fill = group)) +
     #geom_col(color = 'black',
     #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
     #geom_bar(stat="identity", width=1) +
@@ -2214,15 +2301,19 @@ ggplot(limited.shared.EA.AF, aes(x = "", y = value, fill = group)) +
                                  "EA.AF.per.NA" = "#bbe3d4",
                                  "EA.AF.per.SA" = "#f0d2ff"),
                       name = "Family Origin",
-                      labels = c("EA.AF.per.AF" = paste0("Africa (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.AF"], ")"),
-                                 "EA.AF.per.AU" = paste0("Australia (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.AU"], ")"),
-                                 "EA.AF.per.EA" = paste0("Eurasia (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.EA"], ")"),
-                                 "EA.AF.per.NA" = paste0("North America (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.NA"], ")"),
-                                 "EA.AF.per.SA" = paste0("South America (", limited.shared.EA.AF$value[limited.shared.EA.AF$per == "per.SA"], ")"))) +
+                      labels = c("EA.AF.per.AF" = paste0("Africa (", rangers.shared.EA.AF$value[rangers.shared.EA.AF$per == "per.AF"], ")"),
+                                 "EA.AF.per.AU" = paste0("Australia (", rangers.shared.EA.AF$value[rangers.shared.EA.AF$per == "per.AU"], ")"),
+                                 "EA.AF.per.EA" = paste0("Eurasia (", rangers.shared.EA.AF$value[rangers.shared.EA.AF$per == "per.EA"], ")"),
+                                 "EA.AF.per.NA" = paste0("North America (", rangers.shared.EA.AF$value[rangers.shared.EA.AF$per == "per.NA"], ")"),
+                                 "EA.AF.per.SA" = paste0("South America (", rangers.shared.EA.AF$value[rangers.shared.EA.AF$per == "per.SA"], ")"))) +
     coord_polar("y", start = 0) +
     theme_void()
 
-ggplot(limited.shared.EA.AU, aes(x = "", y = value, fill = group)) +
+ggsave(p.rangers.pie.EA.AF, 
+       file = "./Figures/rangers.pie.EA.AF.png", 
+       width = 20, height = 10, units = "cm")
+
+p.rangers.pie.EA.AU <- ggplot(rangers.shared.EA.AU, aes(x = "", y = value, fill = group)) +
     #geom_col(color = 'black',
     #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
     #geom_bar(stat="identity", width=1) +
@@ -2233,15 +2324,19 @@ ggplot(limited.shared.EA.AU, aes(x = "", y = value, fill = group)) +
                                  "EA.AU.per.NA" = "#bbe3d4",
                                  "EA.AU.per.SA" = "#f0d2ff"),
                       name = "Family Origin",
-                      labels = c("EA.AU.per.AF" = paste0("Africa (", limited.shared.EA.AU$value[limited.shared.EA.AU$per == "per.AF"], ")"),
-                                 "EA.AU.per.AU" = paste0("Australia (", limited.shared.EA.AU$value[limited.shared.EU.AU$per == "per.AU"], ")"),
-                                 "EA.AU.per.EA" = paste0("Eurasia (", limited.shared.EA.AU$value[limited.shared.EA.AU$per == "per.EA"], ")"),
-                                 "EA.AU.per.NA" = paste0("North America (", limited.shared.EA.AU$value[limited.shared.EA.AU$per == "per.NA"], ")"),
-                                 "EA.AU.per.SA" = paste0("South America (", limited.shared.EA.AU$value[limited.shared.EA.AU$per == "per.SA"], ")"))) +
+                      labels = c("EA.AU.per.AF" = paste0("Africa (", rangers.shared.EA.AU$value[rangers.shared.EA.AU$per == "per.AF"], ")"),
+                                 "EA.AU.per.AU" = paste0("Australia (", rangers.shared.EA.AU$value[rangers.shared.EA.AU$per == "per.AU"], ")"),
+                                 "EA.AU.per.EA" = paste0("Eurasia (", rangers.shared.EA.AU$value[rangers.shared.EA.AU$per == "per.EA"], ")"),
+                                 "EA.AU.per.NA" = paste0("North America (", rangers.shared.EA.AU$value[rangers.shared.EA.AU$per == "per.NA"], ")"),
+                                 "EA.AU.per.SA" = paste0("South America (", rangers.shared.EA.AU$value[rangers.shared.EA.AU$per == "per.SA"], ")"))) +
     coord_polar("y", start = 0) +
     theme_void()
 
-ggplot(limited.shared.EA.NA, aes(x = "", y = value, fill = group)) +
+ggsave(p.rangers.pie.EA.AU, 
+       file = "./Figures/rangers.pie.EA.AU.png", 
+       width = 20, height = 10, units = "cm")
+
+p.rangers.pie.EA.NA <- ggplot(rangers.shared.EA.NA, aes(x = "", y = value, fill = group)) +
     #geom_col(color = 'black',
     #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
     #geom_bar(stat="identity", width=1) +
@@ -2252,15 +2347,19 @@ ggplot(limited.shared.EA.NA, aes(x = "", y = value, fill = group)) +
                                  "EA.NA.per.NA" = "#bbe3d4",
                                  "EA.NA.per.SA" = "#f0d2ff"),
                       name = "Family Origin",
-                      labels = c("EA.NA.per.AF" = paste0("Africa (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.AF"], ")"),
-                                 "EA.NA.per.AU" = paste0("Australia (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.AU"], ")"),
-                                 "EA.NA.per.EA" = paste0("Eurasia (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.EA"], ")"),
-                                 "EA.NA.per.NA" = paste0("North America (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.NA"], ")"),
-                                 "EA.NA.per.SA" = paste0("South America (", limited.shared.EA.NA$value[limited.shared.EA.NA$per == "per.SA"], ")"))) +
+                      labels = c("EA.NA.per.AF" = paste0("Africa (", rangers.shared.EA.NA$value[rangers.shared.EA.NA$per == "per.AF"], ")"),
+                                 "EA.NA.per.AU" = paste0("Australia (", rangers.shared.EA.NA$value[rangers.shared.EA.NA$per == "per.AU"], ")"),
+                                 "EA.NA.per.EA" = paste0("Eurasia (", rangers.shared.EA.NA$value[rangers.shared.EA.NA$per == "per.EA"], ")"),
+                                 "EA.NA.per.NA" = paste0("North America (", rangers.shared.EA.NA$value[rangers.shared.EA.NA$per == "per.NA"], ")"),
+                                 "EA.NA.per.SA" = paste0("South America (", rangers.shared.EA.NA$value[rangers.shared.EA.NA$per == "per.SA"], ")"))) +
     coord_polar("y", start = 0) +
     theme_void()
 
-ggplot(limited.shared.NA.SA, aes(x = "", y = value, fill = group)) +
+ggsave(p.rangers.pie.EA.NA, 
+       file = "./Figures/rangers.pie.EA.NA.png", 
+       width = 20, height = 10, units = "cm")
+
+p.rangers.pie.NA.SA <- ggplot(rangers.shared.NA.SA, aes(x = "", y = value, fill = group)) +
     #geom_col(color = 'black',
     #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
     #geom_bar(stat="identity", width=1) +
@@ -2271,140 +2370,21 @@ ggplot(limited.shared.NA.SA, aes(x = "", y = value, fill = group)) +
                                  "NA.SA.per.NA" = "#bbe3d4",
                                  "NA.SA.per.SA" = "#f0d2ff"),
                       name = "Family Origin",
-                      labels = c("NA.SA.per.AF" = paste0("Africa (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.AF"], ")"),
-                                 "NA.SA.per.AU" = paste0("Australia (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.AU"], ")"),
-                                 "NA.SA.per.EA" = paste0("Eurasia (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.EA"], ")"),
-                                 "NA.SA.per.NA" = paste0("North America (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.NA"], ")"),
-                                 "NA.SA.per.SA" = paste0("South America (", limited.shared.NA.SA$value[limited.shared.NA.SA$per == "per.SA"], ")"))) +
+                      labels = c("NA.SA.per.AF" = paste0("Africa (", rangers.shared.NA.SA$value[rangers.shared.NA.SA$per == "per.AF"], ")"),
+                                 "NA.SA.per.AU" = paste0("Australia (", rangers.shared.NA.SA$value[rangers.shared.NA.SA$per == "per.AU"], ")"),
+                                 "NA.SA.per.EA" = paste0("Eurasia (", rangers.shared.NA.SA$value[rangers.shared.NA.SA$per == "per.EA"], ")"),
+                                 "NA.SA.per.NA" = paste0("North America (", rangers.shared.NA.SA$value[rangers.shared.NA.SA$per == "per.NA"], ")"),
+                                 "NA.SA.per.SA" = paste0("South America (", rangers.shared.NA.SA$value[rangers.shared.NA.SA$per == "per.SA"], ")"))) +
     coord_polar("y", start = 0) +
     theme_void()
 
-## North.America
-lim.origin.na.melt <- melt(limited.cont[limited.cont$family.origin == "North.America",],
-                              id.vars = "family.origin",
-                              measure.vars = c("N.Africa.Eurasia", "N.Africa.Australia", 
-                                               "N.Africa.North.America", "N.Africa.South.America",
-                                               "N.Australia.Eurasia", "N.Australia.South.America",
-                                               "N.Australia.North.America",
-                                               "N.Eurasia.North.America", "N.Eurasia.South.America",
-                                               "N.South.America.North.America"),
-                              variable.name = "continent.combo",
-                              value.name = "N")
-lim.origin.na.melt$per <- lim.origin.na.melt$N/limited.cont$N[limited.cont$family.origin == "North.America"]
-lim.origin.na.melt <- as.data.frame(lim.origin.na.melt)
-ggplot(lim.origin.na.melt, aes(x = "", y = per, fill = continent.combo)) +
-    #geom_col(color = 'black',
-    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
-    #geom_bar(stat="identity", width=1) +
-    geom_bar(stat="identity", width=1, color="white") +
-    scale_fill_manual(values = c("N.Africa.Eurasia" = "#C2D991",
-                                 "N.Africa.Australia" = "black", 
-                                 "N.Africa.North.America" = "black", 
-                                 "N.Africa.South.America" = "black",
-                                 "N.Australia.Eurasia" = "#D9967E", 
-                                 "N.Australia.South.America" = "black",
-                                 "N.Australia.North.America" = "#F2CDA0",
-                                 "N.Eurasia.North.America" = "#B4D9C8", 
-                                 "N.Eurasia.South.America" = "black",
-                                 "N.South.America.North.America" = "#E2C9F2")) +
-    coord_polar("y", start = 0) +
-    theme_void()
+ggsave(p.rangers.pie.NA.SA, 
+       file = "./Figures/rangers.pie.NA.SA.png", 
+       width = 20, height = 10, units = "cm")
 
-## South.America
-lim.origin.sa.melt <- melt(limited.cont[limited.cont$family.origin == "South.America",],
-                           id.vars = "family.origin",
-                           measure.vars = c("N.Africa.Eurasia", "N.Africa.Australia", 
-                                            "N.Africa.North.America", "N.Africa.South.America",
-                                            "N.Australia.Eurasia", "N.Australia.South.America",
-                                            "N.Australia.North.America",
-                                            "N.Eurasia.North.America", "N.Eurasia.South.America",
-                                            "N.South.America.North.America"),
-                           variable.name = "continent.combo",
-                           value.name = "N")
-lim.origin.sa.melt$per <- lim.origin.sa.melt$N/limited.cont$N[limited.cont$family.origin == "South.America"]
-lim.origin.sa.melt <- as.data.frame(lim.origin.sa.melt)
-ggplot(lim.origin.sa.melt, aes(x = "", y = per, fill = continent.combo)) +
-    #geom_col(color = 'black',
-    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
-    #geom_bar(stat="identity", width=1) +
-    geom_bar(stat="identity", width=1, color="white") +
-    scale_fill_manual(values = c("N.Africa.Eurasia" = "black",
-                                 "N.Africa.Australia" = "black", 
-                                 "N.Africa.North.America" = "black", 
-                                 "N.Africa.South.America" = "black",
-                                 "N.Australia.Eurasia" = "black", 
-                                 "N.Australia.South.America" = "black",
-                                 "N.Australia.North.America" = "black",
-                                 "N.Eurasia.North.America" = "black", 
-                                 "N.Eurasia.South.America" = "black",
-                                 "N.South.America.North.America" = "#E2C9F2")) +
-    coord_polar("y", start = 0) +
-    theme_void()
-
-## Eurasia
-lim.origin.ea.melt <- melt(limited.cont[limited.cont$family.origin == "Eurasia",],
-                           id.vars = "family.origin",
-                           measure.vars = c("N.Africa.Eurasia", "N.Africa.Australia", 
-                                            "N.Africa.North.America", "N.Africa.South.America",
-                                            "N.Australia.Eurasia", "N.Australia.South.America",
-                                            "N.Australia.North.America",
-                                            "N.Eurasia.North.America", "N.Eurasia.South.America",
-                                            "N.South.America.North.America"),
-                           variable.name = "continent.combo",
-                           value.name = "N")
-lim.origin.ea.melt$per <- lim.origin.ea.melt$N/limited.cont$N[limited.cont$family.origin == "Eurasia"]
-lim.origin.ea.melt <- as.data.frame(lim.origin.ea.melt)
-ggplot(lim.origin.ea.melt, aes(x = "", y = per, fill = continent.combo)) +
-    #geom_col(color = 'black',
-    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
-    #geom_bar(stat="identity", width=1) +
-    geom_bar(stat="identity", width=1, color="white") +
-    scale_fill_manual(values = c("N.Africa.Eurasia" = "#C2D991",#YES
-                                 "N.Africa.Australia" = "black", 
-                                 "N.Africa.North.America" = "black", 
-                                 "N.Africa.South.America" = "black",
-                                 "N.Australia.Eurasia" = "#D9967E", #YES
-                                 "N.Australia.South.America" = "black",
-                                 "N.Australia.North.America" = "#F2CDA0",
-                                 "N.Eurasia.North.America" = "#B4D9C8", #YES
-                                 "N.Eurasia.South.America" = "black",
-                                 "N.South.America.North.America" = "#E2C9F2")) + #YES
-    coord_polar("y", start = 0) +
-    theme_void()
-
-## Africa
-lim.origin.af.melt <- melt(limited.cont[limited.cont$family.origin == "Africa",],
-                           id.vars = "family.origin",
-                           measure.vars = c("N.Africa.Eurasia", "N.Africa.Australia", 
-                                            "N.Africa.North.America", "N.Africa.South.America",
-                                            "N.Australia.Eurasia", "N.Australia.South.America",
-                                            "N.Australia.North.America",
-                                            "N.Eurasia.North.America", "N.Eurasia.South.America",
-                                            "N.South.America.North.America"),
-                           variable.name = "continent.combo",
-                           value.name = "N")
-lim.origin.af.melt$per <- lim.origin.af.melt$N/limited.cont$N[limited.cont$family.origin == "Africa"]
-lim.origin.af.melt <- as.data.frame(lim.origin.af.melt)
-ggplot(lim.origin.af.melt, aes(x = "", y = per, fill = continent.combo)) +
-    #geom_col(color = 'black',
-    #         position = position_stack(reverse = TRUE)) + #show.legend = TRUE
-    #geom_bar(stat="identity", width=1) +
-    geom_bar(stat="identity", width=1, color="white") +
-    scale_fill_manual(values = c("N.Africa.Eurasia" = "#C2D991",#YES
-                                 "N.Africa.Australia" = "black", 
-                                 "N.Africa.North.America" = "black", 
-                                 "N.Africa.South.America" = "black",
-                                 "N.Australia.Eurasia" = "#D9967E", #YES
-                                 "N.Australia.South.America" = "black",
-                                 "N.Australia.North.America" = "#F2CDA0",
-                                 "N.Eurasia.North.America" = "#B4D9C8", #YES
-                                 "N.Eurasia.South.America" = "black",
-                                 "N.South.America.North.America" = "#E2C9F2")) + #YES
-    coord_polar("y", start = 0) +
-    theme_void()
-
-##trotter
-trotter.origin <- trotter %>%
+##### COSMOPOLITAN ORIGINS -----
+cosmo <- df[df$n.cont == "3+",]
+cosmo.origin <- cosmo %>%
   group_by(family.origin) %>%
   dplyr::summarise(N = n(),
                    N.Africa = length(continent.Africa[continent.Africa == TRUE]),
@@ -2413,32 +2393,32 @@ trotter.origin <- trotter %>%
                    N.North.America = length(continent.North.America[continent.North.America == TRUE]),
                    N.Eurasia = length(continent.Eurasia[continent.Eurasia == TRUE])) %>%
   as.data.frame() 
-trotter.origin <- trotter.origin[trotter.origin$family.origin != "",]
+cosmo.origin <- cosmo.origin[cosmo.origin$family.origin != "",]
 
 #get proportions
-trotter.origin$prop.spread <- ""
-trotter.origin$prop.spread[trotter.origin$family.origin == "Africa"] <- trotter.origin$N.Africa[trotter.origin$family.origin == "Africa"]/trotter.origin$N[trotter.origin$family.origin == "Africa"]
-trotter.origin$prop.spread[trotter.origin$family.origin == "Eurasia"] <- trotter.origin$N.Eurasia[trotter.origin$family.origin == "Eurasia"]/trotter.origin$N[trotter.origin$family.origin == "Eurasia"]
-trotter.origin$prop.spread[trotter.origin$family.origin == "Australia"] <- trotter.origin$N.Australia[trotter.origin$family.origin == "Australia"]/trotter.origin$N[trotter.origin$family.origin == "Australia"]
-trotter.origin$prop.spread[trotter.origin$family.origin == "South.America"] <- trotter.origin$N.South.America[trotter.origin$family.origin == "South.America"]/trotter.origin$N[trotter.origin$family.origin == "South.America"]
-trotter.origin$prop.spread[trotter.origin$family.origin == "North.America"] <- trotter.origin$N.North.America[trotter.origin$family.origin == "North.America"]/trotter.origin$N[trotter.origin$family.origin == "North.America"]
+cosmo.origin$prop.spread <- ""
+cosmo.origin$prop.spread[cosmo.origin$family.origin == "Africa"] <- cosmo.origin$N.Africa[cosmo.origin$family.origin == "Africa"]/cosmo.origin$N[cosmo.origin$family.origin == "Africa"]
+cosmo.origin$prop.spread[cosmo.origin$family.origin == "Eurasia"] <- cosmo.origin$N.Eurasia[cosmo.origin$family.origin == "Eurasia"]/cosmo.origin$N[cosmo.origin$family.origin == "Eurasia"]
+cosmo.origin$prop.spread[cosmo.origin$family.origin == "Australia"] <- cosmo.origin$N.Australia[cosmo.origin$family.origin == "Australia"]/cosmo.origin$N[cosmo.origin$family.origin == "Australia"]
+cosmo.origin$prop.spread[cosmo.origin$family.origin == "South.America"] <- cosmo.origin$N.South.America[cosmo.origin$family.origin == "South.America"]/cosmo.origin$N[cosmo.origin$family.origin == "South.America"]
+cosmo.origin$prop.spread[cosmo.origin$family.origin == "North.America"] <- cosmo.origin$N.North.America[cosmo.origin$family.origin == "North.America"]/cosmo.origin$N[cosmo.origin$family.origin == "North.America"]
 #no jumpers in North.America
 #no spreaders from Australia
 
-trotter.origin$prop.jump <- 1- as.numeric(trotter.origin$prop.spread)
+cosmo.origin$prop.jump <- 1- as.numeric(cosmo.origin$prop.spread)
 
 #want to know where the jumpers and spreaders went to
-trotter.cont <- trotter %>%
+cosmo.cont.shared <- cosmo %>%
   group_by(family.origin) %>%
   dplyr::summarise(N = n(),
                    N.Africa.Eurasia.North.America = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE & continent.North.America == TRUE]),
                    N.Eurasia.North.America.South.America = length(continent.Eurasia[continent.Eurasia == TRUE & continent.North.America == TRUE & continent.South.America == TRUE]),
                    N.Africa.Eurasia.Australia = length(continent.Africa[continent.Africa == TRUE & continent.Eurasia == TRUE & continent.Australia == TRUE])) %>%
   as.data.frame() 
-trotter.cont <- trotter.cont[trotter.cont$family.origin != "",]
-#write.csv(trotter.cont, 
-#          "./Results/trotter.family.origin.csv",
-#          row.names = FALSE)
+cosmo.cont.shared <- cosmo.cont.shared[cosmo.cont.shared$family.origin != "",]
+write.csv(cosmo.cont.shared, 
+          "./Results/trotter.family.origin.csv",
+          row.names = FALSE)
 
 length(df$binomial[df$family.origin == "South.America"]) #658
 length(df$binomial[df$family.origin == "South.America" &
@@ -2446,13 +2426,9 @@ length(df$binomial[df$family.origin == "South.America" &
 length(df$binomial[df$family.origin == "North.America"]) #636
 length(df$binomial[df$family.origin == "North.America" &
                      df$n.cont == 2]) #46
-length(df$binomial[df$family.origin == "Eurasia"]) #1754
+length(df$binomial[df$family.origin == "Eurasia"]) #1753
 length(df$binomial[df$family.origin == "Eurasia" &
                      df$n.cont == 2]) #75
-
-homies.origin$N.jump[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$total[homies.origin$family.origin == "Africa"] - homies.origin$N.Africa[homies.origin$family.origin == "Africa"])
-homies.origin$prop.origin[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N.Africa[homies.origin$family.origin == "Africa"]/homies.origin$total[homies.origin$family.origin == "Africa"])
-homies.origin$prop.jump[homies.origin$family.origin == "Africa"] <- as.numeric(homies.origin$N.jump[homies.origin$family.origin == "Africa"])/as.numeric(homies.origin$total[homies.origin$family.origin == "Africa"])
 
 continent <- names(dplyr::select(df, starts_with("continent")))
 homies.origin <- data.frame(continent  = continents)
@@ -2470,14 +2446,14 @@ colnames(homies.family)[colnames(homies.family) == "N"] <- "homies.N"
 homies.family <- homies.family %>%
   dplyr::select(-n.cont)
 
-limited.family <- family.origin[family.origin$n.cont == 2,]
-colnames(limited.family)[colnames(limited.family) == "N"] <- "limited.N"
-limited.family <- limited.family %>%
+rangers.family <- family.origin[family.origin$n.cont == 2,]
+colnames(rangers.family)[colnames(rangers.family) == "N"] <- "rangers.N"
+rangers.family <- rangers.family %>%
   dplyr::select(-n.cont)
 
-trotter.family <- family.origin[family.origin$n.cont == "3+",]
-colnames(trotter.family)[colnames(trotter.family) == "N"] <- "trotter.N"
-trotter.family <- trotter.family %>%
+cosmo.family <- family.origin[family.origin$n.cont == "3+",]
+colnames(cosmo.family)[colnames(cosmo.family) == "N"] <- "cosmo.N"
+cosmo.family <- cosmo.family %>%
   dplyr::select(-n.cont)
 
 ##### DISPERSAL -----
@@ -2501,28 +2477,31 @@ df.dispersal$dispersal.phylo =  ((df.dispersal$age * 365)/(df.dispersal$gen.leng
 ggplot() +
   geom_density(aes(df.dispersal$dispersal.foss[!is.na(df.dispersal$dispersal.foss)]))
 
-length(df.dispersal$dispersal.foss[!is.na(df.dispersal$dispersal.foss)]) #69
+length(df.dispersal$dispersal.foss[!is.na(df.dispersal$dispersal.foss)]) #68
 
 ggplot() +
   geom_density(aes(df.dispersal$dispersal.phylo[!is.na(df.dispersal$dispersal.phylo)]))
-length(df.dispersal$dispersal.phylo[!is.na(df.dispersal$dispersal.phylo)]) #85
+length(df.dispersal$dispersal.phylo[!is.na(df.dispersal$dispersal.phylo)]) #84
 
-nrow(df.dispersal[is.na(df.dispersal$dispersal.foss),]) #541
-nrow(df.dispersal[is.na(df.dispersal$dispersal.phylo),]) #526
+nrow(df.dispersal[is.na(df.dispersal$dispersal.foss),]) #543
+nrow(df.dispersal[is.na(df.dispersal$dispersal.phylo),]) #527
 length(unique(df.dispersal$family[is.na(df.dispersal$dispersal.foss)])) #85
 length(unique(df.dispersal$family[is.na(df.dispersal$dispersal.phylo)])) #83
 
+## which groups are we misssing?
 table(df.dispersal$order[is.na(df.dispersal$dispersal.foss)])
 table(df.dispersal$order[is.na(df.dispersal$dispersal.phylo)])
+#primates and rodenets most represented
 
 nrow(df.dispersal[!is.na(df.dispersal$dispersal.foss) &
-                    df.dispersal$order == "Rodentia",]) #12
+                    df.dispersal$order == "Rodentia",]) #12; only have 12 rodents out of lots
 nrow(df.dispersal[!is.na(df.dispersal$dispersal.foss) &
-                    df.dispersal$order == "Primates",]) #0
+                    df.dispersal$order == "Primates",]) #0; i.e. missing ALL primates
 
 table(df.dispersal$family.origin[is.na(df.dispersal$dispersal.foss) &
                                    df.dispersal$order == "Primates"])
 
+#are we missing rodents because of body size, where the smallest rodents are missing?
 ks.test(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss) &
                                 df.dispersal$order == "Rodentia"], 
         df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss) &
@@ -2543,7 +2522,96 @@ ks.test(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss) &
 # data:  df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss) & df.dispersal$order == "Rodentia"] and df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss) & df.dispersal$order == "Rodentia"]
 # D^- = 0.68667, p-value = 4.401e-06
 # alternative hypothesis: the CDF of x lies below that of y
+#yes, have bigger rodenets when have this data
 
+## how does body size look for those that we're aren't missing? are they all large?
+hist(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]))
+hist(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]))
+#both pretty uniform
+
+min(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) #21.175
+max(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) #2949986
+
+min(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]) #4.5
+max(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]) #3940034
+
+#is there diff in body size between those we do have fossil FAD data for and those we dont?
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), 
+        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]))
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)])
+# D = 0.35218, p-value = 6.23e-07
+# alternative hypothesis: two-sided
+
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), 
+        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]), alternative = "greater")
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)])
+# D^+ = 0.0018416, p-value = 0.9996
+# alternative hypothesis: the CDF of x lies above that of y
+
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), 
+        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]), alternative = "less") #sig
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)])
+# D^- = 0.35463, p-value = 3.115e-07
+# alternative hypothesis: the CDF of x lies below that of y
+#yes, body size bigger for those we have fossil data for
+
+min(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) #same as above
+max(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)])
+
+min(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
+max(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
+
+#is there diff in body size between those we do have phylo data for and those we dont?
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), 
+        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]))
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
+# D = 0.37078, p-value = <0.001
+# alternative hypothesis: two-sided
+
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), 
+        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]), alternative = "greater")
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
+# D^+ = 0.0019048, p-value = 0.9995
+# alternative hypothesis: the CDF of x lies above that of y
+
+ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), 
+        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]), alternative = "less") #sig
+# Asymptotic two-sample Kolmogorov-Smirnov test
+# 
+# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
+# D^- = 0.37078, p-value = <0.001
+# alternative hypothesis: the CDF of x lies below that of y
+#yes, body size bigger for those we have phylo data for
+
+table(df.dispersal$n.cont) #i.e., what has home range and mass
+# 1     2       3+ 
+# 544   62      5 
+#only have data for 62/260 (24%) of species on 2 continents
+#only have data for 544/4119 (13%) of speices on 1 continent
+
+table(df.dispersal$n.cont[!is.na(df.dispersal$dispersal.foss)])
+# 1     2   3+ 
+# 44    20  4
+#only have data for 20/260 (7.6%) of species on 2 continents for fossil data
+#only have data for 44/4119 (1.1%) of speices on 1 continent for fossil data
+
+table(df.dispersal$n.cont[!is.na(df.dispersal$dispersal.phylo)])
+# 1     2   3+ 
+# 59    21  4
+#only have data for 21/260 (8%) of species on 2 continents for phylo data
+#only have data for 59/4119 (1.4%) of speices on 1 continent for phylo data
+
+###### CAN SPECIES MAKE IT? ------ 
 ##Eurasia 
 #54750000 km2
 #8403.60 #km from coast of Portugal to north-eastern most point of Russia 
@@ -2578,7 +2646,7 @@ South.America.NS = 7429
 Australia.EW = 3624
 Australia.NS = 2993
 
-length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.foss)]) #69
+length(df.dispersal$binomial[!is.na(df.dispersal$dispersal.foss)]) #68
 
 length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Australia.EW & !is.na(df.dispersal$dispersal.foss)]) 
 length(df.dispersal$binomial[df.dispersal$dispersal.foss >= Australia.NS & !is.na(df.dispersal$dispersal.foss)]) 
@@ -2604,81 +2672,6 @@ length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= North.America.NS & 
 length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= South.America.EW & !is.na(df.dispersal$dispersal.phylo)]) 
 length(df.dispersal$binomial[df.dispersal$dispersal.phylo >= South.America.NS & !is.na(df.dispersal$dispersal.phylo)]) 
 
-hist(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]))
-hist(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]))
-
-min(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) #21.2
-max(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) #2949986
-
-min(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]) #4.5
-max(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]) #3940034
-
-ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), 
-        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]))
-# Asymptotic two-sample Kolmogorov-Smirnov test
-# 
-# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)])
-# D = 0.35218, p-value = 6.212e-07
-# alternative hypothesis: two-sided
-
-ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), 
-        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]), alternative = "greater")
-# Asymptotic two-sample Kolmogorov-Smirnov test
-# 
-# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)])
-# D^+ = 0.0018416, p-value = 0.9996
-# alternative hypothesis: the CDF of x lies above that of y
-
-ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]), 
-        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)]), alternative = "less") #sig
-# Asymptotic two-sample Kolmogorov-Smirnov test
-# 
-# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.foss)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.foss)])
-# D^- = 0.35463, p-value = 2.053e-07
-# alternative hypothesis: the CDF of x lies below that of y
-
-min(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) #same as above
-max(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)])
-
-min(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
-max(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
-
-ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), 
-        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]))
-# Asymptotic two-sample Kolmogorov-Smirnov test
-# 
-# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
-# D = 0.37078, p-value = 3.638e-09
-# alternative hypothesis: two-sided
-
-ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), 
-        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]), alternative = "greater")
-# Asymptotic two-sample Kolmogorov-Smirnov test
-# 
-# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
-# D^+ = 0.0019048, p-value = 0.9995
-# alternative hypothesis: the CDF of x lies above that of y
-
-ks.test(log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]), 
-        log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)]), alternative = "less") #sig
-# Asymptotic two-sample Kolmogorov-Smirnov test
-# 
-# data:  log10(df.dispersal$avg.mass[!is.na(df.dispersal$dispersal.phylo)]) and log10(df.dispersal$avg.mass[is.na(df.dispersal$dispersal.phylo)])
-# D^- = 0.37078, p-value = 1.819e-09
-# alternative hypothesis: the CDF of x lies below that of y
-
-table(df.dispersal$n.cont)
-# 1   2  3+ 
-# 545  60   4 
-
-table(df.dispersal$n.cont[!is.na(df.dispersal$dispersal.foss)])
-# 1  2 3+ 
-# 45 20  4
-
-table(df.dispersal$n.cont[!is.na(df.dispersal$dispersal.phylo)])
-# 1  2 3+ 
-# 60 21  4
-
 #unimpeded animals can get across continents; clearly some filtering
 #is the filtering clade or ecological type specific? answer than by looking at families or something
 #problem with home range: already constricted by filtering of some sort
@@ -2697,10 +2690,10 @@ ggplot(df.dispersal) + #do histogram; .25 log
                                  "3+")) +
     scale_y_continuous(name = "Count") +
     scale_x_continuous(name = expression(dispersal~distance~(km)))
-range(log10(df.dispersal$dispersal.distance[df.dispersal$n.cont == "1"]), na.rm = TRUE)
-#8.04 km to 2260000 km
-range(log10(df.dispersal$dispersal.distance[df.dispersal$n.cont == "3+"]))
-#293 km to 1103928 kn
+range(df.dispersal$dispersal.distance[df.dispersal$n.cont == "1"], na.rm = TRUE)
+#11.56184 km to 676899.43949 km (10^1 to 10^5)
+range(df.dispersal$dispersal.distance[df.dispersal$n.cont == "3+"])
+#1749.828 km to 1103928.351 km (10^3 to 10^6)
 #starts 2 orders are mag higher than everyone else?
 
 ggplot(df.dispersal) + #do histogram; .25 log 
@@ -2717,13 +2710,13 @@ ggplot(df.dispersal) + #do histogram; .25 log
                                  "3+")) +
     scale_y_continuous(name = "Count") +
     scale_x_continuous(name = expression(phylo~age~(mya)))
-range(log10(df.dispersal$age[df.dispersal$n.cont == "1"]), na.rm = TRUE)
-#3.937665 7.895312
-range(log10(df.dispersal$age[df.dispersal$n.cont == "3+"]))
-#5.884275 6.448300
+range(df.dispersal$age[df.dispersal$n.cont == "1"], na.rm = TRUE)
+#28664.39 51999997.61
+range(df.dispersal$age[df.dispersal$n.cont == "3+"])
+#766080.9 2006204.8
 #nothing spectacular?
 
-##### FIGURE -----
+###### DISPERSAL FIGURES ------
 p.disp.1 <- ggplot() + 
     geom_histogram(aes(log10(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "1" & !is.na(df.dispersal$dispersal.phylo)])), 
                    colour = "black", fill = "black",
@@ -2740,8 +2733,9 @@ p.disp.1 <- ggplot() +
                                   expression(10^4), expression(10^6),
                                   expression(10^8), expression(10^10),
                                   expression(10^12)))
-
-length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "1" & !is.na(df.dispersal$dispersal.phylo)]) #60
+#sample size
+length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "1" & !is.na(df.dispersal$dispersal.phylo)]) 
+#60
 
 ggsave(p.disp.1, 
        file = "./Figures/dispersal.one.png", 
@@ -2763,15 +2757,16 @@ p.disp.2 <- ggplot() +
                                   expression(10^4), expression(10^6),
                                   expression(10^8), expression(10^10),
                                   expression(10^12)))
-
-length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo)]) #21
+#sample size
+length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo)]) 
+#21
 
 ggsave(p.disp.2, 
        file = "./Figures/dispersal.two.png", 
        width = 20, height = 10, units = "cm")
 
 p.disp.2.nonvol <- ggplot() + 
-    geom_histogram(aes(log10(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$order != "Chiroptera"])), 
+    geom_histogram(aes(log10(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$habitat.mode != "volant"])), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -2786,8 +2781,9 @@ p.disp.2.nonvol <- ggplot() +
                                   expression(10^4), expression(10^6),
                                   expression(10^8), expression(10^10),
                                   expression(10^12)))
-
-length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$order != "Chiroptera"]) #14
+#sample size
+length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$order != "Chiroptera"]) 
+#14
 
 ggsave(p.disp.2.nonvol, 
        file = "./Figures/dispersal.two.nonvol.png", 
@@ -2795,7 +2791,7 @@ ggsave(p.disp.2.nonvol,
 
 
 p.disp.2.vol <- ggplot() + 
-    geom_histogram(aes(log10(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$order == "Chiroptera"])), 
+    geom_histogram(aes(log10(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$habitat.mode == "volant"])), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -2810,8 +2806,9 @@ p.disp.2.vol <- ggplot() +
                                   expression(10^4), expression(10^6),
                                   expression(10^8), expression(10^10),
                                   expression(10^12)))
-
-length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$order == "Chiroptera"]) #7
+#sample size
+length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$order == "Chiroptera"]) 
+#7
 
 ggsave(p.disp.2.vol, 
        file = "./Figures/dispersal.two.vol.png", 
@@ -2834,69 +2831,15 @@ p.disp.3 <- ggplot() +
                                   expression(10^4), expression(10^6),
                                   expression(10^8), expression(10^10),
                                   expression(10^12)))
-
+#sample size
 length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "3+" & !is.na(df.dispersal$dispersal.phylo)])
+#4
 
 ggsave(p.disp.3, 
        file = "./Figures/dispersal.three.png", 
        width = 20, height = 10, units = "cm")
 
-
-p.disp.age <- ggplot(df.dispersal[!is.na(df.dispersal$dispersal.phylo),]) +
-    geom_point(aes(log10(age), log10(dispersal.phylo),
-                   group = n.cont,
-                   col = n.cont),
-               size = 2) +
-    plot_theme +
-    #theme(legend.position = c(0.6, 0.82)) +
-    theme(plot.background = element_rect(fill = 'transparent', color = NA)) +
-    scale_y_continuous(name = "Dispersal Distance",
-                  limits = c(log10(10^3), log10(10^12)),
-                  breaks = c(log10(10^4), log10(10^6),
-                             log10(10^8), log10(10^10),
-                             log10(10^12)),
-                  labels = c(expression(10^4), expression(10^6),
-                             expression(10^8), expression(10^10),
-                             expression(10^12))) +
-     scale_x_continuous(name = "Age",
-                        limits = c(log10(10^4), log10(10^8)),
-                        breaks = c(log10(10^4), log10(10^5),
-                                   log10(10^6), log10(10^7),
-                                   log10(10^8)),
-                        labels = c("10 kya", "100 kya", "1 mya",
-                                   "10 mya", "100 mya")) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 18),
-          axis.text.y = element_text(size = 16)) +
-    scale_color_manual(values = cont_bw) +
-    geom_hline(yintercept = log10(Eurasia.EW), #longest distance
-               linetype = 'dashed',
-               col = "#fee0a6", size = 1) + 
-    geom_hline(yintercept = log10(Africa.NS), #longest distance
-               linetype = 'dashed',
-               col = "#c5dc93", size = 1) +
-    geom_hline(yintercept = log10(North.America.NS), #longest distance
-               linetype = 'dashed',
-               col = "#bbe3d4", size = 1) +
-    geom_hline(yintercept = log10(South.America.NS), #longest distance
-               linetype = 'dashed',
-               col = "#f0d2ff", size = 1) +
-    geom_hline(yintercept = log10(Australia.EW), #longest distance
-               linetype = 'dashed',
-               col = "#e4a182", size = 1) + 
-    geom_hline(yintercept = (log10(South.America.NS + North.America.NS)),
-               linetype = 'dashed',
-               col = "#afa298", size = 1) + 
-    geom_hline(yintercept = (log10(Eurasia.EW + North.America.NS)),
-               linetype = 'dashed',
-               col = "#afa298", size = 1) + 
-    geom_hline(yintercept = (log10(Africa.NS + Eurasia.EW)),
-               linetype = 'dashed',
-               col = "#afa298", size = 1)
-
-ggsave(p.disp.age, 
-       file = "./Figures/dispersal.age.png", 
-       width = 20, height = 10, units = "cm")
-
+###### DISPERSAL DISTANCE BY AGE -----
 #model: age of dispersal (delay), generation length, age of lineage (fossil age), and dispersal amount
 #((df.dispersal$age * 365)/(df.dispersal$gen.length + df.dispersal$disp.age))*df.dispersal$dispersal.distance
 df.dispersal$dispersal.10 =  ((10 * 365)/(df.dispersal$gen.length + 10))*df.dispersal$dispersal.distance
@@ -2907,7 +2850,7 @@ df.dispersal$dispersal.100000 =  ((100000 * 365)/(df.dispersal$gen.length + 1000
 
 #add in lines for continents
 
-p.disp.age2 <- ggplot(df.dispersal[!is.na(df.dispersal$dispersal.phylo),]) +
+p.disp.age <- ggplot(df.dispersal[!is.na(df.dispersal$dispersal.phylo),]) +
     geom_point(aes(log10(age), log10(dispersal.phylo),
                    group = n.cont,
                    col = n.cont),
@@ -2943,8 +2886,8 @@ p.disp.age2 <- ggplot(df.dispersal[!is.na(df.dispersal$dispersal.phylo),]) +
     geom_hline(yintercept = (log10(Eurasia.EW + Africa.NS)),
                col = "#afa298", size = 1)
 
-ggsave(p.disp.age2, 
-       file = "./Figures/dispersal.age2.png", 
+ggsave(p.disp.age, 
+       file = "./Figures/dispersal.age.png", 
        width = 24, height = 15, units = "cm")
 
 
@@ -2956,26 +2899,25 @@ df.time <- df.dispersal[!is.na(df.dispersal$dispersal.phylo), c("n.cont", "binom
 
 #which species is the slowest?
 which.min(df.time$dispersal.distance) #63 (all of them are the same below)
-df.time[63,] #Peromyscus leucopus; still has a large geographic range!; in NA
+df.time[62,] #Peromyscus leucopus; still has a large geographic range!; in NA
 which.min(df.time$dispersal.10)
 which.min(df.time$dispersal.100)
 which.min(df.time$dispersal.1000)
 which.min(df.time$dispersal.10000)
 which.min(df.time$dispersal.100000)
-which.min(df.dispersal$dispersal.phylo) #493
-df.dispersal[493,] #Sciurus carolinensis; also large geographic range and suprisingly similar to Peromyscus leucopus; in NA
+which.min(df.dispersal$dispersal.phylo) #492
+df.dispersal[492,] #Sciurus carolinensis; also large geographic range and suprisingly similar to Peromyscus leucopus; in NA
 
-which.max(df.time$dispersal.distance) #81
-df.time[81,] #Ursus maritimus; arctic, but not one of our globe trotters; in EA and NA
-which.max(df.time$dispersal.10) #59
-df.time[59,] #Panthera leo; a globe trotter!
-which.max(df.time$dispersal.100) #59
-which.max(df.time$dispersal.1000) #59
-which.max(df.time$dispersal.10000) #59
-which.max(df.time$dispersal.100000) #81
-which.max(df.dispersal$dispersal.phylo) #390
-df.dispersal[390,] #Panthera tigris; large geogrpahic range, in EA, not a globe trotter
-
+which.max(df.time$dispersal.distance) #80
+df.time[80,] #Ursus maritimus; arctic, but not one of our globe trotters; in EA and NA
+which.max(df.time$dispersal.10) #58
+df.time[58,] #Panthera leo; a globe trotter!
+which.max(df.time$dispersal.100) #58
+which.max(df.time$dispersal.1000) #58
+which.max(df.time$dispersal.10000) #58
+which.max(df.time$dispersal.100000) #80
+which.max(df.dispersal$dispersal.phylo) #389
+df.dispersal[389,] #Panthera tigris; large geogrpahic range, in EA, not a globe trotter
 
 #need it so age a row and dispersal type and then dispersal value
 disp.min <- c(min(df.time$dispersal.distance),
@@ -3008,7 +2950,6 @@ df.time2$disp.age <- as.numeric(df.time2$disp.age)
 df.time2$disp.min <- as.numeric(df.time2$disp.min)
 df.time2$disp.max <- as.numeric(df.time2$disp.max)
 df.time2$disp.mean <- as.numeric(df.time2$disp.mean)
-
 
 df.time2$disp.type <- factor(df.time2$disp.type,
                              levels = c("gen", "decade", "century", "millenia", "10kya", "100kya",
@@ -3054,6 +2995,7 @@ ggsave(p.disp.age.time,
        file = "./Figures/dispersal.time.png", 
        width = 24, height = 15, units = "cm")
     
+###### AGES FIGURE -----
 p.age.1 <- ggplot() + #do histogram; .5 log 
     geom_histogram(aes(log10(df$age.median[df$n.cont == "1" & !is.na(df$age.median)])), 
                    colour = "black", fill = "black",
@@ -3066,8 +3008,9 @@ p.age.1 <- ggplot() + #do histogram; .5 log
                        labels = c(expression(10^-2), expression(10^-1),
                                   expression(10^0), expression(10^1),
                                   expression(10^2)))
-
-length(df$age.median[df$n.cont == "1" & !is.na(df$age.median)]) #3711
+#sample size
+length(df$age.median[df$n.cont == "1" & !is.na(df$age.median)]) 
+#3711
 
 ggsave(p.age.1, 
        file = "./Figures/age.one.png", 
@@ -3086,15 +3029,16 @@ p.age.2 <- ggplot() + #do histogram; .5 log
                        labels = c(expression(10^-2), expression(10^-1),
                                   expression(10^0), expression(10^1),
                                   expression(10^2)))
-
-length(df$age.median[df$n.cont == "2" & !is.na(df$age.median)]) #251
+#sample size
+length(df$age.median[df$n.cont == "2" & !is.na(df$age.median)]) 
+#251
 
 ggsave(p.age.2, 
        file = "./Figures/age.two.png", 
        width = 20, height = 10, units = "cm")
 
 p.age.2.nonvol <- ggplot() + #do histogram; .5 log 
-    geom_histogram(aes(log10(df$age.median[df$n.cont == "2" & !is.na(df$age.median) & df$order != "Chiroptera"])), 
+    geom_histogram(aes(log10(df$age.median[df$n.cont == "2" & !is.na(df$age.median) & df$habitat.mode != "volant"])), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -3105,15 +3049,16 @@ p.age.2.nonvol <- ggplot() + #do histogram; .5 log
                        labels = c(expression(10^-2), expression(10^-1),
                                   expression(10^0), expression(10^1),
                                   expression(10^2)))
-
-length(df$age.median[df$n.cont == "2" & !is.na(df$age.median) & df$order != "Chiroptera"]) #114
+#sample size
+length(df$age.median[df$n.cont == "2" & !is.na(df$age.median) & df$habitat.mode != "volant"]) 
+#114
 
 ggsave(p.age.2.nonvol, 
        file = "./Figures/age.two.nonvol.png", 
        width = 20, height = 10, units = "cm")
 
 p.age.2.vol <- ggplot() + #do histogram; .5 log 
-    geom_histogram(aes(log10(df$age.median[df$n.cont == "2" & !is.na(df$age.median) & df$order == "Chiroptera"])), 
+    geom_histogram(aes(log10(df$age.median[df$n.cont == "2" & !is.na(df$age.median) & df$habitat.mode == "volant"])), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -3124,8 +3069,9 @@ p.age.2.vol <- ggplot() + #do histogram; .5 log
                        labels = c(expression(10^-2), expression(10^-1),
                                   expression(10^0), expression(10^1),
                                   expression(10^2)))
-
-length(df$age.median[df$n.cont == "2" & !is.na(df$age.median) & df$order == "Chiroptera"]) #137
+#sample size
+length(df$age.median[df$n.cont == "2" & !is.na(df$age.median) & df$habitat.mode == "volant"]) 
+#137
 
 ggsave(p.age.2.vol, 
        file = "./Figures/age.two.vol.png", 
@@ -3143,14 +3089,16 @@ p.age.3 <- ggplot() + #do histogram; .5 log
                        labels = c(expression(10^-2), expression(10^-1),
                                   expression(10^0), expression(10^1),
                                   expression(10^2)))
-
-length(df$age.median[df$n.cont == "3+" & !is.na(df$age.median)]) #6
+#sample size
+length(df$age.median[df$n.cont == "3+" & !is.na(df$age.median)]) 
+#6
 
 ggsave(p.age.3, 
        file = "./Figures/age.three.png", 
        width = 20, height = 10, units = "cm")
 
 #### H3: DIVERSITY OF CLADE ----
+## TEST: wide-ranging species come from families with lots of species
 
 null.family <- df %>%
   group_by(family) %>%
@@ -3169,29 +3117,49 @@ colnames(homies.family)[colnames(homies.family) == "N"] <- "homies.N"
 homies.family <- homies.family %>%
   dplyr::select(-n.cont)
 
-limited.family <- family[family$n.cont == 2,]
-colnames(limited.family)[colnames(limited.family) == "N"] <- "limited.N"
-limited.family <- limited.family %>%
+rangers.family <- family[family$n.cont == 2,]
+colnames(rangers.family)[colnames(rangers.family) == "N"] <- "rangers.N"
+rangers.family <- rangers.family %>%
   dplyr::select(-n.cont)
 
-trotter.family <- family[family$n.cont == "3+",]
-colnames(trotter.family)[colnames(trotter.family) == "N"] <- "trotter.N"
-trotter.family <- trotter.family %>%
+family.nonvol <- df[df$habitat.mode != "volant",] %>%
+    group_by(n.cont, family) %>%
+    dplyr::summarise(N = n()) %>% 
+    as.data.frame()
+
+rangers.family.nonvol <- family.nonvol[family.nonvol$n.cont == 2,]
+colnames(rangers.family.nonvol)[colnames(rangers.family.nonvol) == "N"] <- "rangers.N"
+rangers.family.nonvol <- rangers.family.nonvol %>%
+    dplyr::select(-n.cont)
+
+family.vol <- df[df$habitat.mode == "volant",] %>%
+    group_by(n.cont, family) %>%
+    dplyr::summarise(N = n()) %>% 
+    as.data.frame()
+
+rangers.family.vol <- family.vol[family.vol$n.cont == 2,]
+colnames(rangers.family.vol)[colnames(rangers.family.vol) == "N"] <- "rangers.N"
+rangers.family.vol <- rangers.family.vol %>%
+    dplyr::select(-n.cont)
+
+cosmo.family <- family[family$n.cont == "3+",]
+colnames(cosmo.family)[colnames(cosmo.family) == "N"] <- "cosmo.N"
+cosmo.family <- cosmo.family %>%
   dplyr::select(-n.cont)
 
 #create full dataset
-fam.null.trot <- merge(null.family, trotter.family, by = "family", all.x = TRUE, all.y = TRUE)
-fam.null.trot.lim <- merge(fam.null.trot, limited.family, by = "family", all.x = TRUE, all.y = TRUE)
-fam.null.trol.lim.homies <- merge(fam.null.trot.lim, homies.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.cosmo <- merge(null.family, cosmo.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.cosmo.rangers <- merge(fam.null.cosmo, rangers.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.cosmo.rangers.homies <- merge(fam.null.cosmo.rangers, homies.family, by = "family", all.x = TRUE, all.y = TRUE)
 
-df.family <- fam.null.trol.lim.homies
+df.family <- fam.null.cosmo.rangers.homies
 df.family[is.na(df.family)] <- 0
 
 df.family$prop.null <- df.family$null.N/nrow(df)
 
 df.family$prop.homies <- df.family$homies.N/nrow(df[df$n.cont == "1",])
-df.family$prop.lim <- df.family$limited.N/nrow(df[df$n.cont == "2",])
-df.family$prop.trot <- df.family$trotter.N/nrow(df[df$n.cont == "3+",])
+df.family$prop.rangers <- df.family$rangers.N/nrow(df[df$n.cont == "2",])
+df.family$prop.cosmo <- df.family$cosmo.N/nrow(df[df$n.cont == "3+",])
 
 #binomial test
 for(i in 1:nrow(df.family)){
@@ -3200,13 +3168,13 @@ for(i in 1:nrow(df.family)){
 }
 
 for(i in 1:nrow(df.family)){
-  test <- binom.test(df.family$limited.N[i], nrow(df[df$n.cont == "2",]), p = df.family$prop.null[i], alternative = "two.sided")
-  df.family$p.lim[i] <- test$p.value
+  test <- binom.test(df.family$rangers.N[i], nrow(df[df$n.cont == "2",]), p = df.family$prop.null[i], alternative = "two.sided")
+  df.family$p.rangers[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.family)){
-  test <- binom.test(df.family$trotter.N[i], nrow(df[df$n.cont == "3+",]), p = df.family$prop.null[i], alternative = "two.sided")
-  df.family$p.trot[i] <- test$p.value
+  test <- binom.test(df.family$cosmo.N[i], nrow(df[df$n.cont == "3+",]), p = df.family$prop.null[i], alternative = "two.sided")
+  df.family$p.cosmo[i] <- test$p.value
 }
 
 #add sidak correction
@@ -3217,85 +3185,87 @@ df.family <- arrange(df.family, p.homies) %>%
                 signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
                 signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
 
-df.family <- arrange(df.family, p.lim) %>%
-  dplyr::mutate(signif.lim = p.lim < 0.05,
-                signif.bonferoni.lim = p.lim < 0.05/n(),
-                signif.holm.lim = !0.05/(n() + 1 - 1:n()) < p.lim,
-                signif.sidak.lim = p.lim < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.lim = !(1 - (1 - 0.05)^(1/n())) < p.lim)
+df.family <- arrange(df.family, p.rangers) %>%
+  dplyr::mutate(signif.rangers = p.rangers < 0.05,
+                signif.bonferoni.rangers = p.rangers < 0.05/n(),
+                signif.holm.rangers = !0.05/(n() + 1 - 1:n()) < p.rangers,
+                signif.sidak.rangers = p.rangers < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.rangers = !(1 - (1 - 0.05)^(1/n())) < p.rangers)
 
-df.family <- arrange(df.family, p.trot) %>%
-  dplyr::mutate(signif.trot = p.trot < 0.05,
-                signif.bonferoni.trot = p.trot < 0.05/n(),
-                signif.holm.trot = !0.05/(n() + 1 - 1:n()) < p.trot,
-                signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
+df.family <- arrange(df.family, p.cosmo) %>%
+  dplyr::mutate(signif.cosmo = p.cosmo < 0.05,
+                signif.bonferoni.cosmo = p.cosmo < 0.05/n(),
+                signif.holm.cosmo = !0.05/(n() + 1 - 1:n()) < p.cosmo,
+                signif.sidak.cosmo = p.cosmo < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.cosmo = !(1 - (1 - 0.05)^(1/n())) < p.cosmo)
 
-#write.csv(df.family, 
-#          "./Results/family.results.csv",
-#          row.names = FALSE)
+write.csv(df.family, 
+          "./Results/family.results.csv",
+          row.names = FALSE)
 
 ##maybe do at order level; maybe don't care about continent of origin for order because too far in past, and families maybe sp w/in families more ecol similar and so behave similarly
 
 #test for body size bias
 ##limited dispersers
-lim.true <- subset(df.family, df.family$signif.sidak.lim == TRUE, select = c(family,
-                                                                             null.N,
-                                                                             limited.N,
-                                                                             prop.null,
-                                                                             prop.lim,
-                                                                             signif.sidak.lim))
+rangers.true <- subset(df.family, df.family$signif.sidak.rangers == TRUE, select = c(family,
+                                                                                     null.N,
+                                                                                     rangers.N,
+                                                                                     prop.null,
+                                                                                     prop.rangers,
+                                                                                     signif.sidak.rangers))
 
-lim.false <- subset(df.family, df.family$signif.sidak.lim == FALSE, select = c(family,
-                                                                               null.N,
-                                                                               limited.N,
-                                                                               prop.null,
-                                                                               prop.lim,
-                                                                               signif.sidak.lim))
+rangers.false <- subset(df.family, df.family$signif.sidak.rangers == FALSE, select = c(family,
+                                                                                       null.N,
+                                                                                       rangers.N,
+                                                                                       prop.null,
+                                                                                       prop.rangers,
+                                                                                       signif.sidak.rangers))
+        
+family.rangers.true <- df[df$family %in% rangers.true$family,]
+hist(log10(family.rangers.true$avg.mass))
 
-family.lim.true <- df[df$family %in% lim.true$family,]
-hist(log10(family.lim.true$avg.mass))
+family.rangers.false <- df[df$family %in% rangers.false$family,]
+hist(log10(family.rangers.false$avg.mass))
 
-family.lim.false <- df[df$family %in% lim.false$family,]
-hist(log10(family.lim.false$avg.mass))
-
-family.lim.true.na <- family.lim.true %>%
+family.rangers.true.na <- family.rangers.true %>%
   drop_na(avg.mass)
 
-family.lim.false.na <- family.lim.false %>%
+family.rangers.false.na <- family.rangers.false %>%
   drop_na(avg.mass)
 
-ks.test(family.lim.true.na$avg.mass, 
-        family.lim.false.na$avg.mass) #sig diff
+ks.test(family.rangers.true.na$avg.mass, 
+        family.rangers.false.na$avg.mass) #sig diff
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  family.lim.true.na$avg.mass and family.lim.false.na$avg.mass
 # D = 0.36586, p-value < 2.2e-16
 # alternative hypothesis: two-sided
 
-ks.test(family.lim.true$avg.mass, family.lim.false$avg.mass, alternative = "greater") ##sig
+ks.test(family.rangers.true$avg.mass, 
+        family.rangers.false$avg.mass, alternative = "greater") ##sig; wide ranging speices are SMALLER than non
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  family.lim.true$avg.mass and family.lim.false$avg.mass
 # D^+ = 0.36586, p-value < 2.2e-16
 # alternative hypothesis: the CDF of x lies above that of y
 
-ks.test(family.lim.true$avg.mass, family.lim.false$avg.mass, alternative = "less") #not sig
+ks.test(family.rangers.true$avg.mass, family.rangers.false$avg.mass, alternative = "less") #not sig
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  family.lim.true$avg.mass and family.lim.false$avg.mass
 # D^- = -3.8164e-17, p-value = 1
 # alternative hypothesis: the CDF of x lies below that of y
 
-##globe trotters
-trot.true <- subset(df.family, df.family$signif.sidak.trot == TRUE, select = c(family,
-                                                                               null.N,
-                                                                               trotter.N,
-                                                                               prop.null,
-                                                                               prop.trot,
-                                                                               signif.sidak.trot))
+##cosmopolitan
+cosmo.true <- subset(df.family, df.family$signif.sidak.cosmo == TRUE, select = c(family,
+                                                                                 null.N,
+                                                                                 cosmo.N,
+                                                                                 prop.null,
+                                                                                 prop.cosmo,
+                                                                                 signif.sidak.cosmo))
 #THERE AREN'T ANY
 
+#is it drivine by insectivores? 
 insect.family <- c("Erinaceidae", "Soricidae", "Talpidae", "Solenodontidae",
                    "Chrysochloridae", "Tenrecidae", "Potamogalidae", "Macroscelididae",
                    "Tupaiidae", "Ptilocercidae", "Cynocephalidae")
@@ -3355,7 +3325,7 @@ summary(lm(df.wr$n.cont.sp ~ df.wr$n.ord.sp))
 # Multiple R-squared:  0.2986,	Adjusted R-squared:  0.2726 
 # F-statistic: 11.49 on 1 and 27 DF,  p-value: 0.002163
 
-
+###### DIVERSITY BAR GRAPH -----
 p.div.1 <- ggplot() + #do histogram; .25 log 
     geom_histogram(aes(log10(homies.family$homies.N)), 
                    colour = "black", fill = "black",
@@ -3363,10 +3333,10 @@ p.div.1 <- ggplot() + #do histogram; .25 log
     plot_theme +
     scale_y_continuous(name = "Count") +
     scale_x_continuous(name = expression(Family~Diversity),
-                       limits = c(log10(1), log10(10^3)),
-                       labels = c(expression(10^0), expression(10^1), 
+                       limits = c(log10(.1), log10(10^3)),
+                       labels = c(expression(10^-1), expression(10^0), expression(10^1), 
                                   expression(10^2), expression(10^3)))
-
+#sample size
 length(homies.family$homies.N) #132 fam
 sum(homies.family$homies.N) #4120 sp
 
@@ -3375,63 +3345,80 @@ ggsave(p.div.1,
        width = 14, height = 10, units = "cm")
 
 p.div.2 <- ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(log10(limited.family$limited.N)), 
+    geom_histogram(aes(log10(rangers.family$rangers.N)), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
     scale_y_continuous(name = "Count") +
     scale_x_continuous(name = expression(Family~Diversity),
-                       limits = c(log10(1), log10(10^2)),
-                       breaks = c(log10(1), log10(10), log10(10^2)),
-                       labels = c(expression(10^0), expression(10^1), 
-                                  expression(10^2)))
+                       limits = c(log10(.1), log10(10^3)),
+                       labels = c(expression(10^-1), expression(10^0), expression(10^1), 
+                                  expression(10^2), expression(10^3)))
+#sample size
+length(rangers.family$rangers.N) #54 fam
+sum(rangers.family$rangers.N) #260 sp
 
 ggsave(p.div.2, 
        file = "./Figures/fam.div_two.cont.png", 
        width = 14, height = 10, units = "cm")
 
-ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass) & df$order == "Chiroptera"]), 
+p.div.2.nonvol <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(log10(rangers.family.nonvol$rangers.N)), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
     scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
-                       limits = c(log10(1), log10(10^6)),
-                       labels = c(expression(10^0), expression(10^2), 
-                                  expression(10^4), expression(10^6)))
+    scale_x_continuous(name = expression(Family~Diversity),
+                       limits = c(log10(.1), log10(10^3)),
+                       labels = c(expression(10^-1), expression(10^0), expression(10^1), 
+                                  expression(10^2), expression(10^3)))
+#sample size
+length(rangers.family.nonvol$rangers.N) #41 fam
+sum(rangers.family.nonvol$rangers.N) #118 sp
 
-ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass) & df$order != "Chiroptera"]), 
+ggsave(p.div.2.nonvol, 
+       file = "./Figures/fam.div.nonvol_two.cont.png", 
+       width = 14, height = 10, units = "cm")
+
+p.div.2.vol <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(log10(limited.family.vol$limited.N)), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
     scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
-                       limits = c(log10(1), log10(10^6)),
-                       labels = c(expression(10^0), expression(10^2), 
-                                  expression(10^4), expression(10^6)))
+    scale_x_continuous(name = expression(Family~Diversity),
+                       limits = c(log10(.1), log10(10^3)),
+                       labels = c(expression(10^-1), expression(10^0), expression(10^1), 
+                                  expression(10^2), expression(10^3)))
+#sample size
+length(rangers.family.vol$rangers.N) #13 fam
+sum(rangers.family.vol$rangers.N) #142 sp
 
-p.bs.3 <- ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]), 
+ggsave(p.div.2.vol, 
+       file = "./Figures/fam.div.vol_two.cont.png", 
+       width = 14, height = 10, units = "cm")
+
+p.div.3 <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(log10(cosmo.family$cosmo.N)), 
                    colour = "red", fill = "red",
                    binwidth = .25) +
     plot_theme +
-    scale_y_continuous(name = "Count",
-                       breaks = c(0, 1, 2)) +
-    scale_x_continuous(name = expression(log[10]~Body~Mass~(g)),
-                       limits = c(log10(1), log10(10^6)),
-                       labels = c(expression(10^0), expression(10^2), 
-                                  expression(10^4), expression(10^6)))
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = expression(Family~Diversity),
+                       limits = c(log10(.1), log10(10^3)),
+                       labels = c(expression(10^-1), expression(10^0), expression(10^1), 
+                                  expression(10^2), expression(10^3)))
+#sample size
+length(cosmo.family$cosmo.N) #6 fam
+sum(cosmo.family$cosmo.N) #6 sp
 
-ggsave(p.bs.3, 
-       file = "./Figures/body_size_three.cont.png", 
+ggsave(p.div.3, 
+       file = "./Figures/fam.div_three.cont.png", 
        width = 14, height = 10, units = "cm")
-
 
 #### H4: BODY SIZE ----
 
-global.mass <- df$log.mass[!is.na(df$log.mass)] #3310 records
+global.mass <- df$log.mass[!is.na(df$log.mass)] #3316 records
 median(global.mass) #1.95424
 median(df$avg.mass[!is.na(df$avg.mass)]) #89.9995
 
@@ -3445,6 +3432,7 @@ ks.test(hb.mass, global.mass)
 # data:  hb.mass and global.mass
 # D = 0.015662, p-value = 0.8292
 # alternative hypothesis: two-sided
+#NO DIFF
  
 ##### 2 compared to global -----
 ld.mass <- df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)] #243
@@ -3456,7 +3444,7 @@ ks.test(ld.mass, global.mass)
 # data:  ld.mass and global.mass
 # D = 0.20185, p-value = 1.944e-08
 # alternative hypothesis: two-sided
-ks.test(ld.mass, global.mass, alternative = "greater") #ld smaller than global
+ks.test(ld.mass, global.mass, alternative = "greater") #on2 smaller than global
 # Asymptotic two-sample Kolmogorov-Smirnov test
 # 
 # data:  ld.mass and global.mass
@@ -3490,24 +3478,46 @@ min(df$avg.mass[df$order == "Carnivora" &
 max(df$avg.mass[df$order == "Carnivora" &
                   df$n.cont == "3+"], na.rm = TRUE) #297349.5
 
-df.sub<-df %>% 
-    mutate(quart.bin = cut(log.mass, breaks = seq(0, 7.25, .25))) %>%
-    as.data.frame
+### what about frugivores on 2 continents? (Pineda-Munoz et al. 2016, Paleobiology)
+# frugivore size 1–30 kg ==> 1000g to 30000g ==> 10^3 to 10^4
+# would expect to see few species in this size range
+table(df$log.size.bin[df$n.cont == "2" & df$habitat.mode != "volant"])
+#few in 1, 5, 6; a lot in 3, 
+#it's hard to be on 2 continents if you're really small; could also be there aren't that many small
+table(df$log.size.bin[!is.na(df$log.mass)])
+#0      1       2       3       4       5       6       7 
+#385    1315    720     436     252     160     46      2 
+#there's actually a fair number of small species, so it add to the story that it is hard if you're small
 
-df.sub.cts <- df.sub %>%
-    dplyr::group_by(quart.bin) %>%
-    dplyr::summarise(diff.per = 1-(length(log.mass[n.cont == 2])/length(log.mass[n.cont == 1])),
-                     n.1 = length(log.mass[n.cont == 1]),
-                     n.2 = length(log.mass[n.cont == 2])) %>%
+#where is the gap? I think we need it at .25 log bin
+bins <- df[df$n.cont == "2",] %>%
+    dplyr::group_by(qtr.bin) %>%
+    dplyr::summarise(n = n()) %>%
     as.data.frame()
-plot(df.sub.cts$quart.bin, df.sub.cts$diff.per)
+View(bins)
+#reduction at (2.5,2.75]
 
-##### FIGURE ----
+nrow(df[df$n.cont == "2" & df$diet.frugivore.tot == TRUE & df$habitat.mode != "volant",]) #44 out of 260 (~17%)
+#who are they?
+table(df$order[df$n.cont == "2" & df$diet.frugivore.tot == TRUE & df$habitat.mode != "volant"])
+#mostly rodents
+#how big are they?
+table(df$log.size.bin[df$n.cont == "2" & df$diet.frugivore.tot == TRUE & df$habitat.mode != "volant"])
+# 0  1   2  3   4 
+# 1  20  9  10  4 
+#how big are the rodents?
+table(df$log.size.bin[df$n.cont == "2" & df$diet.frugivore.tot == TRUE & df$habitat.mode != "volant" & df$order == "Rodentia"])
+#mostly 10g
+#0  1   2  3  4 
+#1  19  7  2  1 
+
+##### BODY SIZE FIGURE ----
 
 df.na <- df %>%
     drop_na(log.mass) %>%
     as.data.frame()
-p.bs <- ggplot(df.na) + #do histogram; .25 log 
+
+p.bs.legend <- ggplot(df.na) + #do histogram; .25 log 
     geom_histogram(aes(log.mass,
                        group = n.cont, 
                        fill = n.cont),
@@ -3522,8 +3532,9 @@ p.bs <- ggplot(df.na) + #do histogram; .25 log
                                  "3+")) +
     scale_y_continuous(name = "Count") +
     scale_x_continuous(name = expression(log[10]~Body~Mass~(g)))
-ggsave(p.bs, 
-       file = "./Figures/body_size_bw-red.png", 
+
+ggsave(p.bs.legend, 
+       file = "./Figures/body_size_bw-red_legend.png", 
        width = 20, height = 10, units = "cm")
 
 p.bs.no.legend <- ggplot(df.na) + #do histogram; .25 log 
@@ -3580,13 +3591,15 @@ p.bs.2 <- ggplot() + #do histogram; .25 log
                        limits = c(log10(1), log10(10^6)),
                        labels = c(expression(10^0), expression(10^2), 
                                   expression(10^4), expression(10^6)))
-    
+#sample size
+length(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass)]) #243
+
 ggsave(p.bs.2, 
        file = "./Figures/body_size_two.cont.png", 
        width = 14, height = 10, units = "cm")
 
-ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass) & df$order == "Chiroptera"]), 
+p.bs.2.vol <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass) & df$habitat.mode == "volant"]), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -3595,9 +3608,15 @@ ggplot() + #do histogram; .25 log
                        limits = c(log10(1), log10(10^6)),
                        labels = c(expression(10^0), expression(10^2), 
                                   expression(10^4), expression(10^6)))
+#sample size
+length(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass) & df$habitat.mode == "volant"]) #129
 
-ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass) & df$order != "Chiroptera"]), 
+ggsave(p.bs.2.vol, 
+       file = "./Figures/body_size.vol_two.cont.png", 
+       width = 14, height = 10, units = "cm")
+
+p.bs.2.nonvol <- ggplot() + #do histogram; .25 log 
+    geom_histogram(aes(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass) & df$habitat.mode != "volant"]), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -3606,6 +3625,12 @@ ggplot() + #do histogram; .25 log
                        limits = c(log10(1), log10(10^6)),
                        labels = c(expression(10^0), expression(10^2), 
                                   expression(10^4), expression(10^6)))
+#sample size
+length(df$log.mass[df$n.cont == "2" & !is.na(df$log.mass) & df$habitat.mode != "volant"]) #114
+
+ggsave(p.bs.2.nonvol, 
+       file = "./Figures/body_size.nonvol_two.cont.png", 
+       width = 14, height = 10, units = "cm")
 
 p.bs.1 <- ggplot() + #do histogram; .25 log 
     geom_histogram(aes(df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)]), 
@@ -3617,6 +3642,8 @@ p.bs.1 <- ggplot() + #do histogram; .25 log
                        limits = c(log10(1), log10(10^6)),
                        labels = c(expression(10^0), expression(10^2), 
                                   expression(10^4), expression(10^6)))
+#sample size
+length(df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)]) #3067
 
 ggsave(p.bs.1, 
        file = "./Figures/body_size_one.cont.png", 
@@ -3633,7 +3660,8 @@ p.bs.3 <- ggplot() + #do histogram; .25 log
                        limits = c(log10(1), log10(10^6)),
                        labels = c(expression(10^0), expression(10^2), 
                                   expression(10^4), expression(10^6)))
-
+#sample size
+length(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]) #3067
 ggsave(p.bs.3, 
        file = "./Figures/body_size_three.cont.png", 
        width = 14, height = 10, units = "cm")
@@ -3726,29 +3754,29 @@ colnames(homies.breadth)[colnames(homies.breadth) == "N"] <- "homies.N"
 homies.breadth <- homies.breadth %>%
   dplyr::select(-n.cont)
 
-limited.breadth <- breadth[breadth$n.cont == 2,]
-colnames(limited.breadth)[colnames(limited.breadth) == "N"] <- "limited.N"
-limited.breadth <- limited.breadth %>%
+rangers.breadth <- breadth[breadth$n.cont == 2,]
+colnames(rangers.breadth)[colnames(rangers.breadth) == "N"] <- "rangers.N"
+rangers.breadth <- rangers.breadth %>%
   dplyr::select(-n.cont)
 
-trotter.breadth <- breadth[breadth$n.cont == "3+",]
-colnames(trotter.breadth)[colnames(trotter.breadth) == "N"] <- "trotter.N"
-trotter.breadth <- trotter.breadth %>%
+cosmo.breadth <- breadth[breadth$n.cont == "3+",]
+colnames(cosmo.breadth)[colnames(cosmo.breadth) == "N"] <- "cosmo.N"
+cosmo.breadth <- cosmo.breadth %>%
   dplyr::select(-n.cont)
 
 #create full dataset
-breadth.null.trot <- merge(null.breadth, trotter.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
-breadth.null.trot.lim <- merge(breadth.null.trot, limited.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
-breadth.null.trol.lim.homies <- merge(breadth.null.trot.lim, homies.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
+breadth.null.cosmo <- merge(null.breadth, cosmo.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
+breadth.null.cosmo.rangers <- merge(breadth.null.cosmo, rangers.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
+breadth.null.trol.rangers.homies <- merge(breadth.null.cosmo.rangers, homies.breadth, by = "diet.breadth", all.x = TRUE, all.y = TRUE)
 
-df.breadth <- breadth.null.trol.lim.homies
+df.breadth <- breadth.null.trol.rangers.homies
 df.breadth[is.na(df.breadth)] <- 0
 
 df.breadth$prop.null <- df.breadth$null.N/nrow(df)
 
 df.breadth$prop.homies <- df.breadth$homies.N/nrow(df[df$n.cont == 1,])
-df.breadth$prop.lim <- df.breadth$limited.N/nrow(df[df$n.cont == 2,])
-df.breadth$prop.trot <- df.breadth$trotter.N/nrow(df[df$n.cont == "3+",])
+df.breadth$prop.rangers <- df.breadth$rangers.N/nrow(df[df$n.cont == 2,])
+df.breadth$prop.cosmo <- df.breadth$cosmo.N/nrow(df[df$n.cont == "3+",])
 
 #binomial test
 
@@ -3758,13 +3786,13 @@ for(i in 1:nrow(df.breadth)){
 }
 
 for(i in 1:nrow(df.breadth)){
-  test <- binom.test(df.breadth$limited.N[i], nrow(df[df$n.cont == 2,]), p = df.breadth$prop.null[i], alternative = "two.sided")
-  df.breadth$p.lim[i] <- test$p.value
+  test <- binom.test(df.breadth$rangers.N[i], nrow(df[df$n.cont == 2,]), p = df.breadth$prop.null[i], alternative = "two.sided")
+  df.breadth$p.rangers[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.breadth)){
-  test <- binom.test(df.breadth$trotter.N[i], nrow(df[df$n.cont == "3+",]), p = df.breadth$prop.null[i], alternative = "two.sided")
-  df.breadth$p.trot[i] <- test$p.value
+  test <- binom.test(df.breadth$cosmo.N[i], nrow(df[df$n.cont == "3+",]), p = df.breadth$prop.null[i], alternative = "two.sided")
+  df.breadth$p.cosmo[i] <- test$p.value
 }
 
 #add sidak correction
@@ -3775,23 +3803,23 @@ df.breadth <- arrange(df.breadth, p.homies) %>%
                 signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
                 signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
 
-df.breadth <- arrange(df.breadth, p.lim) %>%
-  dplyr::mutate(signif.lim = p.lim < 0.05,
-                signif.bonferoni.lim = p.lim < 0.05/n(),
-                signif.holm.lim = !0.05/(n() + 1 - 1:n()) < p.lim,
-                signif.sidak.lim = p.lim < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.lim = !(1 - (1 - 0.05)^(1/n())) < p.lim)
+df.breadth <- arrange(df.breadth, p.rangers) %>%
+  dplyr::mutate(signif.rangers = p.rangers < 0.05,
+                signif.bonferoni.rangers = p.rangers < 0.05/n(),
+                signif.holm.rangers = !0.05/(n() + 1 - 1:n()) < p.rangers,
+                signif.sidak.rangers = p.rangers < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.rangers = !(1 - (1 - 0.05)^(1/n())) < p.rangers)
 
-df.breadth <- arrange(df.breadth, p.trot) %>%
-  dplyr::mutate(signif.trot = p.trot < 0.05,
-                signif.bonferoni.trot = p.trot < 0.05/n(),
-                signif.holm.trot = !0.05/(n() + 1 - 1:n()) < p.trot,
-                signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
+df.breadth <- arrange(df.breadth, p.cosmo) %>%
+  dplyr::mutate(signif.cosmo = p.cosmo < 0.05,
+                signif.bonferoni.cosmo = p.cosmo < 0.05/n(),
+                signif.holm.cosmo = !0.05/(n() + 1 - 1:n()) < p.cosmo,
+                signif.sidak.cosmo = p.cosmo < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.cosmo = !(1 - (1 - 0.05)^(1/n())) < p.cosmo)
 
-#write.csv(df.breadth, 
-#          "./Results/diet.breadth.results.csv",
-#         row.names = FALSE)
+write.csv(df.breadth, 
+          "./Results/diet.breadth.results.csv",
+         row.names = FALSE)
 
 #include trot.N, null prop, expected, observed-expected, (O-E)^2, (O-E)^2/exp, X crit, p
 
@@ -3814,9 +3842,9 @@ df.diet.stats <- df %>%
             graz.frug = length(df$binomial[df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"])) %>%
   as.data.frame()
 
-#write.csv(df.diet.stats,
-#          "./Results/diet.summary.csv",
-#          row.names = FALSE)
+write.csv(df.diet.stats,
+          "./Results/diet.summary.csv",
+          row.names = FALSE)
 
 ##deeper look into dietary breadth of 3
 df.3 <- df[df$diet.breadth ==3,]
@@ -3845,12 +3873,14 @@ table(df.3$n.cont) #180 on 1 continent, 6 on 2 continents
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
                    df$diet.breadth == 2]) #308
+## a lot are browser & grazer combo
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.carnivore.tot == TRUE & 
                    df$diet.breadth == 2]) #0
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
                    df$diet.breadth == 2]) #702
+##a lot are browser & frugivore comnbo
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.invertivore.tot == TRUE & 
                    df$diet.breadth == 2]) #20
@@ -3859,150 +3889,149 @@ length(df$binomial[df$diet.browser.tot == TRUE &
                    df$diet.breadth == 2]) #0
 length(df$binomial[df$diet.grazer.tot == TRUE & 
                    df$diet.carnivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #1
 length(df$binomial[df$diet.invertivore.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #2
 length(df$binomial[df$diet.frugivore.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #58
 length(df$binomial[df$diet.piscivore.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
-                   df$diet.breadth == 2])
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
+                   df$diet.breadth == 2]) #0
+length(df$binomial[df$diet.carnivore.tot = TRUE & 
                    df$diet.invertivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #127
+##a lot are carnivore & invertivore combo
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #46
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.piscivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #4
 length(df$binomial[df$diet.invertivore.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #452
+#a lot are invertivore and frugivore combo
 length(df$binomial[df$diet.invertivore.tot == TRUE & 
                    df$diet.piscivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #17
 length(df$binomial[df$diet.piscivore.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
-                   df$diet.breadth == 2])
+                   df$diet.breadth == 2]) #0
 
 ##n.cont = 1
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #297
+#a lot are browser & grazer combo
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #682
+#a lot are browser & frugivore combo
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.invertivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #20
 length(df$binomial[df$diet.grazer.tot == TRUE & 
                    df$diet.carnivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #0
 length(df$binomial[df$diet.invertivore.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #2
 length(df$binomial[df$diet.frugivore.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #54
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.invertivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #113
+#a lot are carnivore and invertivore combo
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #44
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.piscivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #4
 length(df$binomial[df$diet.invertivore.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #424
+#a lot are invertivore and frugivore combo
 length(df$binomial[df$diet.invertivore.tot == TRUE & 
                    df$diet.piscivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 1])
+                   df$n.cont == 1]) #13
 
 ##n.cont = 2
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 2])
+                   df$n.cont == 2]) #11
+#not as many browsers and grazers; not a lot of either are on 2 continents
 length(df$binomial[df$diet.browser.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 2])
+                   df$n.cont == 2]) #20
+#do still have this
 length(df$binomial[df$diet.grazer.tot == TRUE & 
                    df$diet.carnivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 2])
+                   df$n.cont == 2]) #1
 length(df$binomial[df$diet.frugivore.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 2])
+                   df$n.cont == 2]) #4
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.invertivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 2])
+                   df$n.cont == 2]) #12
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 2])
+                   df$n.cont == 2]) #1
 length(df$binomial[df$diet.invertivore.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 2])
+                   df$n.cont == 2]) #28
+#and this one
 length(df$binomial[df$diet.invertivore.tot == TRUE & 
                    df$diet.piscivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == 2])
+                   df$n.cont == 2]) #4
 
 ##n.cont = 3+
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.invertivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == "3+"])
+                   df$n.cont == "3+"]) #2
 length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.frugivore.tot == TRUE & 
                    df$diet.breadth == 2 &
-                   df$n.cont == "3+"])
+                   df$n.cont == "3+"]) #1
 
-
+#role of bats in driving these patterns
 length(df$binomial[df$order == "Chiroptera" &
-                   df$n.cont == 2])
-length(df$binomial[df$order == "Chiroptera" &
-                   df$n.cont == 2 &
-                   df$diet.frugivore.tot == TRUE])
+                   df$n.cont == 2]) #142
 length(df$binomial[df$order == "Chiroptera" &
                    df$n.cont == 2 &
-                   df$diet.invertivore.tot == TRUE])
+                   df$diet.frugivore.tot == TRUE]) #52 of them are frugivores
 length(df$binomial[df$order == "Chiroptera" &
                    df$n.cont == 2 &
-                   df$diet.carnivore.tot == TRUE])
+                   df$diet.invertivore.tot == TRUE]) #106 of them are insectivores
 length(df$binomial[df$order == "Chiroptera" &
                    df$n.cont == 2 &
-                   df$diet.piscivore.tot== TRUE])
-
-length(df$binomial[df$family.origin == "South.America"])
-length(df$binomial[df$family.origin == "South.America" &
-                   df$n.cont == 2])
-length(df$binomial[df$family.origin == "North.America"])
-length(df$binomial[df$family.origin == "North.America" &
-                   df$n.cont == 2])
-length(df$binomial[df$family.origin == "Eurasia"]) 
-length(df$binomial[df$family.origin == "Eurasia" &
-                   df$n.cont == 2]) 
+                   df$diet.carnivore.tot == TRUE]) #9 are carnivores
+length(df$binomial[df$order == "Chiroptera" &
+                   df$n.cont == 2 &
+                   df$diet.piscivore.tot== TRUE]) #2! are piscivores
 
 ##### DIET TYPE -----
 #are there diet types differences between homiess, limited dispersers, and globe trotters?
@@ -4011,14 +4040,14 @@ df.diet <- data.frame(diet = diets)
 
 df.diet["null.N"] <- colSums(df[diets])
 df.diet["homies.N"] <- colSums(df[df$n.cont == 1, diets])
-df.diet["limited.N"] <- colSums(df[df$n.cont == 2, diets])
-df.diet["trotter.N"] <- colSums(df[df$n.cont == "3+", diets])
+df.diet["rangers.N"] <- colSums(df[df$n.cont == 2, diets])
+df.diet["cosmo.N"] <- colSums(df[df$n.cont == "3+", diets])
 
 df.diet$prop.null <- df.diet$null.N/nrow(df)
 
 df.diet$prop.homies <- df.diet$homies.N/nrow(df[df$n.cont == 1,])
-df.diet$prop.lim <- df.diet$limited.N/nrow(df[df$n.cont == 2,])
-df.diet$prop.trot <- df.diet$trotter.N/nrow(df[df$n.cont == "3+",])
+df.diet$prop.rangers <- df.diet$rangers.N/nrow(df[df$n.cont == 2,])
+df.diet$prop.cosmo <- df.diet$cosmo.N/nrow(df[df$n.cont == "3+",])
 
 #binomial test
 
@@ -4028,13 +4057,13 @@ for(i in 1:nrow(df.diet)){
 }
 
 for(i in 1:nrow(df.diet)){
-  test <- binom.test(df.diet$limited.N[i], nrow(df[df$n.cont == 2,]), p = df.diet$prop.null[i], alternative = "two.sided")
-  df.diet$p.lim[i] <- test$p.value
+  test <- binom.test(df.diet$rangers.N[i], nrow(df[df$n.cont == 2,]), p = df.diet$prop.null[i], alternative = "two.sided")
+  df.diet$p.rangers[i] <- test$p.value
 }
 
 for(i in 1:nrow(df.diet)){
-  test <- binom.test(df.diet$trotter.N[i], nrow(df[df$n.cont == "3+",]), p = df.diet$prop.null[i], alternative = "two.sided")
-  df.diet$p.trot[i] <- test$p.value
+  test <- binom.test(df.diet$cosmo.N[i], nrow(df[df$n.cont == "3+",]), p = df.diet$prop.null[i], alternative = "two.sided")
+  df.diet$p.cosmo[i] <- test$p.value
 }
 
 #add sidak correction
@@ -4045,23 +4074,29 @@ df.diet <- arrange(df.diet, p.homies) %>%
                 signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
                 signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
 
-df.diet <- arrange(df.diet, p.lim) %>%
-  dplyr::mutate(signif.lim = p.lim < 0.05,
-                signif.bonferoni.lim = p.lim < 0.05/n(),
-                signif.holm.lim = !0.05/(n() + 1 - 1:n()) < p.lim,
-                signif.sidak.lim = p.lim < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.lim = !(1 - (1 - 0.05)^(1/n())) < p.lim)
+df.diet <- arrange(df.diet, p.rangers) %>%
+  dplyr::mutate(signif.rangers = p.rangers < 0.05,
+                signif.bonferoni.rangers = p.rangers < 0.05/n(),
+                signif.holm.rangers = !0.05/(n() + 1 - 1:n()) < p.rangers,
+                signif.sidak.rangers = p.rangers < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.rangers = !(1 - (1 - 0.05)^(1/n())) < p.rangers)
+#nothing special about frugivores
 
-df.diet <- arrange(df.diet, p.trot) %>%
-  dplyr::mutate(signif.trot = p.trot < 0.05,
-                signif.bonferoni.trot = p.trot < 0.05/n(),
-                signif.holm.trot = !0.05/(n() + 1 - 1:n()) < p.trot,
-                signif.sidak.trot = p.trot < 1 - (1 - 0.05)^(1/n()),
-                signif.holm.sidak.trot = !(1 - (1 - 0.05)^(1/n())) < p.trot)
+df.diet <- arrange(df.diet, p.cosmo) %>%
+  dplyr::mutate(signif.cosmo = p.cosmo < 0.05,
+                signif.bonferoni.cosmo = p.cosmo < 0.05/n(),
+                signif.holm.cosmo = !0.05/(n() + 1 - 1:n()) < p.cosmo,
+                signif.sidak.cosmo = p.cosmo < 1 - (1 - 0.05)^(1/n()),
+                signif.holm.sidak.cosmo = !(1 - (1 - 0.05)^(1/n())) < p.cosmo)
 
-#write.csv(df.diet, 
-#          "./Results/diet.results.csv",
-#          row.names = FALSE)
+write.csv(df.diet, 
+          "./Results/diet.results.csv",
+          row.names = FALSE)
+
+##mostly losing browsers, grazers, and piscivores when go from 1 to 2
+##gaining carnivores
+#slight decrease in frugivores and slight increase in invertivores
+
 
 #test if carnivorans of n=2 and n=3+ are larger than expected
 ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == 2]))
@@ -4084,6 +4119,7 @@ ks.test(log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]), log1
 # data:  log10(df$avg.mass[df$n.cont == 2 & df$diet.carnivore.tot == TRUE]) and log10(df$avg.mass[df$n.cont == 2])
 # D^- = 0.47582, p-value = 1.311e-08
 # alternative hypothesis: the CDF of x lies below that of y
+#yes, larger
 
 ks.test(log10(df$avg.mass[df$n.cont == "3+" & df$diet.carnivore.tot == TRUE]), log10(df$avg.mass[df$n.cont == "3+"])) #not sig
 # Exact two-sample Kolmogorov-Smirnov test
@@ -4093,28 +4129,8 @@ ks.test(log10(df$avg.mass[df$n.cont == "3+" & df$diet.carnivore.tot == TRUE]), l
 # alternative hypothesis: two-sided
 
 ###### DELVING DEEPER ------
-##deeper look into dietary breadth of 3
-df.3 <- df[df$diet.breadth ==3,]
 
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
-                       df.3$diet.invertivore.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #152
-
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
-                       df.3$diet.carnivore.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #2
-
-length(df.3$binomial[df.3$diet.invertivore.tot == TRUE &
-                       df.3$diet.carnivore.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #18
-
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
-                       df.3$diet.grazer.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #12
-
-table(df.3$n.cont) #180 on 1 continent, 6 on 2 continents
-
-## do bats drive trends in n.cont == 2 for diet
+## do bats drive trends in n.cont == 2 for diet; look at size range to understand where bats are
 df.2 <- df[df$n.cont == 2,]
 range(df.2$avg.mass[df.2$order == "Chiroptera"], na.rm = TRUE)
 #most in between 10^0 and 10^2
@@ -4142,6 +4158,7 @@ View(bins.diff)
 # bin 3 switches from dominant in 2 types on 1 continent to just carn on 2 continents (i.e., lost carn in bin 2 and gained in bin 3; lost frug in bin 3 and kept in bin 2)
 # bin 4 switches from grazers to carnivores
 
+## where is the turnover happening?
 ord.diff <- df[df$log.size.bin >= 2 & df$log.size.bin <= 4,] %>%
     dplyr::group_by(log.size.bin, n.cont, order) %>%
     dplyr::summarise(n = n()) %>%
@@ -4184,166 +4201,7 @@ hist(df$log.mass[df$diet.frugivore.tot == TRUE])
 range(df$avg.mass[df$diet.invertivore.tot == TRUE], na.rm = TRUE)
 #same range here
 
-##deeper look into those with dietary breadth of 2
-#only for diet.breadth == 2
-## total
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2]) #308
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.carnivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #0
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #702
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #20
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #0
-length(df$binomial[df$diet.grazer.tot == TRUE & 
-                     df$diet.carnivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #1
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2]) #2
-length(df$binomial[df$diet.frugivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2]) #58
-length(df$binomial[df$diet.piscivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2]) #0
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #127
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #46
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #4
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #452
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #17
-length(df$binomial[df$diet.piscivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2]) #0
-
-##n.cont = 1
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #297
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #682
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #20
-length(df$binomial[df$diet.grazer.tot == TRUE & 
-                     df$diet.carnivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #0
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #2
-length(df$binomial[df$diet.frugivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #54
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #113
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #44
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #4
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #424
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 1]) #13
-
-##n.cont = 2
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #11
-length(df$binomial[df$diet.browser.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #20
-length(df$binomial[df$diet.grazer.tot == TRUE & 
-                     df$diet.carnivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #1
-length(df$binomial[df$diet.frugivore.tot == TRUE & 
-                     df$diet.grazer.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #4
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #12
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #1
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #28
-length(df$binomial[df$diet.invertivore.tot == TRUE & 
-                     df$diet.piscivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == 2]) #4
-
-##n.cont = 3+
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.invertivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == "3+"]) #2
-length(df$binomial[df$diet.carnivore.tot == TRUE & 
-                     df$diet.frugivore.tot == TRUE & 
-                     df$diet.breadth == 2 &
-                     df$n.cont == "3+"]) #1
-
-
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2]) #142
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2 &
-                     df$diet.frugivore.tot == TRUE]) #52
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2 &
-                     df$diet.invertivore.tot == TRUE]) #106
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2 &
-                     df$diet.carnivore.tot == TRUE]) #9
-length(df$binomial[df$order == "Chiroptera" &
-                     df$n.cont == 2 &
-                     df$diet.piscivore.tot== TRUE]) #2
-
-###### DIET FIGURES -----
-#UNstacked bar graph
-#Continent as x axis for continent and y for diet
-
-##DIET BREADTH
+##### DIET BREADTH BAR GRAPH -----
 dietbreadth_bargraph <- plyr::ddply(df, c("n.cont", "diet.breadth"), function(x){
   nrow(x)
 })
@@ -4362,7 +4220,7 @@ dietbreadth_bargraph_full$n.cont <- factor(dietbreadth_bargraph_full$n.cont,    
                                            levels = c("1", "2", "3+"))
 
 
-dietbreadth_bargraph.vol <- plyr::ddply(df[df$order == "Chiroptera",], c("n.cont", "diet.breadth"), function(x){
+dietbreadth_bargraph.vol <- plyr::ddply(df[df$habitat.mode == "volant",], c("n.cont", "diet.breadth"), function(x){
     nrow(x)
 })
 
@@ -4381,7 +4239,7 @@ dietbreadth_bargraph_full.vol$n.cont <- factor(dietbreadth_bargraph_full.vol$n.c
 
 
 
-dietbreadth_bargraph.nonvol <- plyr::ddply(df[df$order != "Chiroptera",], c("n.cont", "diet.breadth"), function(x){
+dietbreadth_bargraph.nonvol <- plyr::ddply(df[df$habitat.mode != "volant",], c("n.cont", "diet.breadth"), function(x){
     nrow(x)
 })
 
@@ -4417,38 +4275,86 @@ ggplot(dietbreadth_bargraph_full, aes(x = diet.breadth,
                     legend.position = c(0.82, 0.8)) +
   theme(axis.title.y = element_text(margin = margin(r = 5)))
 
-ggplot(dietbreadth_bargraph_full, 
-       aes(x = diet.breadth, y = prop, 
-           fill = as.factor(n.cont))) + 
-  geom_bar(stat = "identity", position = "dodge", color="black") +
-  scale_fill_manual(name = "Number of Continents", 
-                    labels = c("1",
-                               "2",
-                               "3+"),
-                    values = cb_viridis) +
-  xlab("\n\nDietary Breadth") + 
-  ylab("Proportion") + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) + 
-  plot_theme + theme(panel.border = element_rect(fill = NA),
-                     strip.background = element_rect(fill = NA),
-                     legend.position = c(.9, 0.8)) +
-  theme(axis.title.y = element_text(margin = margin(r = 5)))
+p.diet.brd.1 <-  ggplot() +  
+    geom_bar(aes(df$diet.breadth[df$n.cont == "1"]),
+             colour = "black", fill = "black") +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary breadth")
+##sample size
+length(df$diet.breadth[df$n.cont == "1"]) #4119
 
-## x axis = continent, y axis = diet
+ggsave(p.diet.brd.1, 
+       file = "./Figures/diet.breadth.one.png", 
+       width = 20, height = 10, units = "cm")
 
-ggplot(dietbreadth_bargraph_full, 
-       aes(x = diet.breadth, y = prop, 
-           fill = as.factor(n.cont))) + 
-  geom_bar(stat = "identity", position = "dodge", color="black") +
-  scale_fill_manual("Continents", 
-                    values = cb_viridis) +
-  xlab("\n\nDietary Breadth") + 
-  ylab("Proportion") + 
-  theme(legend.position = "none") + 
-  plot_theme
+p.diet.brd.2 <-  ggplot() +  
+    geom_bar(aes(df$diet.breadth[df$n.cont == "2"]),
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary breadth")
+##sample size
+length(df$diet.breadth[df$n.cont == "2"]) #260
 
-##DIET TYPE
-diet.melt <- melt(df, id.vars = c("order", "binomial", "n.cont", "diet.breadth"), 
+ggsave(p.diet.brd.2, 
+       file = "./Figures/diet.breadth.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.diet.brd.2.nonvol <- ggplot() +  
+    geom_bar(aes(df$diet.breadth[df$n.cont == "2" & df$habitat.mode != "volant"]),
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary breadth Nonvolant")
+##sample size
+length(df$diet.breadth[df$n.cont == "2" & df$habitat.mode != "volant"]) #118
+
+ggsave(p.diet.brd.2.nonvol, 
+       file = "./Figures/diet.breadth.nonvol.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.diet.brd.2.vol <- ggplot() +  
+    geom_bar(aes(df$diet.breadth[df$n.cont == "2" & df$habitat.mode == "volant"]),
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary breadth Volant")
+##sample size
+length(df$diet.breadth[df$n.cont == "2" & df$habitat.mode == "volant"]) #142
+
+ggsave(p.diet.brd.2.vol, 
+       file = "./Figures/diet.breadth.vol.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.diet.brd.3 <-  ggplot() +  
+    geom_bar(aes(df$diet.breadth[df$n.cont == "3+"]),
+             colour = "red", fill = "red") +
+    plot_theme +
+    theme(axis.text.x = element_text(vjust = -.5),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_continuous(name = "Dietary Breadth",
+                       limits = c(.5, 3.5),
+                       breaks = c(1, 2, 3),
+                       labels = c(1, 2, 3))
+##sample size
+length(df$diet.breadth[df$n.cont == "3+"]) #6
+
+ggsave(p.diet.brd.3, 
+       file = "./Figures/diet.breadth.three.png", 
+       width = 20, height = 10, units = "cm")
+
+##### DIET TYPE ------
+diet.melt <- melt(df, id.vars = c("order", "binomial", "n.cont", "diet.breadth", "habitat.mode"), 
                   measure.vars = c("diet.carnivore.tot", 
                                    "diet.browser.tot", 
                                    "diet.grazer.tot", 
@@ -4458,31 +4364,31 @@ diet.melt <- melt(df, id.vars = c("order", "binomial", "n.cont", "diet.breadth")
                   variable.name = "diet.type")
 
 diet.melt <- diet.melt %>%
-  filter(diet.melt$value == TRUE)
+    filter(diet.melt$value == TRUE)
 
 table(diet.melt$diet.type[diet.melt$diet.breadth == 3])
 
 #group by binomial so don't recount
 unique.diet.melt <- diet.melt %>%
-  group_by(binomial) %>%
-  dplyr:: summarise(diettype = diet.type[1], numconts = n.cont[1]) %>%
-  mutate_at("diettype", as.factor) %>%
-  as.data.frame()
-
-unique.diet.melt.nonvol <- diet.melt[diet.melt$order != "Chiroptera",] %>%
     group_by(binomial) %>%
     dplyr:: summarise(diettype = diet.type[1], numconts = n.cont[1]) %>%
     mutate_at("diettype", as.factor) %>%
     as.data.frame()
 
-unique.diet.melt.vol <- diet.melt[diet.melt$order == "Chiroptera",] %>%
+unique.diet.melt.nonvol <- diet.melt[diet.melt$habitat.mode != "volant",] %>%
+    group_by(binomial) %>%
+    dplyr:: summarise(diettype = diet.type[1], numconts = n.cont[1]) %>%
+    mutate_at("diettype", as.factor) %>%
+    as.data.frame()
+
+unique.diet.melt.vol <- diet.melt[diet.melt$habitat.mode == "volant",] %>%
     group_by(binomial) %>%
     dplyr:: summarise(diettype = diet.type[1], numconts = n.cont[1]) %>%
     mutate_at("diettype", as.factor) %>%
     as.data.frame()
 
 diettype_bargraph <- plyr::ddply(unique.diet.melt, c("numconts", "diettype"), function(x){
-  nrow(x)
+    nrow(x)
 })
 diettype_bargraph_full <- complete(diettype_bargraph, numconts, diettype)
 
@@ -4517,144 +4423,27 @@ diettype_bargraph_full.nonvol$tots[diettype_bargraph_full.nonvol$numconts == "3+
 
 diettype_bargraph_full.nonvol$prop <- diettype_bargraph_full.nonvol$V1 / diettype_bargraph_full.nonvol$tots
 
-
 #show as proportions
-ggplot(diettype_bargraph_full, 
-       aes(x = diettype, y = prop, 
-           fill = numconts)) + 
-  geom_bar(stat = "identity") +
-  xlab("Diet Type") + 
-  ylab("Proportion") + 
-  scale_x_discrete(labels=c("diet.carnivore.tot" = "Carnivore", "diet.piscivore.tot" = "Piscivore", 
-                            "diet.invertivore.tot" = "Invertivore", "diet.browser.tot" = "Browser", 
-                            "diet.grazer.tot" = "Grazer", "diet.frugivore.tot" = "Frugivore")) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 11)) + 
-  scale_fill_manual(values = c("1" = "black",
-                                  "2" = "gray47",
-                                  "3+" = "gray72"),
-                       name = "Number of Continents",
-                       labels = c("1",
-                                  "2",
-                                  "3+")) +
-  geom_col(position = position_stack(reverse = TRUE)) +
-  plot_theme +
-  theme(panel.border = element_rect(fill = NA),
-        strip.background = element_rect(fill = NA),
-        legend.position = c(1.25, 0.5)) +
-  theme(axis.title.y = element_text(margin = margin(r = 5)))
-
-#show as proportions
-
 diettype_bargraph_full$diettype <- factor(diettype_bargraph_full$diettype, 
                                           levels=c("diet.browser.tot", "diet.grazer.tot", "diet.frugivore.tot",
                                                    "diet.carnivore.tot", "diet.piscivore.tot", "diet.invertivore.tot"))
 
+diettype_bargraph_full$numconts <- factor(diettype_bargraph_full$numconts,
+                                          levels = c("1", "2", "3+"))
+
 ggplot(diettype_bargraph_full, 
        aes(x = diettype, y = prop, 
-           fill = as.factor(numconts))) + 
-  geom_bar(stat = "identity", position = "dodge", color="black") +
-  scale_fill_manual(name = "Number of Continents",
-                    labels = c("1",
-                               "2",
-                               "3+"),
-                    values = cb_viridis) +
-  xlab("Diet Type") + 
-  ylab("Proportion") + 
-  scale_x_discrete(labels=c("diet.browser.tot" = "Browser", 
-                            "diet.grazer.tot" = "Grazer", 
-                            "diet.frugivore.tot" = "Frugivore",
-                            "diet.carnivore.tot" = "Carnivore", 
-                            "diet.piscivore.tot" = "Piscivore", 
-                            "diet.invertivore.tot" = "Invertivore")) + 
-  theme(axis.text.x = element_text(angle = 45, hjust=1, size=14)) + 
-  plot_theme + 
-  theme(panel.border = element_rect(fill=NA),
-                    strip.background = element_rect(fill=NA),
-                    legend.position = c(.3, 0.8)) +
-  theme(axis.title.y = element_text(margin = margin(r = 5)))
-
-## BREADTH
-ggplot() +  
-    geom_bar(aes(df$diet.breadth, group = df$n.cont, fill = df$n.cont)) +
-    plot_theme +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) +
-    theme(plot.background = element_rect(fill = 'transparent', color = NA)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = "Dietary breadth") + 
-    scale_fill_manual(values = cont_bw)
-
-p.diet.brd.1 <-  ggplot() +  
-    geom_bar(aes(df$diet.breadth[df$n.cont == "1"]),
-             colour = "black", fill = "black") +
-    plot_theme +
-    theme(axis.text.x = element_text(vjust = -1),
-          axis.title.x = element_text(vjust = -1)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = "Dietary breadth")
-
-ggsave(p.diet.brd.1, 
-       file = "./Figures/diet.breadth.one.png", 
-       width = 20, height = 10, units = "cm")
-
-p.diet.brd.2 <-  ggplot() +  
-    geom_bar(aes(df$diet.breadth[df$n.cont == "2"]),
-             colour = "gray47", fill = "gray47") +
-    plot_theme +
-    theme(axis.text.x = element_text(vjust = -1),
-          axis.title.x = element_text(vjust = -1)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = "Dietary breadth")
-
-ggsave(p.diet.brd.2, 
-       file = "./Figures/diet.breadth.two.png", 
-       width = 20, height = 10, units = "cm")
-
-ggplot() +  
-    geom_bar(aes(df$diet.breadth[df$n.cont == "2" & df$order != "Chiroptera"]),
-             colour = "gray47", fill = "gray47") +
-    plot_theme +
-    theme(axis.text.x = element_text(vjust = -1),
-          axis.title.x = element_text(vjust = -1)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = "Dietary breadth Nonvolant")
-
-ggplot() +  
-    geom_bar(aes(df$diet.breadth[df$n.cont == "2" & df$order == "Chiroptera"]),
-             colour = "gray47", fill = "gray47") +
-    plot_theme +
-    theme(axis.text.x = element_text(vjust = -1),
-          axis.title.x = element_text(vjust = -1)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = "Dietary breadth Volant")
-
-p.diet.brd.3 <-  ggplot() +  
-    geom_bar(aes(df$diet.breadth[df$n.cont == "3+"]),
-             colour = "red", fill = "red") +
-    plot_theme +
-    theme(axis.text.x = element_text(vjust = -.5),
-          axis.title.x = element_text(vjust = -1)) +
-    scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = "Dietary Breadth",
-                       limits = c(.5, 3.5),
-                       breaks = c(1, 2, 3),
-                       labels = c(1, 2, 3))
-
-ggsave(p.diet.brd.3, 
-       file = "./Figures/diet.breadth.three.png", 
-       width = 20, height = 10, units = "cm")
-
-## TYPE
-ggplot(diettype_bargraph_full, 
-       aes(x = diettype, y = log10(V1), 
            fill = numconts)) + 
     geom_bar(stat = "identity") +
     xlab("Diet Type") + 
-    ylab("Count") + 
+    ylab("Proportion") + 
     scale_x_discrete(labels=c("diet.carnivore.tot" = "Carnivore", "diet.piscivore.tot" = "Piscivore", 
                               "diet.invertivore.tot" = "Invertivore", "diet.browser.tot" = "Browser", 
                               "diet.grazer.tot" = "Grazer", "diet.frugivore.tot" = "Frugivore")) + 
     theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 11)) + 
-    scale_fill_manual(values = cont_bw,
+    scale_fill_manual(values = c("1" = "black",
+                                 "2" = "gray47",
+                                 "3+" = "red"),
                       name = "Number of Continents",
                       labels = c("1",
                                  "2",
@@ -4665,9 +4454,6 @@ ggplot(diettype_bargraph_full,
           strip.background = element_rect(fill = NA),
           legend.position = c(1.25, 0.5)) +
     theme(axis.title.y = element_text(margin = margin(r = 5)))
-
-diettype_bargraph_full$numconts <- factor(diettype_bargraph_full$numconts,
-                                          levels = c("1", "2", "3+"))
 
 p.diet.1 <- ggplot() + 
     geom_bar(aes(x = diettype_bargraph_full$diettype[diettype_bargraph_full$numconts == "1"], 
@@ -4686,7 +4472,8 @@ p.diet.1 <- ggplot() +
     plot_theme +
     theme(axis.text.x = element_text(vjust = -1),
           axis.title.x = element_text(vjust = -1))
-    
+##sample size
+sum(diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "1"]) #4119
 
 ggsave(p.diet.1, 
        file = "./Figures/diet.type.one.png", 
@@ -4709,12 +4496,14 @@ p.diet.2 <- ggplot() +
     plot_theme +
     theme(axis.text.x = element_text(vjust = -1),
           axis.title.x = element_text(vjust = -1))
+##sample size
+sum(diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "2"], na.rm = TRUE) #260
 
 ggsave(p.diet.2, 
        file = "./Figures/diet.type.two.png", 
        width = 20, height = 10, units = "cm")
 
-ggplot() + 
+p.diet.2.nonvol <- ggplot() + 
     geom_bar(aes(x = diettype_bargraph_full.nonvol$diettype[diettype_bargraph_full.nonvol$numconts == "2"], 
                  y = diettype_bargraph_full.nonvol$V1[diettype_bargraph_full.nonvol$numconts == "2"]),
              colour = "gray47", fill = "gray47",
@@ -4731,8 +4520,14 @@ ggplot() +
     plot_theme +
     theme(axis.text.x = element_text(vjust = -1),
           axis.title.x = element_text(vjust = -1))
+##sample size
+sum(diettype_bargraph_full.nonvol$V1[diettype_bargraph_full.nonvol$numconts == "2"], na.rm = TRUE) #118
 
-ggplot() + 
+ggsave(p.diet.2.nonvol, 
+       file = "./Figures/diet.type.nonvol.two.png", 
+       width = 20, height = 10, units = "cm")
+
+p.diet.2.vol <- ggplot() + 
     geom_bar(aes(x = diettype_bargraph_full.vol$diettype[diettype_bargraph_full.vol$numconts == "2"], 
                  y = diettype_bargraph_full.vol$V1[diettype_bargraph_full.vol$numconts == "2"]),
              colour = "gray47", fill = "gray47",
@@ -4749,6 +4544,12 @@ ggplot() +
     plot_theme +
     theme(axis.text.x = element_text(vjust = -1),
           axis.title.x = element_text(vjust = -1))
+##sample size
+sum(diettype_bargraph_full.vol$V1[diettype_bargraph_full.vol$numconts == "2"], na.rm = TRUE) #142
+
+ggsave(p.diet.2.vol, 
+       file = "./Figures/diet.type.vol.two.png", 
+       width = 20, height = 10, units = "cm")
 
 p.diet.3 <- ggplot() + 
     geom_bar(aes(x = diettype_bargraph_full$diettype[diettype_bargraph_full$numconts == "3+"], 
@@ -4767,13 +4568,379 @@ p.diet.3 <- ggplot() +
     plot_theme +
     theme(axis.text.x = element_text(vjust = -.5),
           axis.title.x = element_text(vjust = -1))
+##sample size
+sum(diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "3+"], na.rm = TRUE) #6
 
 ggsave(p.diet.3, 
        file = "./Figures/diet.type.three.png", 
        width = 20, height = 10, units = "cm")
 
+#### H6: HABITAT MODE ----
+## TEST: animals that are widespread have a specific habitat modes (or aren't specific habitat modes)
+null.habitat.mode <- df[df$habitat.mode != "",] %>%
+    group_by(habitat.mode) %>%
+    dplyr::summarise(null.N = n()) %>%
+    dplyr::select(habitat.mode,
+                  null.N) %>%
+    as.data.frame()
 
-#### H6: GEOGRAPHIC RANGE SIZE ----
+habitat.mode <- df[df$habitat.mode != "",] %>%
+    group_by(n.cont, habitat.mode) %>%
+    dplyr::summarise(N = n()) %>% 
+    as.data.frame()
+
+homies.habitat.mode <- habitat.mode[habitat.mode$n.cont == 1,]
+colnames(homies.habitat.mode)[colnames(homies.habitat.mode) == "N"] <- "homies.N"
+homies.habitat.mode <- homies.habitat.mode %>%
+    dplyr::select(-n.cont)
+
+rangers.habitat.mode <- habitat.mode[habitat.mode$n.cont == 2,]
+colnames(rangers.habitat.mode)[colnames(rangers.habitat.mode) == "N"] <- "rangers.N"
+rangers.habitat.mode <- rangers.habitat.mode %>%
+    dplyr::select(-n.cont)
+
+cosmo.habitat.mode <- habitat.mode[habitat.mode$n.cont == "3+",]
+colnames(cosmo.habitat.mode)[colnames(cosmo.habitat.mode) == "N"] <- "cosmo.N"
+cosmo.habitat.mode <- cosmo.habitat.mode %>%
+    dplyr::select(-n.cont)
+
+#create full dataset
+hab.null.cosmo <- merge(null.habitat.mode, cosmo.habitat.mode, by = "habitat.mode", all.x = TRUE, all.y = TRUE)
+hab.null.cosmo.rangers <- merge(hab.null.cosmo, rangers.habitat.mode, by = "habitat.mode", all.x = TRUE, all.y = TRUE)
+hab.null.cosmo.rangers.homies <- merge(hab.null.cosmo.rangers, homies.habitat.mode, by = "habitat.mode", all.x = TRUE, all.y = TRUE)
+
+df.hab <- hab.null.cosmo.rangers.homies
+df.hab[is.na(df.hab)] <- 0
+
+df.hab$prop.null <- df.hab$null.N/nrow(df)
+
+df.hab$prop.homies <- df.hab$homies.N/nrow(df[df$n.cont == "1",])
+df.hab$prop.rangers <- df.hab$rangers.N/nrow(df[df$n.cont == "2",])
+df.hab$prop.cosmo <- df.hab$cosmo.N/nrow(df[df$n.cont == "3+",])
+
+#binomial test
+for(i in 1:nrow(df.hab)){
+    test <- binom.test(df.hab$homies.N[i], nrow(df[df$n.cont == "1",]), 
+                       p = df.hab$prop.null[i], alternative = "two.sided")
+    df.hab$p.homies[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.hab)){
+    test <- binom.test(df.hab$rangers.N[i], nrow(df[df$n.cont == "2",]), 
+                       p = df.hab$prop.null[i], alternative = "two.sided")
+    df.hab$p.rangers[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.hab)){
+    test <- binom.test(df.hab$cosmo.N[i], nrow(df[df$n.cont == "3+",]), 
+                       p = df.hab$prop.null[i], alternative = "two.sided")
+    df.hab$p.cosmo[i] <- test$p.value
+}
+
+#add sidak correction
+df.hab <- arrange(df.hab, p.homies) %>%
+    dplyr::mutate(signif.homies = p.homies < 0.05,
+                  signif.bonferoni.homies = p.homies < 0.05/n(),
+                  signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                  signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
+
+df.hab <- arrange(df.hab, p.rangers) %>%
+    dplyr::mutate(signif.rangers = p.rangers < 0.05,
+                  signif.bonferoni.rangers = p.rangers < 0.05/n(),
+                  signif.holm.rangers = !0.05/(n() + 1 - 1:n()) < p.rangers,
+                  signif.sidak.rangers = p.rangers < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.rangers = !(1 - (1 - 0.05)^(1/n())) < p.rangers)
+
+df.hab <- arrange(df.hab, p.cosmo) %>%
+    dplyr::mutate(signif.cosmo = p.cosmo < 0.05,
+                  signif.bonferoni.cosmo = p.cosmo < 0.05/n(),
+                  signif.holm.cosmo = !0.05/(n() + 1 - 1:n()) < p.cosmo,
+                  signif.sidak.cosmo = p.cosmo < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.cosmo = !(1 - (1 - 0.05)^(1/n())) < p.cosmo)
+
+write.csv(df.hab, 
+          "./Results/habitat.results.csv",
+          row.names = FALSE)
+#volant sig for homies, fewer are volant
+#terr, volant, arboreal, fossorial sig for lim
+##terr dec; vol incr; arboreal dec; foss dec
+#non for trotters
+
+##### HABITAT MODE BAR GRAPH -----
+df.hab.trim <- df[!is.na(df$habitat.mode),]
+df.hab.trim <- df[df$habitat.mode != "",]
+unique(df.hab.trim$habitat.mode)
+df.hab.trim$habitat.mode <- factor(df.hab.trim$habitat.mode,
+                                   levels = c("terr",
+                                              "terr- fossorial",
+                                              "terr _ aquatic",
+                                              "arboreal",
+                                              "volant"))
+
+df.habitat.counts <- df.hab.trim %>%
+    group_by(n.cont, habitat.mode) %>%
+    summarize(n = n()) %>%
+    as.data.frame()
+three.add.fossorial <- c("3+", "terr- fossorial", 0)
+three.add.arbor <- c("3+", "arboreal", 0)
+three.add.aqua <- c("3+", "terr _ aquatic", 0)
+df.habitat.counts <- rbind(df.habitat.counts, three.add.fossorial, three.add.arbor,
+                           three.add.aqua)
+
+p.hab.1 <-  ggplot() +  
+    geom_col(aes(df.habitat.counts$habitat.mode[df.habitat.counts$n.cont == "1"],
+                 as.numeric(df.habitat.counts$n[df.habitat.counts$n.cont == "1"])), 
+             colour = "black", fill = "black") +
+    plot_theme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14), #vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Habitat Mode",
+                     labels = c("terr" = "terrestrial",
+                                "terr- fossorial" = "fossorial",
+                                "terr _ aquatic" = "aquatic",
+                                "arboreal" = "arboreal",
+                                "volant" = "volant"))
+##sample size
+length(df.hab.trim$habitat.mode[df.hab.trim$n.cont == "1"]) #3516
+
+ggsave(p.hab.1, 
+       file = "./Figures/habit.one.png", 
+       width = 20, height = 10, units = "cm")
+
+p.hab.2 <-  ggplot() +  
+    geom_col(aes(df.habitat.counts$habitat.mode[df.habitat.counts$n.cont == "2"],
+                 as.numeric(df.habitat.counts$n[df.habitat.counts$n.cont == "2"])), 
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14), #vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Habitat Mode",
+                     labels = c("terr" = "terrestrial",
+                                "terr- fossorial" = "fossorial",
+                                "terr _ aquatic" = "aquatic",
+                                "arboreal" = "arboreal",
+                                "volant" = "volant"))
+##sample size
+length(df.hab.trim$habitat.mode[df.hab.trim$n.cont == "2"]) #258
+
+ggsave(p.hab.2, 
+       file = "./Figures/habit.two.png", 
+       width = 20, height = 10, units = "cm")
+
+df.habitat.counts.nonvol <- df.hab.trim[df.hab.trim$habitat.mode != "volant" & df.hab.trim$n.cont == "2",] %>%
+    group_by(n.cont, habitat.mode) %>%
+    summarize(n = n()) %>%
+    as.data.frame()
+two.add.vol <- c("2", "volant", 0)
+df.habitat.counts.nonvol <- rbind(df.habitat.counts.nonvol, 
+                                  two.add.vol)
+
+p.hab.2.nonvol <-  ggplot() +  
+    geom_col(aes(df.habitat.counts.nonvol$habitat.mode,
+                 as.numeric(df.habitat.counts.nonvol$n)), 
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14), #vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Habitat Mode",
+                     labels = c("terr" = "terrestrial",
+                                "terr- fossorial" = "fossorial",
+                                "terr _ aquatic" = "aquatic",
+                                "arboreal" = "arboreal",
+                                "volant" = "volant"))
+##sample size
+length(df.hab.trim$habitat.mode[df.hab.trim$n.cont == "2" & df.hab.trim$habitat.mode != "volant"]) #116
+
+ggsave(p.hab.2.nonvol, 
+       file = "./Figures/habit.two.nonvol.png", 
+       width = 20, height = 10, units = "cm")
+
+df.habitat.counts.vol <- df.hab.trim[df.hab.trim$habitat.mode == "volant" & df.hab.trim$n.cont == "2",] %>%
+    group_by(n.cont, habitat.mode) %>%
+    summarize(n = n()) %>%
+    as.data.frame()
+two.add.fossorial <- c("2", "terr- fossorial", 0)
+two.add.arbor <- c("2", "arboreal", 0)
+two.add.aqua <- c("2", "terr _ aquatic", 0)
+two.add.terr <- c("2", "terr", 0)
+df.habitat.counts.vol <- rbind(df.habitat.counts.vol, 
+                               two.add.fossorial, two.add.arbor,
+                               two.add.aqua, two.add.terr)
+
+p.hab.2.vol <-  ggplot() +  
+    geom_col(aes(df.habitat.counts.vol$habitat.mode,
+                 as.numeric(df.habitat.counts.vol$n)), 
+             colour = "gray47", fill = "gray47") +
+    plot_theme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14), #vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Habitat Mode",
+                     labels = c("terr" = "terrestrial",
+                                "terr- fossorial" = "fossorial",
+                                "terr _ aquatic" = "aquatic",
+                                "arboreal" = "arboreal",
+                                "volant" = "volant"))
+
+##sample size
+length(df.hab.trim$habitat.mode[df.hab.trim$n.cont == "2" & df.hab.trim$habitat.mode == "volant"]) #142
+
+ggsave(p.hab.2.vol, 
+       file = "./Figures/habit.two.vol.png", 
+       width = 20, height = 10, units = "cm")
+
+p.hab.3 <-  ggplot() +  
+    geom_col(aes(df.habitat.counts$habitat.mode[df.habitat.counts$n.cont == "3+"],
+                 as.numeric(df.habitat.counts$n[df.habitat.counts$n.cont == "3+"])), 
+             colour = "red", fill = "red") +
+    plot_theme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14), #vjust = -1),
+          axis.title.x = element_text(vjust = -1)) +
+    scale_y_continuous(name = "Count") +
+    scale_x_discrete(name = "Habitat Mode",
+                     labels = c("terr" = "terrestrial",
+                                "terr- fossorial" = "fossorial",
+                                "terr _ aquatic" = "aquatic",
+                                "arboreal" = "arboreal",
+                                "volant" = "volant"))
+##sample size
+length(df.hab.trim$habitat.mode[df.hab.trim$n.cont == "3+"]) #6
+
+ggsave(p.hab.3, 
+       file = "./Figures/habit.three.png", 
+       width = 20, height = 10, units = "cm")
+
+#### DECISION TREE ----
+df.tree <- df
+
+##make categories for tree
+# volant or not
+df.tree$vol <- "nonvolant"
+df.tree$vol[df.tree$habitat.mode == "volant"] <- "volant"
+
+# herbivore or carnivore
+df.tree$carn <- "herbivore"
+df.tree$carn[df.tree$diet.carnivore.tot == TRUE | df.tree$diet.invertivore.tot == TRUE | df.tree$diet.piscivore.tot == TRUE] <- "carnivore"
+
+# n connectivity of family origin
+df.tree$fam.connectivity <- ""
+df.tree$fam.connectivity[df.tree$family.origin == "North.America" | df.tree$family.origin == "Eurasia"] <- 2
+df.tree$fam.connectivity[df.tree$family.origin == "South.America" | df.tree$family.origin == "Africa"] <- 1
+df.tree$fam.connectivity[df.tree$family.origin == "Australia"] <- 0
+
+# species richness by family
+fam.richness <- df.tree %>%
+    group_by(family) %>%
+    summarise(fam.richness = n()) %>%
+    as.data.frame()
+
+df.tree <- left_join(df.tree, fam.richness, by = "family")
+
+#select specific rows
+df.tree.trim <- select(df.tree, "order", "family", "binomial", 
+                       "avg.mass", "fam.richness", "age.median",
+                       "fam.connectivity", "n.cont", "vol", # "family.origin",
+                       "carn", "diet.breadth",
+                       "diet.invertivore.tot", "diet.carnivore.tot", 
+                       "diet.browser.tot", "diet.grazer.tot", 
+                       "diet.piscivore.tot", "diet.frugivore.tot")
+
+str(df.tree.trim)
+
+df.tree.trim$n.cont <- factor(df.tree.trim$n.cont,
+                              levels = c("1", "2", "3+"))
+
+df.tree.clean <- na.omit(df.tree.trim)
+
+##### CLASSIFICATION TREE -----
+set.seed(1000)
+
+# Split the data into training (75%) and test (25%) sets
+train_index <- sample(1:nrow(df.tree.clean), nrow(df.tree.clean)*0.75)
+
+# train dataset formation
+train_set <- df.tree.clean[train_index, ]
+str(train_set)
+
+# test dataset formation
+test_set <- df.tree.clean[-train_index, ]
+str(test_set)
+
+gm_tree <- rpart(n.cont ~ ., data = train_set, method = "class")
+
+rpart.plot(gm_tree, type = 2, main = "Decision Tree for Global Mammals")
+
+
+# Random Forest
+ind <- sample(2, nrow(df.tree.clean), 
+              replace = TRUE, prob = c(0.75, 0.25))
+train <- df.tree.clean[ind==1,]
+test <- df.tree.clean[ind==2,]
+
+rf <- randomForest(n.cont ~ ., data = df.tree.clean, 
+                   importance = TRUE, proximity = TRUE)
+
+print(rf)
+
+p1 <- predict(rf, train)
+confusionMatrix(p1, train$n.cont)
+
+p2 <- predict(rf, test)
+confusionMatrix(p2, test$n.cont)
+
+plot(rf)
+
+varImpPlot(rf,
+           sort = T,
+           n.var = 6,
+           main = "Variable Importance for Global Mammals")
+importance(rf)
+
+##### DELVING DEEPER -----
+#all the bats
+table(df.tree.clean$family[df.tree.clean$vol == "volant"])
+
+#which bats are at either side of the 11 g break?
+unique(df.tree.clean$family[df.tree.clean$vol == "volant" & df.tree.clean$avg.mass >= 11])
+table(df.tree.clean$family[df.tree.clean$vol == "volant" & df.tree.clean$avg.mass >= 11])
+#all of the Megadermatidae, most of the Molossidae and Phyllostomidae; all of the Pteropodidae
+
+df.tree.clean[df.tree.clean$vol == "volant",] %>%
+    group_by(n.cont) %>%
+    filter(avg.mass < 11) %>%
+    summarise(n = n())
+
+df.tree.clean[df.tree.clean$vol == "volant",] %>%
+    group_by(n.cont) %>%
+    filter(avg.mass >= 11) %>%
+    summarise(n = n())
+
+#which bats are on either side of the 1.3 mya?
+table(df.tree.clean$family[df.tree.clean$vol == "volant" & df.tree.clean$age.median >= 1.3])
+#most of the bats are in this category
+
+table(df.tree.clean$family[df.tree.clean$vol == "volant" & df.tree.clean$age.median < 1.3])
+
+df.tree.clean[df.tree.clean$vol == "volant",] %>%
+    group_by(n.cont) %>%
+    filter(age.median < 1.3) %>%
+    summarise(n = n())
+
+df.tree.clean[df.tree.clean$vol == "volant",] %>%
+    group_by(n.cont) %>%
+    filter(age.median >= 1.3) %>%
+    summarise(n = n()) #a lot of older ones are still on 1 continent
+
+#### LOG ODDS ----
+## use habitat mode volant as reference
+
+
+
+#### H7: GEOGRAPHIC RANGE SIZE ----
 ## TEST: animals that are widespread have a larger geographic range than predicted for body size
 
 for(i in 1:length(df$binomial)){

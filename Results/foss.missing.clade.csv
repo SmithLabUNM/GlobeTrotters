@@ -24,7 +24,7 @@
 "Chinchillidae","Rodentia",2,5,0.714285714285714,7,0,1,1834.4185
 "Chrysochloridae","Afrosoricida",0,21,1,20,1,0.952380952380952,731.540733333333
 "Craseonycteridae","Chiroptera",0,1,1,1,0,1,2.153
-"Cricetidae","Rodentia",71,558,0.887122416534181,592,37,0.941176470588235,65.5637737843551
+"Cricetidae","Rodentia",71,558,0.887122416534181,592,37,0.941176470588235,65.5637737843552
 "Ctenodactylidae","Rodentia",0,5,1,5,0,1,204.6
 "Ctenomyidae","Rodentia",1,59,0.983333333333333,60,0,1,279.147547619048
 "Cuniculidae","Rodentia",1,1,0.5,2,0,1,8499.974
@@ -75,8 +75,8 @@
 "Molossidae","Chiroptera",2,74,0.973684210526316,74,2,0.973684210526316,22.4631477272727
 "Mormoopidae","Chiroptera",0,5,1,5,0,1,13.5935
 "Moschidae","Artiodactyla",1,6,0.857142857142857,7,0,1,12549.475
-"Muridae","Rodentia",11,475,0.977366255144033,432,54,0.888888888888889,80.9636932274475
-"Mustelidae","Carnivora",23,28,0.549019607843137,49,2,0.96078431372549,4059.03482532083
+"Muridae","Rodentia",11,475,0.977366255144033,432,54,0.888888888888889,80.9636932274474
+"Mustelidae","Carnivora",22,28,0.56,48,2,0.96,3645.39726841277
 "Mylodontidae","Pilosa",4,3,0.428571428571429,5,2,0.714285714285714,1788000
 "Myocastoridae","Rodentia",1,0,0,1,0,1,6937.452
 "Myrmecobiidae","Dasyuromorphia",0,1,1,1,0,1,471.5
@@ -97,7 +97,7 @@
 "Petauridae","Diprotodontia",2,4,0.666666666666667,6,0,1,305.916666666667
 "Petromuridae","Rodentia",0,1,1,1,0,1,224.001
 "Phalangeridae","Diprotodontia",1,7,0.875,6,2,0.75,3105
-"Phascolarctidae","Diprotodontia",2,0,0,1,1,0.5,12125
+"Phascolarctidae","Dasyuromorphia",2,0,0,1,1,0.5,12125
 "Phyllostomidae","Chiroptera",7,133,0.95,126,14,0.9,25.4947524271845
 "Pitheciidae","Primates",0,40,1,36,4,0.9,1722.90963636364
 "Platacanthomyidae","Rodentia",0,2,1,2,0,1,49.25
