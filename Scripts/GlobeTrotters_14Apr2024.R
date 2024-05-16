@@ -12,11 +12,12 @@ require(ggplot2)
 require(stringr)
 library(gcookbook)
 library(scales)
-library(plot3D)
 library(rpart)
 library(rpart.plot)
 library(randomForest)
 library(caret)
+library(MASS)
+library(stargazer)
 
 #### PLOT THEME ----
 
@@ -34,9 +35,9 @@ plot_theme <- theme(panel.grid = element_blank(),
                     axis.text = element_text(size = 26, color = "black"), 
                     axis.ticks.length = unit(0.2,"cm"),
                     axis.title = element_text(size = 32),
-                    axis.title.y = element_text(margin = margin(r = 10)),
-                    axis.title.x = element_text(margin = margin(t = 10)),
-                    axis.title.x.top = element_text(margin = margin(b = 5)),
+                    #axis.title.y = element_text(margin = margin(r = 10)),
+                    #axis.title.x = element_text(margin = margin(t = 10)),
+                    #axis.title.x.top = element_text(margin = margin(b = 5)),
                     plot.title = element_text(size = 21, face = "plain", hjust = 10),
                     panel.border = element_rect(colour = "black", fill = NA, size = 1),
                     panel.background = element_blank(),
@@ -1276,7 +1277,7 @@ df.dispersal %>%
   summarise(n = n()) #65 records that have everything
 
 df.dispersal %>%
-  select(-foss.avg.age) %>%
+  dplyr::select(-foss.avg.age) %>%
   drop_na() %>%
   summarise(n = n()) #80 for phylo age
 
@@ -2220,7 +2221,7 @@ rangers.origin.shared.melt$family.origin.per <- paste(rangers.origin.shared.melt
 #Eurasia = #F2CDA0; dark #A68C6D
 #Australia = #D9967E; dark #8C6151
 
-p.ranger.pie <- ggplot(limited.cont.melt, aes(x = "", y = value, fill = family.origin.per)) +
+p.ranger.pie <- ggplot(rangers.origin.shared.melt, aes(x = "", y = value, fill = family.origin.per)) +
   geom_col(color = 'black', 
            position = position_stack(reverse = TRUE), 
            show.legend = TRUE) +
@@ -2782,8 +2783,8 @@ p.disp.2.nonvol <- ggplot() +
                                   expression(10^8), expression(10^10),
                                   expression(10^12)))
 #sample size
-length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$order != "Chiroptera"]) 
-#14
+length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$habitat.mode != "volant"]) 
+#19
 
 ggsave(p.disp.2.nonvol, 
        file = "./Figures/dispersal.two.nonvol.png", 
@@ -2796,7 +2797,8 @@ p.disp.2.vol <- ggplot() +
                    binwidth = .25) +
     plot_theme +
     theme(axis.text.x = element_text(size = 24)) +
-    scale_y_continuous(name = "Count") +
+    scale_y_continuous(name = "Count",
+                       breaks = c(0, 1)) +
     scale_x_continuous(name = "Volant Dispersal distance (km)",
                        limits = c(log10(1), log10(10^12)),
                        breaks = c(log10(1), log10(10^2), log10(10^4),
@@ -2807,8 +2809,8 @@ p.disp.2.vol <- ggplot() +
                                   expression(10^8), expression(10^10),
                                   expression(10^12)))
 #sample size
-length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$order == "Chiroptera"]) 
-#7
+length(df.dispersal$dispersal.phylo[df.dispersal$n.cont == "2" & !is.na(df.dispersal$dispersal.phylo) & df$habitat.mode == "volant"]) 
+#2
 
 ggsave(p.disp.2.vol, 
        file = "./Figures/dispersal.two.vol.png", 
@@ -3326,8 +3328,12 @@ summary(lm(df.wr$n.cont.sp ~ df.wr$n.ord.sp))
 # F-statistic: 11.49 on 1 and 27 DF,  p-value: 0.002163
 
 ###### DIVERSITY BAR GRAPH -----
-p.div.1 <- ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(log10(homies.family$homies.N)), 
+df <- merge(df, null.family,
+             by = "family")
+colnames(df)[colnames(df) == 'null.N'] <- 'fam.richness'
+
+p.div.1 <- ggplot(df[df$n.cont == "1",]) + #do histogram; .25 log 
+    geom_histogram(aes(log10(fam.richness)), 
                    colour = "black", fill = "black",
                    binwidth = .25) +
     plot_theme +
@@ -3344,8 +3350,8 @@ ggsave(p.div.1,
        file = "./Figures/fam.div_one.cont.png", 
        width = 14, height = 10, units = "cm")
 
-p.div.2 <- ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(log10(rangers.family$rangers.N)), 
+p.div.2 <- ggplot(df[df$n.cont == "2",]) + #do histogram; .25 log 
+    geom_histogram(aes(log10(fam.richness)), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -3362,8 +3368,8 @@ ggsave(p.div.2,
        file = "./Figures/fam.div_two.cont.png", 
        width = 14, height = 10, units = "cm")
 
-p.div.2.nonvol <- ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(log10(rangers.family.nonvol$rangers.N)), 
+p.div.2.nonvol <- ggplot(df[df$n.cont == "2" & df$habitat.mode != "volant",]) + #do histogram; .25 log 
+    geom_histogram(aes(log10(fam.richness)), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -3380,8 +3386,8 @@ ggsave(p.div.2.nonvol,
        file = "./Figures/fam.div.nonvol_two.cont.png", 
        width = 14, height = 10, units = "cm")
 
-p.div.2.vol <- ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(log10(limited.family.vol$limited.N)), 
+p.div.2.vol <- ggplot(df[df$n.cont == "2" & df$habitat.mode == "volant",]) + #do histogram; .25 log 
+    geom_histogram(aes(log10(fam.richness)), 
                    colour = "gray47", fill = "gray47",
                    binwidth = .25) +
     plot_theme +
@@ -3398,13 +3404,13 @@ ggsave(p.div.2.vol,
        file = "./Figures/fam.div.vol_two.cont.png", 
        width = 14, height = 10, units = "cm")
 
-p.div.3 <- ggplot() + #do histogram; .25 log 
-    geom_histogram(aes(log10(cosmo.family$cosmo.N)), 
+p.div.3 <- ggplot(df[df$n.cont == "3+",]) + #do histogram; .25 log 
+    geom_histogram(aes(log10(fam.richness)), 
                    colour = "red", fill = "red",
                    binwidth = .25) +
     plot_theme +
     scale_y_continuous(name = "Count") +
-    scale_x_continuous(name = expression(Family~Diversity),
+    scale_x_continuous(name = expression("Family's Diversity"),
                        limits = c(log10(.1), log10(10^3)),
                        labels = c(expression(10^-1), expression(10^0), expression(10^1), 
                                   expression(10^2), expression(10^3)))
@@ -3421,6 +3427,131 @@ ggsave(p.div.3,
 global.mass <- df$log.mass[!is.na(df$log.mass)] #3316 records
 median(global.mass) #1.95424
 median(df$avg.mass[!is.na(df$avg.mass)]) #89.9995
+
+##### binomial tests of qtr bings -----
+
+null.bs <- df %>%
+    group_by(qtr.bin) %>%
+    dplyr::summarise(null.N = n()) %>%
+    dplyr::select(qtr.bin,
+                  null.N) %>%
+    as.data.frame()
+
+bs.cont <- df %>%
+    group_by(n.cont, qtr.bin) %>%
+    dplyr::summarise(N = n()) %>% 
+    as.data.frame()
+
+homies.bs <- bs.cont[bs.cont$n.cont == 1,]
+colnames(homies.bs)[colnames(homies.bs) == "N"] <- "homies.N"
+homies.bs <- homies.bs %>%
+    dplyr::select(-n.cont)
+
+rangers.bs <- bs.cont[bs.cont$n.cont == 2,]
+colnames(rangers.bs)[colnames(rangers.bs) == "N"] <- "rangers.N"
+rangers.bs <- rangers.bs %>%
+    dplyr::select(-n.cont)
+
+bs.nonvol <- df[df$habitat.mode != "volant",] %>%
+    group_by(n.cont, qtr.bin) %>%
+    dplyr::summarise(N = n()) %>% 
+    as.data.frame()
+
+rangers.bs.nonvol <- bs.nonvol[bs.nonvol$n.cont == 2,]
+colnames(rangers.bs.nonvol)[colnames(rangers.bs.nonvol) == "N"] <- "nonvol.rangers.N"
+rangers.bs.nonvol <- rangers.bs.nonvol %>%
+    dplyr::select(-n.cont)
+
+bs.vol <- df[df$habitat.mode == "volant",] %>%
+    group_by(n.cont, qtr.bin) %>%
+    dplyr::summarise(N = n()) %>% 
+    as.data.frame()
+
+rangers.bs.vol <- bs.vol[bs.vol$n.cont == 2,]
+colnames(rangers.bs.vol)[colnames(rangers.bs.vol) == "N"] <- "vol.rangers.N"
+rangers.bs.vol <- rangers.bs.vol %>%
+    dplyr::select(-n.cont)
+
+cosmo.bs <- bs.cont[bs.cont$n.cont == "3+",]
+colnames(cosmo.bs)[colnames(cosmo.bs) == "N"] <- "cosmo.N"
+cosmo.bs <- cosmo.bs %>%
+    dplyr::select(-n.cont)
+
+#create full dataset
+bs.null.cosmo <- merge(null.bs, cosmo.bs, 
+                       by = "qtr.bin", 
+                       all.x = TRUE, all.y = TRUE)
+bs.null.cosmo.rangers <- merge(bs.null.cosmo, rangers.bs, 
+                               by = "qtr.bin", 
+                               all.x = TRUE, all.y = TRUE)
+bs.null.cosmo.rangers.homies <- merge(bs.null.cosmo.rangers, homies.bs, 
+                                      by = "qtr.bin", 
+                                      all.x = TRUE, all.y = TRUE)
+
+df.bs <- bs.null.cosmo.rangers.homies
+df.bs <- df.bs[!is.na(df.bs$qtr.bin),]
+df.bs[is.na(df.bs)] <- 0
+
+df.bs$prop.null <- df.bs$null.N/nrow(df)
+
+df.bs$prop.homies <- df.bs$homies.N/nrow(df[df$n.cont == "1",])
+df.bs$prop.rangers <- df.bs$rangers.N/nrow(df[df$n.cont == "2",])
+df.bs$prop.cosmo <- df.bs$cosmo.N/nrow(df[df$n.cont == "3+",])
+
+#binomial test
+for(i in 1:nrow(df.bs)){
+    test <- binom.test(df.bs$homies.N[i], nrow(df[df$n.cont == "1",]), 
+                       p = df.bs$prop.null[i], alternative = "two.sided")
+    df.bs$p.homies[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.bs)){
+    test <- binom.test(df.bs$rangers.N[i], nrow(df[df$n.cont == "2",]), 
+                       p = df.bs$prop.null[i], alternative = "two.sided")
+    df.bs$p.rangers[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.bs)){
+    test <- binom.test(df.bs$cosmo.N[i], nrow(df[df$n.cont == "3+",]), 
+                       p = df.bs$prop.null[i], alternative = "two.sided")
+    df.bs$p.cosmo[i] <- test$p.value
+}
+
+#add sidak correction
+df.bs <- arrange(df.bs, p.homies) %>%
+    dplyr::mutate(signif.homies = p.homies < 0.05,
+                  signif.bonferoni.homies = p.homies < 0.05/n(),
+                  signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                  signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
+
+df.bs <- arrange(df.bs, p.rangers) %>%
+    dplyr::mutate(signif.rangers = p.rangers < 0.05,
+                  signif.bonferoni.rangers = p.rangers < 0.05/n(),
+                  signif.holm.rangers = !0.05/(n() + 1 - 1:n()) < p.rangers,
+                  signif.sidak.rangers = p.rangers < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.rangers = !(1 - (1 - 0.05)^(1/n())) < p.rangers)
+
+df.bs <- arrange(df.bs, p.cosmo) %>%
+    dplyr::mutate(signif.cosmo = p.cosmo < 0.05,
+                  signif.bonferoni.cosmo = p.cosmo < 0.05/n(),
+                  signif.holm.cosmo = !0.05/(n() + 1 - 1:n()) < p.cosmo,
+                  signif.sidak.cosmo = p.cosmo < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.cosmo = !(1 - (1 - 0.05)^(1/n())) < p.cosmo)
+
+write.csv(df.bs, 
+          "./Results/bs.qtr.bin.results.csv",
+          row.names = FALSE)
+
+##who are the significant ones?
+#rangers: sig for 0.75, 1 and 1, 1.25 (these sizes found more than expected)
+table(df$order[df$qtr.bin == "(0.75,1]" & df$n.cont == "2"]) #chiroptera
+table(df$order[df$qtr.bin == "(1,1.25]" & df$n.cont == "2"]) #chiroptera
+
+#cosmo: sig for 5.25, 5.5 (these sizes found more than expected)
+table(df$order[df$qtr.bin == "(5.25,5.5]" & df$n.cont == "3+"]) #have 2 carnivorans and an artio
+df$binomial[df$qtr.bin == "(5.25,5.5]" & df$n.cont == "3+"]
+#"Cervus elaphus" "Panthera leo"   "Ursus arctos" 
 
 ##### 1 compared to global -----
 hb.mass <- df$log.mass[df$n.cont == "1" & !is.na(df$log.mass)] #3068 records
@@ -3490,12 +3621,41 @@ table(df$log.size.bin[!is.na(df$log.mass)])
 #there's actually a fair number of small species, so it add to the story that it is hard if you're small
 
 #where is the gap? I think we need it at .25 log bin
-bins <- df[df$n.cont == "2",] %>%
+bin.table <- df[df$n.cont == "2" & df$habitat.mode != "volant",] %>%
     dplyr::group_by(qtr.bin) %>%
     dplyr::summarise(n = n()) %>%
     as.data.frame()
-View(bins)
+View(qtr.bins)
 #reduction at (2.5,2.75]
+#these are:
+unique(df$order[df$qtr.bin == "(2.5,2.75]"]) 
+#these are lots of things 
+table(df$order[df$qtr.bin == "(2.5,2.75]"]) #most are rodents, primates, and carnivorans
+table(df$habitat.mode[df$qtr.bin == "(2.5,2.75]"]) 
+#half are terrestrial, 1/3 are arboreal, 20% are fossorial
+
+#what size range are our arboreal species?
+table(df$qtr.bin[df$habitat.mode == "arboreal"])
+#they are from 2.25 to 4 (aligns with Silvia, although maybe a bit smaller)
+
+df[df$n.cont == "2" & df$habitat.mode == "arboreal",] %>%
+    dplyr::group_by(qtr.bin) %>%
+    dplyr::summarise(n = n()) %>%
+    as.data.frame() #there aren't many.....but none are larger arboreal
+#where are the large arboreal?
+View(df[df$qtr.bin == "(4,4.25]" & df$habitat.mode == "arboreal",])
+#mostly primates
+
+#what does the qtr bin look like for all sp?
+df[df$n.cont == "1" & df$habitat.mode != "volant",] %>%
+    dplyr::group_by(qtr.bin) %>%
+    dplyr::summarise(n = n()) %>%
+    as.data.frame()
+
+df[df$n.cont == "1" & df$habitat.mode == "arboreal",] %>%
+    dplyr::group_by(qtr.bin) %>%
+    dplyr::summarise(n = n()) %>%
+    as.data.frame() #most are at bs bins 2.25 to 3, so this aligns
 
 nrow(df[df$n.cont == "2" & df$diet.frugivore.tot == TRUE & df$habitat.mode != "volant",]) #44 out of 260 (~17%)
 #who are they?
@@ -3510,6 +3670,20 @@ table(df$log.size.bin[df$n.cont == "2" & df$diet.frugivore.tot == TRUE & df$habi
 #mostly 10g
 #0  1   2  3  4 
 #1  19  7  2  1 
+
+##understand if nonvolant animals on 2 conntinents aren't small
+#quarter size bins
+nonvol.2.qtr.bins <- df[df$n.cont == "2" & df$habitat.mode != "volant",] %>%
+    dplyr::group_by(qtr.bin) %>%
+    dplyr::summarise(n = n()) %>%
+    as.data.frame()
+
+nonvol.qtr.bins <- df[df$n.cont == "1" & df$habitat.mode != "volant",] %>%
+    dplyr::group_by(qtr.bin) %>%
+    dplyr::summarise(n = n()) %>%
+    as.data.frame()
+#there are a lot of species that are in 0.75 to 3 size bins that aren't on 2
+
 
 ##### BODY SIZE FIGURE ----
 
@@ -3665,8 +3839,6 @@ length(df$log.mass[df$n.cont == "3+" & !is.na(df$log.mass)]) #3067
 ggsave(p.bs.3, 
        file = "./Figures/body_size_three.cont.png", 
        width = 14, height = 10, units = "cm")
-
-df$log.size.bin.quarter <- df$log.mass
 
 ##### 1 v 2+ -----
 
@@ -3899,7 +4071,7 @@ length(df$binomial[df$diet.frugivore.tot == TRUE &
 length(df$binomial[df$diet.piscivore.tot == TRUE & 
                    df$diet.grazer.tot == TRUE & 
                    df$diet.breadth == 2]) #0
-length(df$binomial[df$diet.carnivore.tot = TRUE & 
+length(df$binomial[df$diet.carnivore.tot == TRUE & 
                    df$diet.invertivore.tot == TRUE & 
                    df$diet.breadth == 2]) #127
 ##a lot are carnivore & invertivore combo
@@ -4425,11 +4597,23 @@ diettype_bargraph_full.nonvol$prop <- diettype_bargraph_full.nonvol$V1 / diettyp
 
 #show as proportions
 diettype_bargraph_full$diettype <- factor(diettype_bargraph_full$diettype, 
-                                          levels=c("diet.browser.tot", "diet.grazer.tot", "diet.frugivore.tot",
-                                                   "diet.carnivore.tot", "diet.piscivore.tot", "diet.invertivore.tot"))
+                                          levels = c("diet.browser.tot", "diet.grazer.tot", "diet.frugivore.tot",
+                                                     "diet.carnivore.tot", "diet.piscivore.tot", "diet.invertivore.tot"))
 
 diettype_bargraph_full$numconts <- factor(diettype_bargraph_full$numconts,
                                           levels = c("1", "2", "3+"))
+
+diettype_bargraph_full.nonvol$diettype <- factor(diettype_bargraph_full.nonvol$diettype, 
+                                                 levels = c("diet.browser.tot", "diet.grazer.tot", "diet.frugivore.tot",
+                                                            "diet.carnivore.tot", "diet.piscivore.tot", "diet.invertivore.tot"))
+diettype_bargraph_full.nonvol$numconts <- factor(diettype_bargraph_full.nonvol$numconts,
+                                                 levels = c("1", "2", "3+"))
+
+diettype_bargraph_full.vol$diettype <- factor(diettype_bargraph_full.vol$diettype, 
+                                              levels = c("diet.browser.tot", "diet.grazer.tot", "diet.frugivore.tot",
+                                                         "diet.carnivore.tot", "diet.piscivore.tot", "diet.invertivore.tot"))
+diettype_bargraph_full.vol$numconts <- factor(diettype_bargraph_full.vol$numconts,
+                                              levels = c("1", "2", "3+"))
 
 ggplot(diettype_bargraph_full, 
        aes(x = diettype, y = prop, 
@@ -4815,16 +4999,20 @@ ggsave(p.hab.3,
        width = 20, height = 10, units = "cm")
 
 #### DECISION TREE ----
+#df.tree <- left_join(df, df.dispersal,
+#                     by = "binomial")
+#not enough dispersal data
+
 df.tree <- df
 
 ##make categories for tree
 # volant or not
-df.tree$vol <- "nonvolant"
-df.tree$vol[df.tree$habitat.mode == "volant"] <- "volant"
+df.tree$locomotion <- "nonvolant"
+df.tree$locomotion[df.tree$habitat.mode == "volant"] <- "volant"
 
 # herbivore or carnivore
-df.tree$carn <- "herbivore"
-df.tree$carn[df.tree$diet.carnivore.tot == TRUE | df.tree$diet.invertivore.tot == TRUE | df.tree$diet.piscivore.tot == TRUE] <- "carnivore"
+df.tree$diet.type <- "herbivore"
+df.tree$diet.type[df.tree$diet.carnivore.tot == TRUE | df.tree$diet.invertivore.tot == TRUE | df.tree$diet.piscivore.tot == TRUE] <- "carnivore"
 
 # n connectivity of family origin
 df.tree$fam.connectivity <- ""
@@ -4833,55 +5021,58 @@ df.tree$fam.connectivity[df.tree$family.origin == "South.America" | df.tree$fami
 df.tree$fam.connectivity[df.tree$family.origin == "Australia"] <- 0
 
 # species richness by family
-fam.richness <- df.tree %>%
-    group_by(family) %>%
-    summarise(fam.richness = n()) %>%
-    as.data.frame()
+#fam.richness <- df.tree %>%
+#    group_by(family) %>%
+#    summarise(fam.richness = n()) %>%
+#    as.data.frame()
 
-df.tree <- left_join(df.tree, fam.richness, by = "family")
+#df.tree <- left_join(df.tree, fam.richness, by = "family")
+
+df.tree$wide.ranging <- df.tree$n.cont
+df.tree$wide.ranging[df.tree$wide.ranging == "3+"] <- "2"
+df.tree$wide.ranging <- as.factor(df.tree$wide.ranging)
+
+df.tree$diet.breadth <- as.factor(df.tree$diet.breadth)
+
+df.tree$fam.connectivity <- as.integer(df.tree$fam.connectivity)
 
 #select specific rows
-df.tree.trim <- select(df.tree, "order", "family", "binomial", 
-                       "avg.mass", "fam.richness", "age.median",
-                       "fam.connectivity", "n.cont", "vol", # "family.origin",
-                       "carn", "diet.breadth",
-                       "diet.invertivore.tot", "diet.carnivore.tot", 
-                       "diet.browser.tot", "diet.grazer.tot", 
-                       "diet.piscivore.tot", "diet.frugivore.tot")
+df.tree.trim <- dplyr::select(df.tree, "locomotion", 
+                              "fam.connectivity", "avg.mass",
+                              "age.median", 
+                              "diet.type", 
+                              "fam.richness", "diet.breadth", 
+                              "wide.ranging")
 
+df.tree.trim <- na.omit(df.tree.trim)
+nrow(df.tree.trim)
 str(df.tree.trim)
 
-df.tree.trim$n.cont <- factor(df.tree.trim$n.cont,
-                              levels = c("1", "2", "3+"))
-
-df.tree.clean <- na.omit(df.tree.trim)
-
 ##### CLASSIFICATION TREE -----
-set.seed(1000)
+set.seed(2000)
 
 # Split the data into training (75%) and test (25%) sets
-train_index <- sample(1:nrow(df.tree.clean), nrow(df.tree.clean)*0.75)
+train_index <- sample(1:nrow(df.tree.trim), nrow(df.tree.trim)*0.8)
 
 # train dataset formation
-train_set <- df.tree.clean[train_index, ]
+train_set <- df.tree.trim[train_index, ]
 str(train_set)
 
 # test dataset formation
-test_set <- df.tree.clean[-train_index, ]
+test_set <- df.tree.trim[-train_index, ]
 str(test_set)
 
-gm_tree <- rpart(n.cont ~ ., data = train_set, method = "class")
+gm_tree <- rpart(wide.ranging ~ ., data = train_set, method = "class")
 
 rpart.plot(gm_tree, type = 2, main = "Decision Tree for Global Mammals")
 
-
 # Random Forest
-ind <- sample(2, nrow(df.tree.clean), 
+ind <- sample(2, nrow(df.tree.trim), 
               replace = TRUE, prob = c(0.75, 0.25))
-train <- df.tree.clean[ind==1,]
-test <- df.tree.clean[ind==2,]
+train <- df.tree.trim[ind == 1,]
+test <- df.tree.trim[ind == 2,]
 
-rf <- randomForest(n.cont ~ ., data = df.tree.clean, 
+rf <- randomForest(n.cont ~ ., data = df.tree.trim, 
                    importance = TRUE, proximity = TRUE)
 
 print(rf)
@@ -4900,37 +5091,95 @@ varImpPlot(rf,
            main = "Variable Importance for Global Mammals")
 importance(rf)
 
+##### NO BATS -----
+df.tree.nobats <- df.tree[df.tree$order != "Chiroptera",]
+
+#select specific rows
+df.tree.trim.nobats <- select(df.tree.nobats, "avg.mass", "age.median", 
+                              "diet.breadth", "diet.type", 
+                              "locomotion", "fam.richness", "fam.connectivity", 
+                              "wide.ranging")
+
+df.tree.trim.nobats <- na.omit(df.tree.trim.nobats)
+
+str(df.tree.trim.nobats)
+
+##### CLASSIFICATION TREE -----
+set.seed(1000)
+
+# Split the data into training (75%) and test (25%) sets
+train_index.nobats <- sample(1:nrow(df.tree.trim.nobats), nrow(df.tree.trim.nobats)*0.75)
+
+# train dataset formation
+train_set.nobats <- df.tree.trim.nobats[train_index, ]
+str(train_set.nobats)
+
+# test dataset formation
+test_set.nobats <- df.tree.trim.nobats[-train_index.nobats, ]
+str(test_set.nobats)
+
+gm_tree.nobats <- rpart(n.cont ~ ., data = train_set.nobats, method = "class")
+
+rpart.plot(gm_tree.nobats, 
+           type = 2, box.palette = "blue", 
+           main = "Decision Tree for Global Mammals No Bats")
+
+# Random Forest
+ind.nobats <- sample(2, nrow(df.tree.trim.nobats), 
+                     replace = TRUE, prob = c(0.75, 0.25))
+train.nobats <- df.tree.trim.nobats[ind.nobats == 1,]
+test.nobats <- df.tree.trim.nobats[ind.nobats == 2,]
+
+rf.nobats <- randomForest(n.cont ~ ., data = df.tree.trim.nobats, 
+                          importance = TRUE, proximity = TRUE)
+
+print(rf.nobats)
+
+p1.nobats <- predict(rf.nobats, train)
+confusionMatrix(p1.nobats, train$n.cont)
+
+p2.nobats <- predict(rf.nobats, test)
+confusionMatrix(p2.nobats, test$n.cont)
+
+plot(rf.nobats)
+
+varImpPlot(rf.nobats,
+           sort = T,
+           n.var = 6,
+           main = "Variable Importance for Global Mammals No Bats")
+importance(rf.nobats)
+
 ##### DELVING DEEPER -----
 #all the bats
-table(df.tree.clean$family[df.tree.clean$vol == "volant"])
+table(df.tree$family[df.tree$locomotion == "volant"])
 
 #which bats are at either side of the 11 g break?
-unique(df.tree.clean$family[df.tree.clean$vol == "volant" & df.tree.clean$avg.mass >= 11])
-table(df.tree.clean$family[df.tree.clean$vol == "volant" & df.tree.clean$avg.mass >= 11])
+unique(df.tree$family[df.tree$locomotion == "volant" & df.tree$avg.mass >= 11])
+table(df.tree$family[df.tree$locomotion == "volant" & df.tree$avg.mass >= 11])
 #all of the Megadermatidae, most of the Molossidae and Phyllostomidae; all of the Pteropodidae
 
-df.tree.clean[df.tree.clean$vol == "volant",] %>%
+df.tree[df.tree$locomotion == "volant",] %>%
     group_by(n.cont) %>%
     filter(avg.mass < 11) %>%
     summarise(n = n())
 
-df.tree.clean[df.tree.clean$vol == "volant",] %>%
+df.tree[df.tree$locomotion == "volant",] %>%
     group_by(n.cont) %>%
     filter(avg.mass >= 11) %>%
     summarise(n = n())
 
 #which bats are on either side of the 1.3 mya?
-table(df.tree.clean$family[df.tree.clean$vol == "volant" & df.tree.clean$age.median >= 1.3])
+table(df.tree$family[df.tree$vol == "volant" & df.tree$age.median >= 1.3])
 #most of the bats are in this category
 
-table(df.tree.clean$family[df.tree.clean$vol == "volant" & df.tree.clean$age.median < 1.3])
+table(df.tree$family[df.tree$locomotion == "volant" & df.tree$age.median < 1.3])
 
-df.tree.clean[df.tree.clean$vol == "volant",] %>%
+df.tree[df.tree$locomotion == "volant",] %>%
     group_by(n.cont) %>%
     filter(age.median < 1.3) %>%
     summarise(n = n())
 
-df.tree.clean[df.tree.clean$vol == "volant",] %>%
+df.tree[df.tree$locomotion == "volant",] %>%
     group_by(n.cont) %>%
     filter(age.median >= 1.3) %>%
     summarise(n = n()) #a lot of older ones are still on 1 continent
@@ -4938,8 +5187,79 @@ df.tree.clean[df.tree.clean$vol == "volant",] %>%
 #### LOG ODDS ----
 ## use habitat mode volant as reference
 
+model <- glm(wide.ranging ~ locomotion + log.mass + diet.type + fam.connectivity + fam.richness + age.median, 
+             family = binomial(link = "logit"), data = df.tree.trim)
+summary(model)
+
+#get odds ratio
+cbind(Estimate = round(coef(model), 4),
+      OR = round(exp(coef(model)), 4))
+
+library(mfx)
+#same thing, different way
+logitor(wide.ranging ~ locomotion + log.mass + diet.type + fam.connectivity + fam.richness + age.median, 
+        data = df.tree.trim)
+
+#look at outputs
+stargazer(model, type = "text", out = "logit.htm")
+    
+#look at outputs of odds ratio
+logit.or = exp(coef(model))
+logit.or
+
+stargazer(model, type = "text", 
+          coef = list(logit.or), p.auto = FALSE, out = "logitor.htm")
+
+##### PLOT ODDS RATIO -----
+
+vars <- c("locomotionvolant", "log.mass", "diet.typeherbivore",
+          "fam.connectivity", "fam.richness", "age.median")
+mod.coef <- c(2.5225, 0.4897, -0.9578, 
+              -0.1511, -0.0022, -0.0034)
+mod.stdErr <- c(0.227, 0.082, 0.192, 
+                0.136, 0.001, 0.014)
+oddsRatio <- c(12.4603, 1.6319, 0.3837,
+               0.8597, 0.9978, 0.9966)
+p.vals.sig <- c("***", "***", "***", 
+                "", "***", "", "")
+
+or.table <- as.data.frame(cbind(vars, mod.coef, mod.stdErr, oddsRatio, p.vals.sig))
+or.table$mod.coef <- as.numeric(or.table$mod.coef)
+or.table$mod.stdErr <- as.numeric(or.table$mod.stdErr)
+or.table$oddsRatio <- as.numeric(or.table$oddsRatio)
+or.table$vars <- factor(or.table$vars,
+                        levels = c("fam.connectivity",
+                                   "age.median",
+                                   "fam.richness",
+                                   "log.mass",
+                                   "diet.typeherbivore",
+                                   "locomotionvolant"))
+
+p.or <- ggplot(or.table, aes(x = vars, y = mod.coef)) +
+    geom_hline(yintercept = 0,
+               col = "#afa298", alpha = 0.5,
+               size = 1, lty = 2) + 
+    geom_point(shape = 19, size = 3) +
+    geom_errorbar(width =.2, aes(ymin = mod.coef - mod.stdErr, 
+                                 ymax = mod.coef + mod.stdErr), 
+                  colour = "black") +
+    plot_theme + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14)) +
+    scale_x_discrete(name = "Variables",
+                     labels = c("age.median" = "Age (mya)", 
+                                "diet.typeherbivore" = "Herbivore", 
+                                "fam.connectivity" = "Connectivity", 
+                                "fam.richness" = "Family Richness", 
+                                "locomotionvolant" = "Volant", 
+                                "log.mass" = expression(log[10]~Mass))) +
+    scale_y_continuous(name = "Odds Ratio")
 
 
+ggsave(p.or, 
+       file = paste0("./Figures/odds.ratio",".png"), 
+       width = 14, height = 10, units = "cm")
+
+    
 #### H7: GEOGRAPHIC RANGE SIZE ----
 ## TEST: animals that are widespread have a larger geographic range than predicted for body size
 
