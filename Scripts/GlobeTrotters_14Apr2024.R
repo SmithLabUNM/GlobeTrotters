@@ -17,6 +17,7 @@ library(rpart.plot)
 library(randomForest)
 library(caret)
 library(MASS)
+library(mfx)
 library(stargazer)
 
 #### PLOT THEME ----
@@ -41,7 +42,6 @@ plot_theme <- theme(panel.grid = element_blank(),
                     plot.title = element_text(size = 21, face = "plain", hjust = 10),
                     panel.border = element_rect(colour = "black", fill = NA, size = 1),
                     panel.background = element_blank(),
-                    legend.position = "none",
                     text = element_text(family = 'Helvetica'),
                     plot.background = element_rect(fill = 'transparent', color = NA))
 
@@ -131,7 +131,7 @@ length(unique(mm.df$binomial[mm.df$diet.carnivore == TRUE])) #291
 length(unique(mm.df$binomial[mm.df$diet.piscivore == TRUE])) #102
 length(unique(mm.df$binomial[mm.df$diet.invertivore == TRUE])) #1668
 
-mm.df$diet.breadth <- select(mm.df, diet.invertivore:diet.piscivore) %>% rowSums()
+mm.df$diet.breadth <- dplyr::select(mm.df, diet.invertivore:diet.piscivore) %>% rowSums()
 
 #### MAKE GENERIC & FAMILY AVERAGES ----
 mm.df$diet.src <- NA
@@ -196,7 +196,7 @@ table(mm.df$diet.src, useNA = "always")
 
 length(unique(mm.df$binomial[is.na(mm.df$diet.src)]))
 
-mm.df$diet.breadth <- select(mm.df, diet.invertivore:diet.piscivore) %>% rowSums()
+mm.df$diet.breadth <- dplyr::select(mm.df, diet.invertivore:diet.piscivore) %>% rowSums()
 table(mm.df$diet.breadth[!duplicated(mm.df$binomial)])
 # 0    1    2    3 
 # 214 3266 1995  261 
@@ -582,8 +582,8 @@ table(df.contTaxaSums$n.cont)
 # 1    2    3    4 
 # 4120  260    5    1 
 
-length(unique(mm.df$binomial)) #4386
-nrow(df.contTaxaSums) #4386
+length(unique(mm.df$binomial)) #4385
+nrow(df.contTaxaSums) #4385
 
 ##### ADD AGES -----
 
@@ -662,6 +662,7 @@ ranges.trim <- ranges %>%
                 present.natural.range,
                 current.range.km2,
                 present.natural.range.km2)
+ranges.trim$binomial <- gsub("_", " ", ranges.trim$binomial)
 
 colnames(pantheria)
 pantheria.trim <- pantheria %>%
@@ -5072,16 +5073,16 @@ ind <- sample(2, nrow(df.tree.trim),
 train <- df.tree.trim[ind == 1,]
 test <- df.tree.trim[ind == 2,]
 
-rf <- randomForest(n.cont ~ ., data = df.tree.trim, 
+rf <- randomForest(wide.ranging ~ ., data = df.tree.trim, 
                    importance = TRUE, proximity = TRUE)
 
 print(rf)
 
 p1 <- predict(rf, train)
-confusionMatrix(p1, train$n.cont)
+confusionMatrix(p1, train$wide.ranging)
 
 p2 <- predict(rf, test)
-confusionMatrix(p2, test$n.cont)
+confusionMatrix(p2, test$wide.ranging)
 
 plot(rf)
 
@@ -5186,7 +5187,7 @@ df.tree[df.tree$locomotion == "volant",] %>%
 
 #### LOG ODDS ----
 ## use habitat mode volant as reference
-
+df.tree.trim$log.mass <- log10(df.tree.trim$avg.mass)
 model <- glm(wide.ranging ~ locomotion + log.mass + diet.type + fam.connectivity + fam.richness + age.median, 
              family = binomial(link = "logit"), data = df.tree.trim)
 summary(model)
@@ -5195,7 +5196,6 @@ summary(model)
 cbind(Estimate = round(coef(model), 4),
       OR = round(exp(coef(model)), 4))
 
-library(mfx)
 #same thing, different way
 logitor(wide.ranging ~ locomotion + log.mass + diet.type + fam.connectivity + fam.richness + age.median, 
         data = df.tree.trim)
@@ -5279,14 +5279,15 @@ for(i in 1:length(df$binomial)){
 
 #want to combine to unique spp
 df.cont <- df %>%
-  dplyr::group_by(binomial) %>%
-  dplyr::summarise(cont.tot.area = sum(tot.area), 
-                   pan.gr.area = gr.area.km2[1], 
-                   hmrg = home.range.km2[1],
-                   faurby.nat.range = present.natural.range.km2[1], 
-                   faurby.current.range = current.range.km2[1],
-                   num.cont = n.cont[1], 
-                   size = mean(avg.mass)) %>%
+  dplyr::select(binomial = binomial,
+                cont.tot.area = tot.area, 
+                   pan.gr.area = gr.area.km2, 
+                   hmrg = home.range.km2,
+                   faurby.nat.range = present.natural.range.km2, 
+                   faurby.current.range = current.range.km2,
+                   num.cont = n.cont, 
+                   size = avg.mass,
+                logSize = log.mass) %>%
   as.data.frame()
 
 #get cleanest dataset
@@ -5294,32 +5295,69 @@ df.pan <- subset(df.cont, !is.na(df.cont$pan.gr.area) & !is.na(df.cont$size))
 
 df.faurby <- subset(df.cont, !is.na(df.cont$faurby.nat.range) & !is.na(df.cont$size) & df.cont$faurby.nat.range != 0) 
 
-length(unique(df.pan$binomial)) #2972
-length(unique(df.pan$binomial[df.pan$num.cont == 1])) #2730
-length(unique(df.pan$binomial[df.pan$num.cont == 2])) #237
-length(unique(df.pan$binomial[df.pan$num.cont == "3+"])) #5
+length(unique(df.pan$binomial)) #2946
+length(unique(df.pan$binomial[df.pan$num.cont == 1])) #2709
+length(unique(df.pan$binomial[df.pan$num.cont == 2])) #231
+length(unique(df.pan$binomial[df.pan$num.cont == "3+"])) #6
 
-length(unique(df.faurby$binomial)) # 2515
-length(unique(df.faurby$binomial[df.faurby$num.cont == 1])) #2396
-length(unique(df.faurby$binomial[df.faurby$num.cont == 2])) #115
-length(unique(df.faurby$binomial[df.faurby$num.cont == "3+"])) #4
+length(unique(df.faurby$binomial)) # 2475
+length(unique(df.faurby$binomial[df.faurby$num.cont == 1])) #2362
+length(unique(df.faurby$binomial[df.faurby$num.cont == 2])) #108
+length(unique(df.faurby$binomial[df.faurby$num.cont == "3+"])) #5
+
+df.pan$ratio <- df.pan$pan.gr.area/df.pan$cont.tot.area
 
 # ranges
 ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
   geom_point(alpha = 0.7, aes(col = num.cont)) +
   geom_smooth(aes(color = num.cont), method = "lm") +
-  scale_color_manual(values = col) +
+  scale_color_manual(values = cont_bw) +
+  #scale_fill_manual(values = cont_bw) +
   labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
   plot_theme + 
   theme(legend.position = "top")
 
-ggplot(data = df.faurby, aes(x = logSize, y = ratio)) +
+#do cosmo species have a larger home ranges for the geographical range?
+summary(lm(log10(df.pan$ratio) ~ log10(df.pan$logSize) + as.factor(df.pan$num.cont))) #r2 = 0.67; sig
+
+ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
+    geom_point(alpha = 0.7, aes(col = num.cont)) +
+    geom_smooth(method = "lm", color = "#76c476") +
+    scale_color_manual(values = cont_bw) +
+    labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
+    plot_theme + 
+    theme(legend.position = "none")
+
+df.faurby$ratio.nat <- df.faurby$hmrg/df.faurby$faurby.nat.range
+df.faurby$ratio.cur <- df.faurby$hmrg/df.faurby$faurby.current.range
+df.faurby$ratio.cur[df.faurby$faurby.current.range == 0] <- NA
+
+#home range
+ggplot(data = df.faurby, aes(x = logSize, y = ratio.cur)) +
   geom_point(alpha = 0.7, aes(col = num.cont)) +
   geom_smooth(aes(color = num.cont), method = "lm") +
-  scale_color_manual(values = col) +
-  labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range/Geographic~Range), color = "Number of Continents") +
+  scale_color_manual(values = cont_bw) +
+  labs(x = expression(log[10]~Body~Mass), 
+       y = expression(log[10]~Home~Range/Current~Geographic~Range), 
+       color = "Number of Continents") +
   plot_theme + 
   theme(legend.position = "top")
+
+#do cosmo species have a larger geographical based on which continents they are on?
+summary(lm(log10(df.faurby$ratio.cur) ~ log10(df.faurby$logSize) + as.factor(df.faurby$num.cont))) #r2 = 0.67; sig
+#no
+
+ggplot(data = df.faurby, aes(x = logSize, y = ratio.nat)) +
+    geom_point(alpha = 0.7, aes(col = num.cont)) +
+    geom_smooth(aes(color = num.cont), method = "lm") +
+    scale_color_manual(values = cont_bw) +
+    labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range/Natural~Geographic~Range), color = "Number of Continents") +
+    plot_theme + 
+    theme(legend.position = "top")
+
+#do cosmo species have a larger geographical based on which continents they are on?
+summary(lm(log10(df.faurby$ratio.nat) ~ log10(df.faurby$logSize) + as.factor(df.faurby$num.cont))) #r2 = 0.67; sig
+#nope
 
 #homerange to geographic range
 plot(log10(df.pan$pan.gr.area) ~ log10(df.pan$hmrg))
@@ -5328,12 +5366,13 @@ summary(lm(df.pan$pan.gr.area ~ df.pan$hmrg)) #significant, but r2 = 0.04
 
 #do bigger animals have a larger hmrg?
 summary(lm(log10(df.pan$hmrg) ~ log10(df.pan$size) + as.factor(df.pan$num.cont))) #r2 = 0.67; sig
+#size affects 2 and 3
 summary(lm(log10(df.pan$hmrg) ~ log10(df.pan$size))) #r2 = 0.66; sig
 
 ggplot(data = df.pan, aes(x = log10(df.pan$size), y = log10(df.pan$hmrg))) +
   geom_point(alpha = 0.7, aes(col = num.cont)) +
   geom_smooth(aes(color = num.cont), method = "lm") +
-  scale_color_manual(values = col) +
+  scale_color_manual(values = cont_bw) +
   labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range), color = "Number of Continents") +
   plot_theme + 
   theme(legend.position = "top")
