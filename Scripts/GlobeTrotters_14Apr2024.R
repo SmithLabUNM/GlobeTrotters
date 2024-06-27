@@ -5308,7 +5308,7 @@ length(unique(df.faurby$binomial[df.faurby$num.cont == "3+"])) #5
 df.pan$ratio <- df.pan$pan.gr.area/df.pan$cont.tot.area
 
 # ranges
-ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
+p.geog.range.w.legend <- ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
   geom_point(alpha = 0.7, aes(col = num.cont)) +
   geom_smooth(aes(color = num.cont), method = "lm") +
   scale_color_manual(values = cont_bw) +
@@ -5316,6 +5316,23 @@ ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
   labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
   plot_theme + 
   theme(legend.position = "top")
+
+ggsave(p.geog.range.w.legend, 
+       file = "./Figures/geog.range.w.legend.png", 
+       width = 20, height = 10, units = "cm")
+
+p.geog.range <- ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
+    geom_point(alpha = 0.7, aes(col = num.cont)) +
+    geom_smooth(aes(color = num.cont), method = "lm") +
+    scale_color_manual(values = cont_bw) +
+    #scale_fill_manual(values = cont_bw) +
+    labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
+    plot_theme + 
+    theme(legend.position = "")
+
+ggsave(p.geog.range, 
+       file = "./Figures/geog.range.png", 
+       width = 14, height = 10, units = "cm")
 
 #do cosmo species have a larger home ranges for the geographical range?
 summary(lm(log10(df.pan$ratio) ~ log10(df.pan$logSize) + as.factor(df.pan$num.cont))) #r2 = 0.67; sig
@@ -5369,13 +5386,17 @@ summary(lm(log10(df.pan$hmrg) ~ log10(df.pan$size) + as.factor(df.pan$num.cont))
 #size affects 2 and 3
 summary(lm(log10(df.pan$hmrg) ~ log10(df.pan$size))) #r2 = 0.66; sig
 
-ggplot(data = df.pan, aes(x = log10(df.pan$size), y = log10(df.pan$hmrg))) +
+p.hr <- ggplot(data = df.pan, aes(x = log10(df.pan$size), y = log10(df.pan$hmrg))) +
   geom_point(alpha = 0.7, aes(col = num.cont)) +
   geom_smooth(aes(color = num.cont), method = "lm") +
   scale_color_manual(values = cont_bw) +
   labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Home~Range), color = "Number of Continents") +
   plot_theme + 
-  theme(legend.position = "top")
+  theme(legend.position = "")
+
+ggsave(p.hr, 
+       file = "./Figures/home.range.png", 
+       width = 14, height = 10, units = "cm")
 
 ## TEST: Place of origin dictates how far you can travel----
 #depends on how far can go
