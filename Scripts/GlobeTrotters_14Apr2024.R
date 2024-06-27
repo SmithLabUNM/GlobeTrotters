@@ -252,6 +252,7 @@ unique(intro.df$binomial[intro.df$extant.status == "domesticated"])
 #"Equus caballus" extinct North America?, domesticated on South America, Australia, and Eurasia; grazer
 
 mean(intro.df$mass, na.rm = TRUE)
+range(intro.df$mass, na.rm = TRUE)
 
 intro.df <- intro.df %>% 
     mutate(Africa = continent == "Africa",
@@ -5386,7 +5387,8 @@ summary(lm(log10(df.pan$hmrg) ~ log10(df.pan$size) + as.factor(df.pan$num.cont))
 #size affects 2 and 3
 summary(lm(log10(df.pan$hmrg) ~ log10(df.pan$size))) #r2 = 0.66; sig
 
-p.hr <- ggplot(data = df.pan, aes(x = log10(df.pan$size), y = log10(df.pan$hmrg))) +
+p.hr <- ggplot(data = df.pan, 
+               aes(x = log10(df.pan$size), y = log10(df.pan$hmrg))) +
   geom_point(alpha = 0.7, aes(col = num.cont)) +
   geom_smooth(aes(color = num.cont), method = "lm") +
   scale_color_manual(values = cont_bw) +
