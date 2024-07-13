@@ -2998,7 +2998,50 @@ p.disp.age.time <-  ggplot(df.time2,
 ggsave(p.disp.age.time, 
        file = "./Figures/dispersal.time.png", 
        width = 24, height = 15, units = "cm")
-    
+
+#size distribution of greatest dispersers
+which.max(df.dispersal$dispersal.foss)
+which.max(df.dispersal$dispersal.phylo)
+df.dispersal$binomial[386]
+df.dispersal$binomial[389]
+df.dispersal$log.dist.foss <- log10(df.dispersal$dispersal.foss)
+df.dispersal$log.dist.phylo <- log10(df.dispersal$dispersal.phylo)
+range(df.dispersal$log.dist.foss, na.rm = TRUE)
+range(df.dispersal$log.dist.phylo, na.rm = TRUE)
+
+df.dispersal <- mutate(df.dispersal, qtr.bin.dist.foss = cut(log.dist.foss, breaks = seq(0, 12, .25)))
+df.dispersal <- mutate(df.dispersal, qtr.bin.dist.phylo = cut(log.dist.phylo, breaks = seq(0, 12, .25)))
+
+unique(df.dispersal$qtr.bin.dist.foss) #up to 7.25
+unique(df.dispersal$qtr.bin.dist.phylo) #up to 7.25
+
+df.dispersal$avg.mass[df.dispersal$qtr.bin.dist.foss == "(11.5,11.8]"]
+
+which.max(df.dispersal$dispersal.distance)
+df.dispersal$binomial[596]
+
+df.dispersal$log.disp.dist <- log10(df.dispersal$dispersal.distance)
+df.dispersal <- mutate(df.dispersal, qtr.bin.dist = cut(log.disp.dist, breaks = seq(0, 7, .25)))
+sort(unique(df.dispersal$qtr.bin.dist)) #max  (6,6.25] 
+df.dispersal[df.dispersal$qtr.bin.dist == "(6,6.25]",] #panthera leo and ursus maritimus
+df.dispersal[df.dispersal$qtr.bin.dist == "(5.75,6]",] #panthera tigris
+df.dispersal[df.dispersal$qtr.bin.dist == "(5.5,5.75]",] #Crocuta crocuta and Panthera onca
+
+#Ursus martimus has greatest dispersal distance; Panthera tigris goes the farthest
+#what are their geog ranges and home ranges and how does it compare?
+range(df$home.range.km2, na.rm = TRUE)
+mean(df$home.range.km2, na.rm = TRUE)
+median(df$home.range.km2, na.rm = TRUE)
+df$home.range.km2[df$binomial == "Ursus maritimus"] #largest
+df$home.range.km2[df$binomial == "Panthera tigris"] #small
+df$home.range.km2[df$binomial == "Panthera onca"] #large
+
+range(df$gr.area.km2, na.rm = TRUE)
+df$gr.area.km2[df$binomial == "Ursus maritimus"] #unknown, but in a single ecoregion
+df$gr.area.km2[df$binomial == "Panthera tigris"] #large
+df$gr.area.km2[df$binomial == "Crocuta crocuta"] #large
+df$gr.area.km2[df$binomial == "Panthera onca"] #large
+
 ###### AGES FIGURE -----
 p.age.1 <- ggplot() + #do histogram; .5 log 
     geom_histogram(aes(log10(df$age.median[df$n.cont == "1" & !is.na(df$age.median)])), 
@@ -5281,6 +5324,7 @@ for(i in 1:length(df$binomial)){
 #want to combine to unique spp
 df.cont <- df %>%
   dplyr::select(binomial = binomial,
+                family = family,
                 cont.tot.area = tot.area, 
                    pan.gr.area = gr.area.km2, 
                    hmrg = home.range.km2,
@@ -5345,6 +5389,56 @@ ggplot(data = df.pan, aes(x = logSize, y = ratio)) +
     labs(x = expression(log[10]~Body~Mass), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
     plot_theme + 
     theme(legend.position = "none")
+
+ggplot(data = df.pan, aes(x = log10(hmrg), y = log10(ratio))) +
+    geom_point(alpha = 0.7, aes(col = num.cont)) +
+    geom_smooth(method = "lm", color = "#76c476") +
+    scale_color_manual(values = cont_bw) +
+    labs(x = expression(log[10]~Home~Range), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
+    plot_theme + 
+    theme(legend.position = "none")
+
+df$log.gr <- log10(df$gr.area.km2)
+range(df$log.gr, na.rm = TRUE)
+df <- mutate(df, qtr.bin.gr = cut(log.gr, breaks = seq(-4, 8, .25)))
+sort(unique(df$qtr.bin.gr))
+df[df$qtr.bin.gr == "(7.75,8]",] %>% drop_na(binomial)
+df[df$qtr.bin.gr == "(7.5,7.75]",] %>% drop_na(binomial)
+#groups with the largest geogr ranges are msutelids, canids, felids, and bears
+df[df$qtr.bin.gr == "(7.25,7.5]",] %>% drop_na(binomial)
+df[df$qtr.bin.gr == "(7.25,7.5]" & df$n.cont == 1,] %>% drop_na(binomial)
+df[df$qtr.bin.gr == "(7.25,7.5]" & df$n.cont == 1 & df$log.size.bin < 3,] %>% drop_na(binomial)
+
+df.dispersal[df.dispersal$binomial == "Sorex caecutiens",]
+df.dispersal[df.dispersal$binomial == "Sciurus vulgaris",]
+
+df.pan$log.ratio <- log10(df.pan$ratio)
+df.pan <- mutate(df.pan, qtr.bin.ratio = cut(log.ratio, breaks = seq(-11, 1, .25)))
+sort(unique(df.pan$qtr.bin.ratio))
+df.pan[df.pan$qtr.bin.ratio == "(0,0.25]",] %>% drop_na(binomial) #Tachyglossus aculeatus
+
+## look at relationships between hmr and gr for the families of globetrotters
+glb.fam <- c("Ursidae", "Mustelidae", "Canidae", "Felidae", "Cervidae", "Vespertilionidae")
+glb <- df.pan[df.pan$family %in% glb.fam,]
+
+ggplot(data = glb, aes(x = log10(hmrg), y = log10(ratio))) +
+    geom_point(alpha = 0.7, aes(col = family)) +
+    geom_smooth(method = "lm", color = "#76c476") +
+    #scale_color_manual(values = cont_bw) +
+    labs(x = expression(log[10]~Home~Range), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
+    plot_theme + 
+    theme(legend.position = "none")
+summary(lm(log10(glb$ratio) ~ log10(glb$hmrg))) #barely sig
+
+glb.carn <- glb[glb$family != "Cervidae" & glb$family != "Vespertilionidae",]
+ggplot(data = glb.carn, aes(x = log10(hmrg), y = log10(ratio))) +
+    geom_point(alpha = 0.7, aes(col = family)) +
+    geom_smooth(method = "lm", color = "#76c476") +
+    #scale_color_manual(values = cont_bw) +
+    labs(x = expression(log[10]~Home~Range), y = expression(log[10]~Geographic~Range/Continent~Size), color = "Number of Continents") +
+    plot_theme #+ 
+    #theme(legend.position = "none")
+summary(lm(log10(glb.carn$ratio) ~ log10(glb.carn$hmrg))) #non sig
 
 df.faurby$ratio.nat <- df.faurby$hmrg/df.faurby$faurby.nat.range
 df.faurby$ratio.cur <- df.faurby$hmrg/df.faurby$faurby.current.range
