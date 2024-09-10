@@ -3729,6 +3729,103 @@ nonvol.qtr.bins <- df[df$n.cont == "1" & df$habitat.mode != "volant",] %>%
     as.data.frame()
 #there are a lot of species that are in 0.75 to 3 size bins that aren't on 2
 
+## how do globetrotters body size compare to their family or order?
+#p. leo; kinda big for it's family
+df %>%
+    filter(family == "Felidae") %>%
+ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Panthera leo"],
+               col = "red") +
+    plot_theme
+
+#m. nivalis; kinda small for it's family
+df %>%
+    filter(family == "Mustelidae") %>%
+    ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Mustela nivalis"],
+               col = "red") +
+    plot_theme
+
+#ursus arctos; kinda big for it's family
+df %>%
+    filter(family == "Ursidae") %>%
+    ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Ursus arctos"],
+               col = "red") +
+    plot_theme
+
+#bat; avg. size for it's family
+df %>%
+    filter(family == "Vespertilionidae") %>%
+    ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Miniopterus schreibersii"],
+               col = "red") +
+    plot_theme
+
+#c. elephas; avg. size?
+df %>%
+    filter(family == "Cervidae") %>%
+    ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Cervus elaphus"],
+               col = "red") +
+    plot_theme
+
+#fox; avg. size
+df %>%
+    filter(family == "Canidae") %>%
+    ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Vulpes vulpes"],
+               col = "red") +
+    plot_theme
+
+#carnivora; two large, one small, one avg
+df %>%
+    filter(order == "Carnivora") %>%
+    ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Vulpes vulpes"],
+               col = "red") +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Panthera leo"],
+               col = "red") +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Mustela nivalis"],
+               col = "red") +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Ursus arctos"],
+               col = "red") +
+    plot_theme
+
+#artiodactyla; about avg
+df %>%
+    filter(order == "Artiodactyla") %>%
+    ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Cervus elaphus"],
+               col = "red") +
+    plot_theme
+df$log.mass[df$binomial == "Cervus elaphus"] #5.255725
+
+#chiroptera; about avg
+df %>%
+    filter(order == "Chiroptera") %>%
+    ggplot() +
+    geom_histogram(aes(log.mass),
+                   binwidth = .25) +
+    geom_vline(xintercept = df$log.mass[df$binomial == "Miniopterus schreibersii"],
+               col = "red") +
+    plot_theme
 
 ##### BODY SIZE FIGURE ----
 
@@ -4418,6 +4515,38 @@ hist(df$log.mass[df$diet.frugivore.tot == TRUE])
 range(df$avg.mass[df$diet.invertivore.tot == TRUE], na.rm = TRUE)
 #same range here
 
+## diet breadth 1, homebodies
+nrow(df[df$diet.breadth == 1 & df$diet.browser.tot == TRUE & df$n.cont == 1,])
+nrow(df[df$diet.breadth == 1 & df$diet.grazer.tot == TRUE & df$n.cont == 1,])
+nrow(df[df$diet.breadth == 1 & df$diet.frugivore.tot == TRUE & df$n.cont == 1,])
+nrow(df[df$diet.breadth == 1 & df$diet.carnivore.tot == TRUE & df$n.cont == 1,])
+nrow(df[df$diet.breadth == 1 & df$diet.invertivore.tot == TRUE & df$n.cont == 1,])
+nrow(df[df$diet.breadth == 1 & df$diet.piscivore.tot == TRUE & df$n.cont == 1,])
+
+## diet breadth 1, wanderers
+nrow(df[df$diet.breadth == 1 & df$diet.browser.tot == TRUE & df$n.cont == 2,])
+nrow(df[df$diet.breadth == 1 & df$diet.grazer.tot == TRUE & df$n.cont == 2,])
+nrow(df[df$diet.breadth == 1 & df$diet.frugivore.tot == TRUE & df$n.cont == 2,])
+nrow(df[df$diet.breadth == 1 & df$diet.carnivore.tot == TRUE & df$n.cont == 2,])
+nrow(df[df$diet.breadth == 1 & df$diet.invertivore.tot == TRUE & df$n.cont == 2,])
+nrow(df[df$diet.breadth == 1 & df$diet.piscivore.tot == TRUE & df$n.cont == 2,])
+
+## diet breadth 1, globetrotters
+nrow(df[df$diet.breadth == 1 & df$diet.browser.tot == TRUE & df$n.cont == "3+",])
+nrow(df[df$diet.breadth == 1 & df$diet.grazer.tot == TRUE & df$n.cont == "3+",])
+nrow(df[df$diet.breadth == 1 & df$diet.frugivore.tot == TRUE & df$n.cont == "3+",])
+nrow(df[df$diet.breadth == 1 & df$diet.carnivore.tot == TRUE & df$n.cont == "3+",])
+nrow(df[df$diet.breadth == 1 & df$diet.invertivore.tot == TRUE & df$n.cont == "3+",])
+nrow(df[df$diet.breadth == 1 & df$diet.piscivore.tot == TRUE & df$n.cont == "3+",])
+
+## diet breadth 3
+table(df$n.cont[df$diet.breadth == 3 & df$diet.browser.tot == TRUE & df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE])
+table(df$n.cont[df$diet.breadth == 3 & df$diet.browser.tot == TRUE & df$diet.carnivore.tot == TRUE & df$diet.frugivore.tot == TRUE])
+table(df$n.cont[df$diet.breadth == 3 & df$diet.invertivore.tot == TRUE & df$diet.browser.tot == TRUE & df$diet.frugivore.tot == TRUE])
+table(df$n.cont[df$diet.breadth == 3 & df$diet.carnivore.tot == TRUE & df$diet.browser.tot == TRUE & df$diet.invertivore.tot == TRUE])
+table(df$n.cont[df$diet.breadth == 3 & df$diet.carnivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$diet.frugivore.tot == TRUE])
+table(df$n.cont[df$diet.breadth == 3 & df$diet.carnivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$diet.piscivore.tot == TRUE])
+
 ##### DIET BREADTH BAR GRAPH -----
 dietbreadth_bargraph <- plyr::ddply(df, c("n.cont", "diet.breadth"), function(x){
   nrow(x)
@@ -4803,6 +4932,15 @@ sum(diettype_bargraph_full$V1[diettype_bargraph_full$numconts == "3+"], na.rm = 
 ggsave(p.diet.3, 
        file = "./Figures/diet.type.three.png", 
        width = 20, height = 10, units = "cm")
+
+##habitats of frugivores and browsers for wanderers
+unique(df$habitat.mode[df$n.cont == 2 & df$diet.frugivore.tot == TRUE])
+unique(df$habitat.mode[df$n.cont == 2 & df$diet.browser.tot == TRUE])
+
+#are all fossorial and arboreal species either frugivores or browsers?
+df[df$n.cont == 2 & df$habitat.mode == "arboreal",] #all but two are frug, the two that aren't are also browse
+df[df$n.cont == 2 & df$habitat.mode == "terr- fossorial",] #all but two are frug, the two that aren't are also browse
+#these are carnivores or invertivores
 
 #### H6: HABITAT MODE ----
 ## TEST: animals that are widespread have a specific habitat modes (or aren't specific habitat modes)
