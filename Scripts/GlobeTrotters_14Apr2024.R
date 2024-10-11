@@ -800,7 +800,7 @@ write.csv(df.clade.mass,
 
 ## BY CONTINENT
 ## are certain continents more affected by this missing data?
-nrow(df[df$continent.Africa == TRUE,]) #115
+nrow(df[df$continent.Africa == TRUE,]) #1150
 nrow(df[df$continent.Africa == TRUE & is.na(df$log.mass),]) #357 (out of 1150; 31%)
 
 nrow(df[df$continent.North.America == TRUE,]) #807
@@ -1058,6 +1058,7 @@ unique(df$family[df$family.origin == "" & df$order == "Chiroptera"])
 #Molossidae and Nycteridae
 nrow(df[df$family.origin == "" &
           df$family == "Molossidae",])
+View(df[df$family == "Molossidae" & df$family.origin == "" & df$n.cont == 2,])
 
 nrow(df[df$family.origin == "" &
           df$family == "Nycteridae",])
@@ -1283,6 +1284,9 @@ df.dispersal %>%
   drop_na() %>%
   summarise(n = n()) #80 for phylo age
 
+table(df$qtr.bin[is.na(df$dispersal.age.d)])
+#small size bins are bigger, should do percent
+unique(df$dispersal.age.d[df$avg.mass < 10]) #only NA
 
 #### Q1: NUM SP PER CONTINENT ----
 #Tally number of species on 1, 2, or 3+ continents
@@ -2852,6 +2856,10 @@ df.dispersal$dispersal.1000 =  ((1000 * 365)/(df.dispersal$gen.length + 1000))*d
 df.dispersal$dispersal.10000 =  ((10000 * 365)/(df.dispersal$gen.length + 10000))*df.dispersal$dispersal.distance
 df.dispersal$dispersal.100000 =  ((100000 * 365)/(df.dispersal$gen.length + 100000))*df.dispersal$dispersal.distance
 
+#df.dispersal$dispersal.150000 =  ((150000 * 365)/(df.dispersal$gen.length + 150000))*df.dispersal$dispersal.distance
+#df.dispersal$dispersal.500000 =  ((500000 * 365)/(df.dispersal$gen.length + 500000))*df.dispersal$dispersal.distance
+#df.dispersal$dispersal.1000000 =  ((1000000 * 365)/(df.dispersal$gen.length + 1000000))*df.dispersal$dispersal.distance
+
 #add in lines for continents
 
 p.disp.age <- ggplot(df.dispersal[!is.na(df.dispersal$dispersal.phylo),]) +
@@ -4137,47 +4145,116 @@ write.csv(df.breadth,
 
 #include trot.N, null prop, expected, observed-expected, (O-E)^2, (O-E)^2/exp, X crit, p
 
-df.diet.stats <- df %>%
-  summarise(n.two = nrow(df[df$n.cont == "2",]),
-            carn.pisc = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.piscivore.tot == TRUE & df$n.cont == "2"]),
-            carn.invt = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "2"]),
-            pisc.invt = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "2"]),
-            carn.brow = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2"]),
-            carn.graz = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2"]),
-            carn.frug = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"]),
-            pisc.brow = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2"]),
-            pisc.graz = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2"]),
-            pisc.frug = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"]),
-            invt.brow = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2"]),
-            invt.graz = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2"]),
-            invt.frug = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"]),
-            brow.graz = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2"]),
-            brow.frug = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"]),
-            graz.frug = length(df$binomial[df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2"])) %>%
+##### LOOK AT COMBOS -----
+nrow(df[df$diet.breadth == 1 & df$diet.browser.tot == TRUE,]) #423
+nrow(df[df$diet.breadth == 1 & df$diet.grazer.tot == TRUE,]) #233
+nrow(df[df$diet.breadth == 1 & df$diet.frugivore.tot == TRUE,]) #487
+nrow(df[df$diet.breadth == 1 & df$diet.carnivore.tot == TRUE,]) #130
+nrow(df[df$diet.breadth == 1 & df$diet.invertivore.tot == TRUE,]) #1182
+nrow(df[df$diet.breadth == 1 & df$diet.piscivore.tot == TRUE,]) #7
+
+df %>%
+    summarise(n.two = nrow(df[df$diet.breadth == 2,]),
+              carn.pisc = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.piscivore.tot == TRUE & df$diet.breadth == 2]),
+              carn.invt = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$diet.breadth == 2]),
+              pisc.invt = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$diet.breadth == 2]),
+              carn.brow = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.browser.tot == TRUE & df$diet.breadth == 2]),
+              carn.graz = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$diet.breadth == 2]),
+              carn.frug = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$diet.breadth == 2]),
+              pisc.brow = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.browser.tot == TRUE & df$diet.breadth == 2]),
+              pisc.graz = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$diet.breadth == 2]),
+              pisc.frug = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$diet.breadth == 2]),
+              invt.brow = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.browser.tot == TRUE & df$diet.breadth == 2]),
+              invt.graz = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$diet.breadth == 2]),
+              invt.frug = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$diet.breadth == 2]),
+              brow.graz = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.grazer.tot == TRUE & df$diet.breadth == 2]),
+              brow.frug = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.frugivore.tot == TRUE & df$diet.breadth == 2]),
+              graz.frug = length(df$binomial[df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE & df$diet.breadth == 2])) %>%
+    as.data.frame()
+
+df %>%
+  summarise(n.two = nrow(df[df$n.cont == "2" & df$diet.breadth == 2,]),
+            carn.pisc = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.piscivore.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            carn.invt = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            pisc.invt = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            carn.brow = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            carn.graz = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            carn.frug = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            pisc.brow = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            pisc.graz = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            pisc.frug = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            invt.brow = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            invt.graz = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            invt.frug = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            brow.graz = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            brow.frug = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2]),
+            graz.frug = length(df$binomial[df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "2" & df$diet.breadth == 2])) %>%
   as.data.frame()
 
-write.csv(df.diet.stats,
-          "./Results/diet.summary.csv",
-          row.names = FALSE)
+df %>%
+    summarise(n.one = nrow(df[df$n.cont == "1" & df$diet.breadth == 2,]),
+              carn.pisc = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.piscivore.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              carn.invt = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              pisc.invt = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              carn.brow = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              carn.graz = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              carn.frug = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              pisc.brow = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              pisc.graz = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              pisc.frug = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              invt.brow = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              invt.graz = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              invt.frug = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              brow.graz = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              brow.frug = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2]),
+              graz.frug = length(df$binomial[df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "1" & df$diet.breadth == 2])) %>%
+    as.data.frame()
+
+df %>%
+    summarise(n.three = nrow(df[df$n.cont == "3+" & df$diet.breadth == 2,]),
+              carn.pisc = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.piscivore.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              carn.invt = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              pisc.invt = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.invertivore.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              carn.brow = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              carn.graz = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              carn.frug = length(df$binomial[df$diet.carnivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              pisc.brow = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              pisc.graz = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              pisc.frug = length(df$binomial[df$diet.piscivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              invt.brow = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.browser.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              invt.graz = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              invt.frug = length(df$binomial[df$diet.invertivore.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              brow.graz = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.grazer.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              brow.frug = length(df$binomial[df$diet.browser.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2]),
+              graz.frug = length(df$binomial[df$diet.grazer.tot == TRUE & df$diet.frugivore.tot == TRUE & df$n.cont == "3+" & df$diet.breadth == 2])) %>%
+    as.data.frame()
 
 ##deeper look into dietary breadth of 3
 df.3 <- df[df$diet.breadth ==3,]
 
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+table(df.3$n.cont[df.3$diet.browser.tot == TRUE &
                      df.3$diet.invertivore.tot == TRUE &
                      df.3$diet.frugivore.tot == TRUE]) #152
 
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+table(df.3$n.cont[df.3$diet.browser.tot == TRUE &
                        df.3$diet.carnivore.tot == TRUE &
                        df.3$diet.frugivore.tot == TRUE]) #2
 
-length(df.3$binomial[df.3$diet.invertivore.tot == TRUE &
+table(df.3$n.cont[df.3$diet.invertivore.tot == TRUE &
                        df.3$diet.carnivore.tot == TRUE &
-                       df.3$diet.frugivore.tot == TRUE]) #16
+                       df.3$diet.frugivore.tot == TRUE]) #18
 
-length(df.3$binomial[df.3$diet.browser.tot == TRUE &
+table(df.3$n.cont[df.3$diet.browser.tot == TRUE &
                        df.3$diet.grazer.tot == TRUE &
                        df.3$diet.frugivore.tot == TRUE]) #12
+
+table(df.3$n.cont[df.3$diet.browser.tot == TRUE &
+                      df.3$diet.carnivore.tot == TRUE &
+                      df.3$diet.invertivore.tot == TRUE]) #1
+
+table(df.3$n.cont[df.3$diet.piscivore.tot == TRUE &
+                      df.3$diet.carnivore.tot == TRUE &
+                      df.3$diet.invertivore.tot == TRUE]) #1
 
 table(df.3$n.cont) #180 on 1 continent, 6 on 2 continents
 
@@ -4346,6 +4423,10 @@ length(df$binomial[df$order == "Chiroptera" &
 length(df$binomial[df$order == "Chiroptera" &
                    df$n.cont == 2 &
                    df$diet.piscivore.tot== TRUE]) #2! are piscivores
+
+table(df$n.cont[df$diet.breadth == 3]) #186 total; 180 on 1 cont
+#152 total species have a diet breadth of 3 and eat i, b, f; 152/186 = 81.7%
+#1188 eat b+g, b+f, c+i, c+p, or i+p with a diet breadth of 2, out of 1737 = 68.4
 
 ##### DIET TYPE -----
 #are there diet types differences between homiess, limited dispersers, and globe trotters?
@@ -5204,12 +5285,12 @@ df.tree$fam.connectivity[df.tree$family.origin == "South.America" | df.tree$fami
 df.tree$fam.connectivity[df.tree$family.origin == "Australia"] <- 0
 
 # species richness by family
-#fam.richness <- df.tree %>%
-#    group_by(family) %>%
-#    summarise(fam.richness = n()) %>%
-#    as.data.frame()
+fam.richness <- df.tree %>%
+    group_by(family) %>%
+    summarise(fam.richness = n()) %>%
+    as.data.frame()
 
-#df.tree <- left_join(df.tree, fam.richness, by = "family")
+df.tree <- left_join(df.tree, fam.richness, by = "family")
 
 df.tree$wide.ranging <- df.tree$n.cont
 df.tree$wide.ranging[df.tree$wide.ranging == "3+"] <- "2"
