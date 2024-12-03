@@ -55,13 +55,19 @@ plot_theme <- theme(panel.grid = element_blank(),
 
 options(stringsAsFactors = FALSE)
 
-## MOM database
+## Body Mass of Late Quaternary Mammals database v11.1
+# download and convert to csv [CSV UTF-8 (Comma delimited) (.csv)]
+# https://github.com/SmithLabUNM/MOM-Database/blob/MOMv11.1/Data/MOMv11.1.xlsx
+# call mm.df
 mm.df <- read.csv("./Data/MOMv11.1.csv", 
                   header = TRUE)
 
 ## Pacifici et al. 2013 data for dispersal
-pacifici <- read.csv("./Data/Generation Length for Mammals.csv", 
-                     header = TRUE)
+# Dryad (https://doi.org/10.5061/dryad.gd0m3)
+# download and covert to csv [CSV UTF-8 (Comma delimited) (.csv)]
+# call pacifici
+#pacifici <- read.csv("./Data/Generation+Lenght+for+Mammals.csv",
+#                     header = TRUE)
 
 ## Family origin data collected for this paper
 origin <- read.csv("./Data/familyOrigin.csv", 
@@ -136,8 +142,12 @@ ranges <- ranges %>% mutate(current.range.km2 = current.range * cell.size, prese
 #write.csv(ranges, "ranges_Faurby.csv", row.names = FALSE)
 
 ## Jones et al. PanTHERIA dataset
-pantheria <- read.csv("./Data/pantheria.csv", 
-                      header = TRUE)
+# download figshare archive from https://doi.org/10.6084/m9.figshare.c.3301274.v1
+# use "PanTHERIA_1-0_WR05_Aug2008.txt" and convert to csv
+# call pantheria
+#pantheria <- read.table("./Data/pantheria/ECOL_90_184/PanTHERIA_1-0_WR05_Aug2008.txt",
+#                        sep = "\t",
+#                        header = TRUE)
 
 #### FIX DIET ----
 
