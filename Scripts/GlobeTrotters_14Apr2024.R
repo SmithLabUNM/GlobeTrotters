@@ -19,6 +19,12 @@ library(caret)
 library(MASS)
 library(mfx)
 library(stargazer)
+library(raster)
+library(data.table)
+library(tiff)
+library(paleobioDB)
+require(ape)
+require(doParallel)
 
 #### PLOT THEME ----
 
@@ -53,9 +59,6 @@ options(stringsAsFactors = FALSE)
 mm.df <- read.csv("./Data/MOMv11.1.csv", 
                   header = TRUE)
 
-mm.df.old <- read.csv("./Data/MOMv11.csv",
-                      header = TRUE)
-
 ## Pacifici et al. 2013 data for dispersal
 pacifici <- read.csv("./Data/Generation Length for Mammals.csv", 
                      header = TRUE)
@@ -64,17 +67,73 @@ pacifici <- read.csv("./Data/Generation Length for Mammals.csv",
 origin <- read.csv("./Data/familyOrigin.csv", 
                    header = TRUE)
 
-## PBDB first fossil occurrence data
-pbdb <- read.csv("./Data/pbdb.data.csv", 
-                 as.is = T)
+## current and present natural ranges
+#downloaded from https://datadryad.org/stash/dataset/doi:10.5061/dryad.bp26v20
+#Trait_data.csv, read in as mam
+#Current.zip, unzip file on computer and read in list from folder called "Current"
+#Present_natural.zip, unzip file on computer and read in list from folder called "Present_natural"
 
-## Faurby et al. Phylocene tree data for ages
-faurby.ages <- read.csv("./Data/species.age_Faurby.csv", 
-                        header = TRUE, row.names = 1)
+#mam <- read.csv("./Data/Trait_data.csv", header = TRUE)
+mam <- mam %>% filter(Terrestrial == 1)
+mam <- mam %>% 
+    dplyr::select(Binomial.1.2, Order.1.2, Family.1.2)
 
-## Faurby et al. present natural ranges
-ranges <- read.csv("./Data/ranges.csv", 
-                   header = TRUE)
+#read in all tif data for current and present natural maps
+list.current = list.files(path = "./Data/Current", #change to appropriate path
+                          pattern = "*.tif",
+                          full.names = TRUE,
+                          recursive = TRUE)
+current.names <- gsub("Current/",
+                      "",
+                      list.current)
+current.names <- gsub(".tif$",
+                      "",
+                      current.names)
+
+current.maps <- do.call(list, lapply(list.current, function(x) raster(x)))
+current.cells <- do.call(rbind, lapply(current.maps, function(x) rowSums(x)))
+row.names(current.cells) <- current.names
+
+list.present.nat = list.files(path = "./Data/Present_natural", #change to appropriate path
+                              pattern = "*.tif",
+                              full.names = TRUE,
+                              recursive = TRUE)
+
+present.nat.names <- gsub("Present_natural/",
+                          "",
+                          list.present.nat)
+present.nat.names <- gsub(".tif$",
+                          "",
+                          present.nat.names)
+
+present.natural.maps <- do.call(list, lapply(list.present.nat, function(x) raster(x)))
+present.natural.cells <- do.call(rbind, lapply(present.natural.maps, function(x) rowSums(x)))
+row.names(present.natural.cells) <- present.nat.names
+
+#get resolution of maps, using the first tif file
+r <- raster("./Data/Current/Abditomys_latidens.tif")
+r[] <- NA
+cell.size <- prod(res(r))/1000/1000
+
+#sums = number of cells
+current.range <- rowSums(current.cells)
+present.natural.range <- rowSums(present.natural.cells)
+
+all.equal(row.names(current.cells), row.names(present.natural.cells))
+s <- which(row.names(current.cells) %in% mam$Binomial.1.2)
+sum(colSums(current.cells[s, ]) > 0)
+sum(colSums(present.natural.cells[s, ]) > 0)
+
+current.range <- bind_cols(Binomial.1.2 = names(current.range), current.range = current.range)
+present.natural.range <- bind_cols(Binomial.1.2 = names(present.natural.range), present.natural.range = present.natural.range)
+
+ranges <- mam %>%
+    left_join(current.range) %>% 
+    left_join(present.natural.range)
+
+ranges <- ranges %>% mutate(current.range.km2 = current.range * cell.size, present.natural.range.km2 = present.natural.range * cell.size)
+
+#write.csv(ranges, "ranges_Faurby.csv", row.names = FALSE)
 
 ## Jones et al. PanTHERIA dataset
 pantheria <- read.csv("./Data/pantheria.csv", 
@@ -313,9 +372,9 @@ intro.contTaxaSums$binomial[intro.contTaxaSums$n.cont == 5] #Felis catus, Mus mu
 length(unique(intro.df$binomial)) #50
 nrow(intro.contTaxaSums) #50
 
-write.csv(intro.contTaxaSums,
-          "./Results/invasive.species.csv",
-          row.names = FALSE)
+#write.csv(intro.contTaxaSums,
+#          "./Results/invasive.species.csv",
+#          row.names = FALSE)
 
 unique(intro.contTaxaSums$binomial)
 range(intro.contTaxaSums$avg.mass, na.rm = TRUE)
@@ -588,7 +647,7 @@ nrow(df.contTaxaSums) #4385
 
 ##### ADD AGES -----
 
-### Fossil age
+###### Fossil age ------
 #age data fossil = PBDB min & max occurence estiamtes. 
 #This provides different fossil data at different resolutions. 
 #The ages extracted here are based only on species level identifications of fossils. 
@@ -596,29 +655,148 @@ nrow(df.contTaxaSums) #4385
 #To get the most likely age of species origin we found the oldest minimum species age, and the oldest maximum species age for each species. 
 #The midpoint of this range was used as species age. Because of species name mismatches and missing species the following analysis includes 693 species out of 4443 possible.
 
-foss.ages <- pbdb %>%
-  group_by(accepted_name) %>%
-  dplyr::summarise(binomial = accepted_name[1],
-                   lw.range = max(min_ma),
-                   hi.range = max(max_ma),
-                   foss.age = (hi.range+lw.range)/2) 
+#excluded all genera with missing names in taxonomy tables; a lot of bats
+#put in unique genera to PBDB
+#download from:
+mammals <- pbdb_occurrences(
+    base_name = "Mammalia",
+    show = c('coords', 'attr', 'ident', 'phylo', 'genus',
+             'time', 'strat', 'ref'),
+    vocab = "pbdb",
+    limit = "all"
+)
 
-### Faurby ages
+#get rid of non-binomials
+sp.rm <- c("A", "9", "8", "7", "6", "5",
+           "4", "3", "2", "1", "3-Hadar", "2-Hadar",
+           '"pantanellii"', "?sp.", "? sp.",
+           " sp. 1 ", " sp. 2 ", " sp. 3 ", " sp. 4 ", 
+           " sp. 5 ", " new species ", " new ", 
+           " indet. Palaeothentidae + Abderitidae clade")
+mammal.clean <- mammals[!mammals$species_name %in% sp.rm,]
+
+#fix differences in names
+#Alcelaphus lichtensteinii
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Alcelaphus lichtensteinii"] <- "Alcelaphus lichtensteini"
+#Alouatta palliatus
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Alouatta palliatus"] <- "Alouatta palliata"
+#Lutra capensis
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Lutra capensis"] <- "Aonyx capensis"
+#Mus sylvaticus
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Mus sylvaticus"] <- "Apodemus sylvaticus"
+#Sus babyrussa
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Sus babyrussa"] <- "Babyrousa babyrussa"
+#Bos bison
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Bos bison"] <- "Bison bison"
+#Sylvilagus idahoensis
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Sylvilagus idahoensis"] <- "Brachylagus idahoensis"
+#Cebuella pygmaea
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Cebuella pygmaea"] <- "Callithrix pygmaea"
+#Schaeffia adusta
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Schaeffia adusta"] <- "Canis adustus"
+#Aenocyon dirus
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Aenocyon dirus"] <- "Canis dirus"
+#Lupulella mesomelas
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Lupulella mesomelas"] <- "Canis mesomelas"
+#Breameryx minor
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Breameryx minor"] <- "Capromeryx minor"
+#Sapajus apella
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Sapajus apella"] <- "Cebus apella"
+#Smutsia gigantea
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Smutsia gigantea"] <- "Manis gigantea"
+#Neogale frenata
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Neogale frenata"] <- "Mustela frenata"
+#Palaeolama (Protauchenia) reissi
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Palaeolama (Protauchenia) reissi"] <- "Palaeolama reissi"
+#Pampatherium typus
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Pampatherium typus"] <- "Pampatherium typum"
+#Leontocebus fuscicollis
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Leontocebus fuscicollis"] <- "Saguinus fuscicollis"
+#Microsorex hoyi
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Microsorex hoyi"] <- "Sorex hoyi"
+#Otospermophilus beecheyi
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Otospermophilus beecheyi"] <- "Spermophilus beecheyi"
+#Urocitellus elegans
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Urocitellus elegans"] <- "Spermophilus elegans"
+#Poliocitellus franklinii
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Poliocitellus franklinii"] <- "Spermophilus franklinii"
+#Callospermophilus lateralis
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Callospermophilus lateralis"] <- "Spermophilus lateralis"
+#Urocitellus parryii
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Urocitellus parryii"] <- "Spermophilus parryii"
+#Urocitellus richardsonii
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Urocitellus richardsonii"] <- "Spermophilus richardsonii"
+#Urocitellus townsendii
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Urocitellus townsendii"] <- "Spermophilus townsendii"
+#Otospermophilus variegatus
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Otospermophilus variegatus"] <- "Spermophilus variegatus"
+#Notiomastodon platensis
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Notiomastodon platensis"] <- "Stegomastodon platensis"
+#Notiomastodon platensis
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Notiomastodon platensis"] <- "Stegomastodon waringi"
+#Murrayglossus hacketti
+mammal.clean$accepted_name[mammal.clean$accepted_name == "Murrayglossus hacketti"] <- "Zaglossus hacketti"
+
+write.csv(mammal.clean,
+          "pbdb.occs.match.mom.csv",
+          row.names = FALSE)
+
+mammals.sel <- mammal.clean[mammal.clean$accepted_name %in% sp,]
+
+pbdb <- mammals.sel
+
+foss.age <-
+    pbdb %>%
+    mutate(binomial = accepted_name) %>%
+    group_by(binomial) %>%
+    summarise(lw.range = max(min_ma), #max because this is the earliest time for the latest estimate that we have a fossil occurrence
+              hi.range = max(max_ma),
+              foss.age = (hi.range+lw.range)/2)
+
+write.csv(foss.age,
+          "foss.age.csv",
+          row.names = FALSE)
+
+###### Phylo ages ------
 #age data phyl = from Faurby tree estimates. 
 #This source provides 1000 equally likely trees. 
 #The species ages were extracted as branch length to the parent node of each species for all trees. 
 #The estimate used for species ages were the median ages found by this method. Because of species name mismatches the following analysis includes 4019 species out of 4443 possible.
 
-species.age.summary <- function(x) {
-  c(age.mean = mean(x),
-    age.median = median(x),
-    age.lower.range = range(x)[1],
-    age.upper.range = range(x)[2],
-    age.q95 = quantile(x, .95),
-    age.q05 = quantile(x, .05),
-    age.sd = sd(x))
+#downloaded from https://datadryad.org/stash/dataset/doi:10.5061/dryad.bp26v20
+#Complete_phylogeny, read in and call it phylo
+
+#phyls <- read.nexus(file = "Complete_phylogeny.nex")
+#1000 trees
+
+#need to resolve the trees
+cl <- makeCluster(8)
+registerDoParallel(cl)
+age <- foreach(i = 1:1000, .packages = c("ape"), .combine = cbind) %dopar% {
+    tree <- phyls[[i]]
+    
+    spec.age <- function(x) {
+        return(tree$edge.length[which.edge(tree, x)])
+    }
+    ages <- sapply(tree$tip.label, spec.age)
+    ages <- ages[order(names(ages))]
 }
-species.age <- apply(faurby.ages, 1, species.age.summary)
+stopCluster(cl)
+gc()
+
+#write.csv(age, "species.age_Faurby.csv")
+
+species.age.summary <- function(x) {
+    c(age.mean = mean(x),
+      age.median = median(x),
+      age.lower.range = range(x)[1],
+      age.upper.range = range(x)[2],
+      age.q95 = quantile(x, .95),
+      age.q05 = quantile(x, .05),
+      age.sd = sd(x))
+}
+
+species.age <- apply(age, 1, species.age.summary)
 str(species.age)
 
 species.age[1:7,1:5]
@@ -629,6 +807,8 @@ phyl.ages$binomial <- gsub("_", " ", phyl.ages$binomial)
 
 phyl.ages <- phyl.ages %>%
   dplyr::select(binomial, age.median) 
+
+#write.csv(phyl.ages, "species.age_Faurby.csv", row.names = FALSE)
 
 # genus level
 # age <- read.csv("age.csv", header = TRUE) #match on genus
@@ -2462,6 +2642,398 @@ cosmo.family <- family.origin[family.origin$n.cont == "3+",]
 colnames(cosmo.family)[colnames(cosmo.family) == "N"] <- "cosmo.N"
 cosmo.family <- cosmo.family %>%
   dplyr::select(-n.cont)
+
+###### TEST IF EXPECTED -----
+table(df$family.origin[df$n.cont == 1]) #3341 total
+#587 originated on NA
+#1675 originated on EA
+table(df$family.origin[df$n.cont == 1]) #3341 total
+nrow(df[df$continent.Africa == TRUE & df$family.origin == "Eurasia" & df$n.cont == 1,])
+nrow(df[df$continent.South.America == TRUE & df$family.origin == "Eurasia" & df$n.cont == 1,])
+nrow(df[df$continent.North.America == TRUE & df$family.origin == "Eurasia" & df$n.cont == 1,])
+nrow(df[df$continent.Australia == TRUE & df$family.origin == "Eurasia" & df$n.cont == 1,])
+#32% of all homebodies not in Eurasia orginated in Eurasia
+
+nrow(df[df$continent.Africa == TRUE & df$family.origin == "North.America" & df$n.cont == 1,])
+nrow(df[df$continent.South.America == TRUE & df$family.origin == "North.America" & df$n.cont == 1,])
+nrow(df[df$continent.Eurasia == TRUE & df$family.origin == "North.America" & df$n.cont == 1,])
+nrow(df[df$continent.Australia == TRUE & df$family.origin == "North.America" & df$n.cont == 1,])
+#11.7% of all homebodies not in North America origingated in North America
+#total: 1476 out of 3341 = 44.2% of all homebodies originated on NA or EA and are not in their place of origin
+
+#20 species found on EA and AF originated in NA, out of a total of 79
+table(df$family.origin[df$continent.Africa == TRUE & df$continent.Eurasia == TRUE & df$n.cont == 2])
+#only places of origin are Africa, Eurasia, and North America; none come from South America
+table(df$family.origin[df$n.cont == 2]) #46 wandering species had families that originated on NA, out of 260; 17.7%
+#but 121 (45.5%) of species on 2 continents originated in North America or Eurasia
+#likewise, 103 (39.6%) of species on 2 continents originated in Africa or South America
+
+table(df$family.origin[df$continent.North.America == TRUE & df$continent.South.America == TRUE & df$n.cont == 2])
+#speices on South America come from as far as Africa
+table(df$family.origin[df$continent.North.America == TRUE & df$continent.Eurasia == TRUE & df$n.cont == 2])
+#only come from Africa, Eurasia, North America
+
+#how many homebody species in Africa or South America originated far away?
+table(df$family.origin[df$continent.Africa == TRUE & df$n.cont == 1])
+#all from africa, eurasia or north america
+table(df$family.origin[df$continent.South.America == TRUE & df$n.cont == 1])
+#from everywhere, incl. africa
+
+table(df$family.origin) # a lot of species originated in EA or NA, but equally as 
+# many originated in SA, with 20% of species without a place of family origin
+table(df$family.origin[df$n.cont == 2]) #many o fthese originated in Eurasia or South America
+
+# is it surprising that species on 2 continents originated on North America or Eurasia?
+
+# see how place of family origin affects whether you're on 1, 2, or 3 continents
+df.ori <- df[df$family.origin == "North.America"
+             | df$family.origin == "South.America" 
+             | df$family.origin == "Eurasia" 
+             | df$family.origin == "Australia"
+             | df$family.origin == "Africa",]
+
+null.fam.ori <- df.ori %>%
+    group_by(family.origin) %>%
+    dplyr::summarise(null.N = n()) %>%
+    dplyr::select(family.origin,
+                  null.N) %>%
+    as.data.frame()
+
+fam.ori <- df.ori %>%
+    group_by(n.cont, family.origin) %>%
+    dplyr::summarise(N = n()) %>% 
+    as.data.frame()
+
+homies.fam.ori <- fam.ori[fam.ori$n.cont == 1,]
+colnames(homies.fam.ori)[colnames(homies.fam.ori) == "N"] <- "homies.N"
+homies.fam.ori <- homies.fam.ori %>%
+    dplyr::select(-n.cont)
+
+rangers.fam.ori <- fam.ori[fam.ori$n.cont == 2,]
+colnames(rangers.fam.ori)[colnames(rangers.fam.ori) == "N"] <- "rangers.N"
+rangers.fam.ori <- rangers.fam.ori %>%
+    dplyr::select(-n.cont)
+
+cosmo.fam.ori <- fam.ori[fam.ori$n.cont == "3+",]
+colnames(cosmo.fam.ori)[colnames(cosmo.fam.ori) == "N"] <- "cosmo.N"
+cosmo.fam.ori <- cosmo.fam.ori %>%
+    dplyr::select(-n.cont)
+
+#create full dataset
+fam.ori.null.cosmo <- merge(null.fam.ori, cosmo.fam.ori, by = "family.origin", all.x = TRUE, all.y = TRUE)
+fam.ori.null.cosmo.rangers <- merge(fam.ori.null.cosmo, rangers.fam.ori, by = "family.origin", all.x = TRUE, all.y = TRUE)
+fam.ori.null.cosmo.rangers.homies <- merge(fam.ori.null.cosmo.rangers, homies.fam.ori, by = "family.origin", all.x = TRUE, all.y = TRUE)
+
+df.fam.ori <- fam.ori.null.cosmo.rangers.homies
+df.fam.ori[is.na(df.fam.ori)] <- 0
+
+df.fam.ori$prop.null <- df.fam.ori$null.N/nrow(df.ori)
+
+df.fam.ori$prop.homies <- df.fam.ori$homies.N/nrow(df.ori[df.ori$n.cont == "1",])
+df.fam.ori$prop.rangers <- df.fam.ori$rangers.N/nrow(df.ori[df.ori$n.cont == "2",])
+df.fam.ori$prop.cosmo <- df.fam.ori$cosmo.N/nrow(df.ori[df.ori$n.cont == "3+",])
+
+#binomial test
+for(i in 1:nrow(df.fam.ori)){
+    test <- binom.test(df.fam.ori$homies.N[i], nrow(df.ori[df.ori$n.cont == "1",]), p = df.fam.ori$prop.null[i], alternative = "two.sided")
+    df.fam.ori$p.homies[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.fam.ori)){
+    test <- binom.test(df.fam.ori$rangers.N[i], nrow(df.ori[df.ori$n.cont == "2",]), p = df.fam.ori$prop.null[i], alternative = "two.sided")
+    df.fam.ori$p.rangers[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.fam.ori)){
+    test <- binom.test(df.fam.ori$cosmo.N[i], nrow(df.ori[df.ori$n.cont == "3+",]), p = df.fam.ori$prop.null[i], alternative = "two.sided")
+    df.fam.ori$p.cosmo[i] <- test$p.value
+}
+
+#add sidak correction
+df.fam.ori <- arrange(df.fam.ori, p.homies) %>%
+    dplyr::mutate(signif.homies = p.homies < 0.05,
+                  signif.bonferoni.homies = p.homies < 0.05/n(),
+                  signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                  signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
+
+df.fam.ori <- arrange(df.fam.ori, p.rangers) %>%
+    dplyr::mutate(signif.rangers = p.rangers < 0.05,
+                  signif.bonferoni.rangers = p.rangers < 0.05/n(),
+                  signif.holm.rangers = !0.05/(n() + 1 - 1:n()) < p.rangers,
+                  signif.sidak.rangers = p.rangers < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.rangers = !(1 - (1 - 0.05)^(1/n())) < p.rangers)
+
+df.fam.ori <- arrange(df.fam.ori, p.cosmo) %>%
+    dplyr::mutate(signif.cosmo = p.cosmo < 0.05,
+                  signif.bonferoni.cosmo = p.cosmo < 0.05/n(),
+                  signif.holm.cosmo = !0.05/(n() + 1 - 1:n()) < p.cosmo,
+                  signif.sidak.cosmo = p.cosmo < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.cosmo = !(1 - (1 - 0.05)^(1/n())) < p.cosmo)
+
+#a lot of wanderers originate in SA; fewer than expected originate in EA and AU
+
+write.csv(df.fam.ori, 
+          "./Results/family.origin.results.csv",
+          row.names = FALSE)
+
+## now based off number of continental connections
+df.ori$connections <- ""
+one <- c("Africa", "South.America")
+two <- c("Eurasia", "North.America")
+df.ori$connections[df.ori$family.origin == "Australia"] <- "none"
+df.ori$connections[df.ori$family.origin %in% one] <- "one"
+df.ori$connections[df.ori$family.origin %in% two] <- "two"
+
+null.ori.conn <- df.ori %>%
+    group_by(connections) %>%
+    dplyr::summarise(null.N = n()) %>%
+    dplyr::select(connections,
+                  null.N) %>%
+    as.data.frame()
+
+ori.conn <- df.ori %>%
+    group_by(n.cont, connections) %>%
+    dplyr::summarise(N = n()) %>% 
+    as.data.frame()
+
+homies.ori.conn <- ori.conn[ori.conn$n.cont == 1,]
+colnames(homies.ori.conn)[colnames(homies.ori.conn) == "N"] <- "homies.N"
+homies.ori.conn <- homies.ori.conn %>%
+    dplyr::select(-n.cont)
+
+rangers.ori.conn <- ori.conn[ori.conn$n.cont == 2,]
+colnames(rangers.ori.conn)[colnames(rangers.ori.conn) == "N"] <- "rangers.N"
+rangers.ori.conn <- rangers.ori.conn %>%
+    dplyr::select(-n.cont)
+
+cosmo.ori.conn <- ori.conn[ori.conn$n.cont == "3+",]
+colnames(cosmo.ori.conn)[colnames(cosmo.ori.conn) == "N"] <- "cosmo.N"
+cosmo.ori.conn <- cosmo.ori.conn %>%
+    dplyr::select(-n.cont)
+
+#create full dataset
+ori.conn.null.cosmo <- merge(null.ori.conn, cosmo.ori.conn, by = "connections", all.x = TRUE, all.y = TRUE)
+ori.conn.null.cosmo.rangers <- merge(ori.conn.null.cosmo, rangers.ori.conn, by = "connections", all.x = TRUE, all.y = TRUE)
+ori.conn.null.cosmo.rangers.homies <- merge(ori.conn.null.cosmo.rangers, homies.ori.conn, by = "connections", all.x = TRUE, all.y = TRUE)
+
+df.ori.conn <- ori.conn.null.cosmo.rangers.homies
+df.ori.conn[is.na(df.ori.conn)] <- 0
+
+df.ori.conn$prop.null <- df.ori.conn$null.N/nrow(df.ori)
+
+df.ori.conn$prop.homies <- df.ori.conn$homies.N/nrow(df.ori[df.ori$n.cont == "1",])
+df.ori.conn$prop.rangers <- df.ori.conn$rangers.N/nrow(df.ori[df.ori$n.cont == "2",])
+df.ori.conn$prop.cosmo <- df.ori.conn$cosmo.N/nrow(df.ori[df.ori$n.cont == "3+",])
+
+#binomial test
+for(i in 1:nrow(df.ori.conn)){
+    test <- binom.test(df.ori.conn$homies.N[i], nrow(df.ori[df.ori$n.cont == "1",]), p = df.ori.conn$prop.null[i], alternative = "two.sided")
+    df.ori.conn$p.homies[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.ori.conn)){
+    test <- binom.test(df.ori.conn$rangers.N[i], nrow(df.ori[df.ori$n.cont == "2",]), p = df.ori.conn$prop.null[i], alternative = "two.sided")
+    df.ori.conn$p.rangers[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.ori.conn)){
+    test <- binom.test(df.ori.conn$cosmo.N[i], nrow(df.ori[df.ori$n.cont == "3+",]), p = df.ori.conn$prop.null[i], alternative = "two.sided")
+    df.ori.conn$p.cosmo[i] <- test$p.value
+}
+
+#add sidak correction
+df.ori.conn <- arrange(df.ori.conn, p.homies) %>%
+    dplyr::mutate(signif.homies = p.homies < 0.05,
+                  signif.bonferoni.homies = p.homies < 0.05/n(),
+                  signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                  signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
+
+df.ori.conn <- arrange(df.ori.conn, p.rangers) %>%
+    dplyr::mutate(signif.rangers = p.rangers < 0.05,
+                  signif.bonferoni.rangers = p.rangers < 0.05/n(),
+                  signif.holm.rangers = !0.05/(n() + 1 - 1:n()) < p.rangers,
+                  signif.sidak.rangers = p.rangers < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.rangers = !(1 - (1 - 0.05)^(1/n())) < p.rangers)
+
+df.ori.conn <- arrange(df.ori.conn, p.cosmo) %>%
+    dplyr::mutate(signif.cosmo = p.cosmo < 0.05,
+                  signif.bonferoni.cosmo = p.cosmo < 0.05/n(),
+                  signif.holm.cosmo = !0.05/(n() + 1 - 1:n()) < p.cosmo,
+                  signif.sidak.cosmo = p.cosmo < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.cosmo = !(1 - (1 - 0.05)^(1/n())) < p.cosmo)
+
+#a lot of wanderers originate in SA; fewer than expected originate in EA and AU
+
+write.csv(df.ori.conn, 
+          "./Results/family.connection.results.csv",
+          row.names = FALSE)
+
+# now, given where they live now, how many originated in different places?
+# and did more than expected originate in highly connected places?
+#e.g., for those that live in africa, how many originated elsewhere?
+#compare this number to the number of endemics?
+
+
+
+# can ignore Australia because no family that originated there is on two continents
+# controlling for number of species in that family, can ask if North America or 
+# Eurasia have more wanderers than expected?
+# first, let's ask if NA or EA has more wanderers than expected
+# then, we can ask if 
+
+#look at number of endemic vs non-endemic per continent
+#and see if any continent is special compared to the average expectation.
+
+
+## create a null of endemic v. not endemic based on number of connections
+null.no.connections.endemic <- nrow(df[df$continent.Australia == TRUE & df$n.cont == 1,])
+null.no.connections.2more <- nrow(df[df$continent.Australia == TRUE & df$n.cont != 1,])
+null.no.connections.stay <- nrow(df[df$continent.Australia == TRUE & df$family.origin == "Australia",])
+null.no.connections.leave <- nrow(df[df$continent.Australia == FALSE & df$family.origin == "Australia",])
+
+null.one.connections.endemic <- nrow(df[df$continent.Africa == TRUE
+                                        | df$continent.South.America == TRUE
+                                        & df$n.cont == 1,])
+null.one.connections.2more <- nrow(df[df$continent.Africa == TRUE
+                                      | df$continent.South.America == TRUE
+                                      & df$n.cont != 1,])
+null.one.connections.stay <- nrow(df[df$continent.Africa == TRUE & df$family.origin == "Africa"]) +
+    nrow(df[df$continent.South.America == TRUE & df$family.origin == "South.America"])
+null.one.connections.leave <- nrow(df[df$continent.Africa == FALSE & df$family.origin == "Africa"]) +
+    nrow(df[df$continent.South.America == FALSE & df$family.origin == "South.America"])
+
+
+null.two.connections.endemic <- nrow(df[df$continent.Eurasia == TRUE
+                                        | df$continent.North.America == TRUE
+                                        & df$n.cont == 1,])
+null.two.connections.2more <- nrow(df[df$continent.Eurasia == TRUE
+                                      | df$continent.North.America == TRUE
+                                      & df$n.cont != 1,])
+null.two.connections.stay <- nrow(df[df$continent.Eurasia == TRUE & df$family.origin == "Eurasia"]) +
+    nrow(df[df$continent.North.America == TRUE & df$family.origin == "North.America"])
+null.two.connections.leave <- nrow(df[df$continent.Eurasia == FALSE & df$family.origin == "Eurasia"]) +
+    nrow(df[df$continent.North.America == FALSE & df$family.origin == "North.America"])
+
+
+null.family <- df %>%
+  group_by(family) %>%
+  dplyr::summarise(null.N = n()) %>%
+  dplyr::select(family,
+                null.N) %>%
+  as.data.frame()
+
+AF.test <- binom.test(nrow(df[df$continent.Africa == TRUE & df$family.origin == "Africa",]), #those that stay
+                      nrow(df[df$continent.Africa == TRUE & df$n.cont == 1,]), #those that are endemic
+                           p = (nrow(df[df$continent.Africa == TRUE & df$n.cont == 1,])/ nrow(df[df$continent.Africa == TRUE,])), #prop endemic to Africa v all on Africa
+                           alternative = "two.sided")
+AF.p.value <- AF.test$p.value
+AF.signif <- AF.p.value < 0.05
+AF.bonferoni <- AF.p.value < 0.05/5
+AF.holm <- !AF.p.value/4 + 1 - 1:5 < AF.p.value
+AF.sidak.holm <- AF.p.value < 1 - (1 - 0.05)^(1/5)
+AF.holm.sidak <- !(1 - (1 - 0.05)^(1/5)) < AF.p.value
+
+AU.test <- binom.test(nrow(df[df$continent.Australia == TRUE & df$family.origin == "Australia",]), #those that stay
+                      nrow(df[df$continent.Australia == TRUE & df$n.cont == 1,]), #those that are endemic
+                      p = (nrow(df[df$continent.Australia == TRUE & df$n.cont == 1,])/ nrow(df[df$continent.Australia == TRUE,])), #prop endemic to Australia v all on Australia
+                      alternative = "two.sided")
+AU.p.value <- AU.test$p.value
+AU.signif <- AU.p.value < 0.05
+AU.bonferoni <- AU.p.value < 0.05/5
+AU.holm <- !AU.p.value/4 + 1 - 1:5 < AU.p.value
+AU.sidak.holm <- AU.p.value < 1 - (1 - 0.05)^(1/5)
+AU.holm.sidak <- !(1 - (1 - 0.05)^(1/5)) < AU.p.value
+
+EA.test <- binom.test(nrow(df[df$continent.Eurasia == TRUE & df$family.origin == "Eurasia",]), #those that stay
+                     nrow(df[df$continent.Eurasia == TRUE & df$n.cont == 1,]), #those that are endemic
+                      p = (nrow(df[df$continent.Eurasia == TRUE & df$n.cont == 1,])/ nrow(df[df$continent.Eurasia == TRUE,])), #prop endemic to Eurasia v all on Eurasia
+                      alternative = "two.sided")
+EA.p.value <- EA.test$p.value
+EA.signif <- EA.p.value < 0.05
+EA.bonferoni <- EA.p.value < 0.05/5
+EA.holm <- !EA.p.value/4 + 1 - 1:5 < EA.p.value
+EA.sidak.holm <- EA.p.value < 1 - (1 - 0.05)^(1/5)
+EA.holm.sidak <- !(1 - (1 - 0.05)^(1/5)) < EA.p.value
+
+NA.test <- binom.test(nrow(df[df$continent.North.America == TRUE & df$family.origin == "North.America",]), #those that stay
+                      nrow(df[df$continent.North.America == TRUE & df$n.cont == 1,]), #those that are endemic
+                      p = (nrow(df[df$continent.North.America == TRUE & df$n.cont == 1,])/ nrow(df[df$continent.North.America == TRUE,])), #prop endemic to North.America v all on North.America
+                      alternative = "two.sided")
+NA.p.value <- NA.test$p.value
+NA.signif <- NA.p.value < 0.05
+NA.bonferoni <- NA.p.value < 0.05/5
+NA.holm <- !NA.p.value/4 + 1 - 1:5 < NA.p.value
+NA.sidak.holm <- NA.p.value < 1 - (1 - 0.05)^(1/5)
+NA.holm.sidak <- !(1 - (1 - 0.05)^(1/5)) < NA.p.value
+
+SA.test <- binom.test(nrow(df[df$continent.South.America == TRUE & df$family.origin == "South.America",]), #those that stay
+                      nrow(df[df$continent.South.America == TRUE & df$n.cont == 1,]), #those that are endemic
+                      p = (nrow(df[df$continent.South.America == TRUE & df$n.cont == 1,])/ nrow(df[df$continent.South.America == TRUE,])), #prop endemic to South.America v all on South.America
+                      alternative = "two.sided")
+SA.p.value <- SA.test$p.value
+SA.signif <- SA.p.value < 0.05
+SA.bonferoni <- SA.p.value < 0.05/5
+SA.holm <- !SA.p.value/4 + 1 - 1:5 < SA.p.value
+SA.sidak.holm <- SA.p.value < 1 - (1 - 0.05)^(1/5)
+SA.holm.sidak <- !(1 - (1 - 0.05)^(1/5)) < SA.p.value
+
+#create full dataset
+fam.null.cosmo <- merge(null.family, cosmo.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.cosmo.rangers <- merge(fam.null.cosmo, rangers.family, by = "family", all.x = TRUE, all.y = TRUE)
+fam.null.cosmo.rangers.homies <- merge(fam.null.cosmo.rangers, homies.family, by = "family", all.x = TRUE, all.y = TRUE)
+
+df.family <- fam.null.cosmo.rangers.homies
+df.family[is.na(df.family)] <- 0
+
+df.family$prop.null <- df.family$null.N/nrow(df)
+
+df.family$prop.homies <- df.family$homies.N/nrow(df[df$n.cont == "1",])
+df.family$prop.rangers <- df.family$rangers.N/nrow(df[df$n.cont == "2",])
+df.family$prop.cosmo <- df.family$cosmo.N/nrow(df[df$n.cont == "3+",])
+
+#binomial test
+for(i in 1:nrow(df.family)){
+    test <- binom.test(df.family$homies.N[i], nrow(df[df$n.cont == "1",]), p = df.family$prop.null[i], alternative = "two.sided")
+    df.family$p.homies[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.family)){
+    test <- binom.test(df.family$rangers.N[i], nrow(df[df$n.cont == "2",]), p = df.family$prop.null[i], alternative = "two.sided")
+    df.family$p.rangers[i] <- test$p.value
+}
+
+for(i in 1:nrow(df.family)){
+    test <- binom.test(df.family$cosmo.N[i], nrow(df[df$n.cont == "3+",]), p = df.family$prop.null[i], alternative = "two.sided")
+    df.family$p.cosmo[i] <- test$p.value
+}
+
+#add sidak correction
+df.family <- arrange(df.family, p.homies) %>%
+    dplyr::mutate(signif.homies = p.homies < 0.05,
+                  signif.bonferoni.homies = p.homies < 0.05/n(),
+                  signif.holm.homies = !0.05/(n() + 1 - 1:n()) < p.homies,
+                  signif.sidak.homies = p.homies < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.homies = !(1 - (1 - 0.05)^(1/n())) < p.homies)
+
+df.family <- arrange(df.family, p.rangers) %>%
+    dplyr::mutate(signif.rangers = p.rangers < 0.05,
+                  signif.bonferoni.rangers = p.rangers < 0.05/n(),
+                  signif.holm.rangers = !0.05/(n() + 1 - 1:n()) < p.rangers,
+                  signif.sidak.rangers = p.rangers < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.rangers = !(1 - (1 - 0.05)^(1/n())) < p.rangers)
+
+df.family <- arrange(df.family, p.cosmo) %>%
+    dplyr::mutate(signif.cosmo = p.cosmo < 0.05,
+                  signif.bonferoni.cosmo = p.cosmo < 0.05/n(),
+                  signif.holm.cosmo = !0.05/(n() + 1 - 1:n()) < p.cosmo,
+                  signif.sidak.cosmo = p.cosmo < 1 - (1 - 0.05)^(1/n()),
+                  signif.holm.sidak.cosmo = !(1 - (1 - 0.05)^(1/n())) < p.cosmo)
+
+write.csv(df.family, 
+          "./Results/family.results.csv",
+          row.names = FALSE)
 
 ##### DISPERSAL -----
 
